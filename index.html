@@ -936,6 +936,7 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barbero
   ${c.modFidelidad?`<label class="lb">Corte gratis cada</label><input class="in" type="number" min="2" value="${c.fidelidad}" onchange="setN('fidelidad',this.value)">`:''}`)}
  ${acc('seguridad','🔐 Seguridad y respaldo','PIN admin, exportar, ejemplos',()=>`
   <label class="lb">PIN de administrador</label><input class="in" inputmode="numeric" maxlength="6" value="${esc(c.adminPin)}" onchange="setC('adminPin',this.value.replace(/\\D/g,''))">
+  ${API.remote?`<button class="btn w" style="margin-top:12px" onclick="probarNube()">🔍 Probar base de datos y fotos</button>`:''}
   <div class="g2" style="margin-top:12px"><button class="btn" onclick="exportar()">⬇️ Exportar</button><label class="btn">⬆️ Importar<input type="file" accept=".json" style="display:none" onchange="importar(this)"></label></div>
   <p class="hint">${API.remote?'Para pasar tus datos a la nube: en el panel anterior toca ⬇️ Exportar y aquí ⬆️ Importar (incluye fotos).':'El respaldo guarda configuración, citas y fotos.'}</p>
   ${API.remote?'':`
@@ -1019,6 +1020,8 @@ async function exportar(){let data;if(API.remote){try{data=await API.req('GET','
 function importar(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{try{const d=JSON.parse(r.result);if(!d.cfg||!Array.isArray(d.citas))throw new Error('Archivo no válido');if(!confirm(`¿Reemplazar todo con el respaldo (${d.citas.length} citas)?`))return;
  if(API.remote){toast('⏳ Subiendo respaldo a la nube…');const x=await API.req('POST','/importar',d);S.draft=null;S.dirty=false;API._d=null;await reload();renderConfig();return toast(`✅ ${x.citas} citas y ${x.fotos} fotos en la nube`)}
  if(d.fotos)for(const[k,v]of Object.entries(d.fotos))await IDB.put(k,v);lsSet('cfg',d.cfg);lsSet('barberos',d.barberos||[]);lsSet('servicios',d.servicios||[]);lsSet('citas',d.citas);if(Array.isArray(d.links))lsSet('links',d.links);if(Array.isArray(d.usuarios))lsSet('usuarios',d.usuarios);S.draft=null;S.dirty=false;await reload();renderConfig();toast('✅ Respaldo importado')}catch(e){toast('❌ '+e.message)}};r.readAsText(f)}
+async function probarNube(){toast('⏳ Probando…');try{const r=await API.req('GET','/diagnostico');
+ const f=(n,x)=>`${x.ok?'✅':'❌'} ${n}: ${x.ok?'funciona':x.error}`;alert([f('Base de datos (D1)',r.db),f('Fotos (R2)',r.fotos),'',r.db.ok?`Citas guardadas: ${r.db.citas} · Links: ${r.db.links}`:'',(r.db.ok&&r.fotos.ok)?'Todo conectado correctamente.':'En Cloudflare: Workers & Pages → tu Worker → Settings → Bindings.'].join('\n').trim())}catch(e){toast('❌ '+e.message)}}
 async function cargarDemo(){lsSet('citas',[...lsGet('citas',[]).filter(c=>!c.demo),...demoCitas()]);await reload();toast('🧪 Ejemplos cargados en la Agenda')}
 async function borrarTodo(){if(!confirm('¿Borrar TODAS las citas?')||prompt('Escribe BORRAR para confirmar')!=='BORRAR')return;lsSet('citas',[]);await reload();toast('🗑️ Citas borradas')}
 

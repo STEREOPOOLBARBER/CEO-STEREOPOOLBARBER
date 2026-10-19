@@ -142,6 +142,7 @@ function leerDataURL(data) {
   return { tipo: m[1], bytes };
 }
 async function guardarFoto(env, data, key = 'f_' + uid()) {
+  if (!env.FOTOS) fail(503, 'Falta conectar el almacén de fotos (R2). En Cloudflare: Settings → Bindings → agrega R2 con el nombre FOTOS.');
   const { tipo, bytes } = leerDataURL(data);
   await env.FOTOS.put(key, bytes, { httpMetadata: { contentType: tipo } });
   return key;
@@ -269,6 +270,7 @@ async function api(req, env, path) {
     const d = await datos(env);
     const publica = fotosPublicas(d).has(x[1]);
     if (!publica && !await sesion(req, env, d)) fail(401, 'Inicia sesión para ver esta foto');
+    if (!env.FOTOS) fail(503, 'Falta conectar el almacén de fotos (R2)');
     const o = await env.FOTOS.get(x[1]); if (!o) fail(404, 'Foto no encontrada');
     return new Response(o.body, { headers: { 'Content-Type': o.httpMetadata?.contentType || 'image/jpeg', 'Cache-Control': publica ? 'public, max-age=86400' : 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' } });
   }
@@ -294,6 +296,24 @@ async function api(req, env, path) {
   if (!s) fail(401, 'Tu sesión terminó. Vuelve a entrar.');
   const exigir = p => { if (!s.perm[p]) fail(403, 'No tienes permiso para esto') };
   const propia = c => { if (!s.perm.verTodas && c.barberoId !== s.barberoId) fail(403, 'No es tu cita') };
+
+  if (path === '/diagnostico' && m === 'GET') {
+    exigir('config');
+    const out = { db: { ok: false }, fotos: { ok: false } };
+    try {
+      const n = await env.DB.prepare('SELECT (SELECT COUNT(*) FROM citas) AS citas, (SELECT COUNT(*) FROM links) AS links').first();
+      out.db = { ok: true, ...n };
+    } catch (e) { out.db = { ok: false, error: String(e.message || e) } }
+    try {
+      if (!env.FOTOS) throw new Error('No está conectado el almacén FOTOS');
+      const k = '_diag_' + uid();
+      await env.FOTOS.put(k, new Uint8Array([1, 2, 3]), { httpMetadata: { contentType: 'application/octet-stream' } });
+      const o = await env.FOTOS.get(k); const ok = !!o && (await o.arrayBuffer()).byteLength === 3;
+      await env.FOTOS.delete(k);
+      out.fotos = ok ? { ok: true } : { ok: false, error: 'No se pudo leer lo guardado' };
+    } catch (e) { out.fotos = { ok: false, error: String(e.message || e) } }
+    return json(out);
+  }
 
   if (path === '/panel' && m === 'GET') {
     await expirar(env);
@@ -450,6 +470,7 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(req);
+    if (!env.DB) return json({ error: 'Falta conectar la base de datos (D1). En Cloudflare: Settings → Bindings → agrega D1 con el nombre DB.' }, 503);
     try { return await api(req, env, url.pathname.slice(4)) }
     catch (e) {
       if (e instanceof HttpError) return json({ error: e.message }, e.status);

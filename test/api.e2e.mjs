@@ -58,7 +58,11 @@ check('dueño confirma la cita', r.s === 200 && r.j.estado === 'confirmada');
 r = await call('POST', '/fotos', { data: PNG }, adm.cookie);
 check('subir foto desde el panel', r.s === 200 && /^f_/.test(r.j.key));
 
+r = await call('GET', '/diagnostico', null, adm.cookie);
+check('diagnóstico: base de datos y fotos conectadas', r.s === 200 && r.j.db.ok && r.j.fotos.ok, JSON.stringify(r.j));
 const barb = await call('POST', '/auth/login', { pin: '4826' });
+r = await call('GET', '/diagnostico', null, barb.cookie);
+check('diagnóstico solo para quien tiene Config', r.s === 403);
 check('login barbero con PIN', barb.s === 200 && barb.j.rol === 'barbero');
 r = await call('GET', '/panel', null, barb.cookie);
 check('barbero solo ve sus citas y sin PINs', r.s === 200 && r.j.citas.every(c => c.barberoId === 'b1') && !JSON.stringify(r.j).includes('5821'), JSON.stringify(r.j).slice(0, 300));
