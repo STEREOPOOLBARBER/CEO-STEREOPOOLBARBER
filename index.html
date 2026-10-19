@@ -254,9 +254,12 @@ th{color:var(--mu);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
 <div class="login" id="login">
   <div class="logo" id="lgLogo">💈</div>
   <h2 id="lgNombre">Barbería</h2>
+  <div id="gbtn" style="min-height:0;margin-top:12px"></div>
+  <div id="pinBox" style="display:flex;flex-direction:column;align-items:center;gap:inherit">
   <p style="color:var(--mu);margin-top:4px">Ingresa tu PIN</p>
   <input class="in pin" id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()">
   <button class="btn p" style="width:260px;padding:14px" onclick="doLogin()">Entrar</button>
+  </div>
   <p class="hint" id="lgHint" style="max-width:300px"></p>
 </div>
 
@@ -281,19 +284,14 @@ th{color:var(--mu);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
 <script>
 /* =====================================================================
    BARBERÍA · PANEL DE CONTROL  (index.html)
-   Modo local: datos en este navegador (localStorage + IndexedDB para fotos).
-   Modo nube:  pon la URL de tu Cloudflare Worker en CONFIG.API_URL.
-
-   Endpoints que el Worker debe exponer (JSON):
-   POST  /auth/login {pin}            -> {token,rol,barberoId,nombre}
-   GET   /panel                        -> {cfg,barberos,servicios,citas}
-   PUT   /config {cfg,barberos,servicios}          (solo admin)
-   POST  /citas {...}  · PATCH /citas/:id  · DELETE /citas/:id (admin)
-   POST  /fotos {data:dataURL}         -> {key}    (guarda en R2)
-   GET   /fotos/:key?t=token           -> imagen
-   El rol y el barbero SIEMPRE salen del token en el Worker, nunca del body.
+   Modo nube:  publicado en Cloudflare usa la API /api (worker/index.js):
+               datos en D1, fotos en R2, login con Google (o PIN).
+   Modo local: abierto como archivo o en GitHub Pages, los datos viven en
+               este navegador (localStorage + IndexedDB para fotos).
+   La sesión viaja en una cookie segura; el rol y los permisos SIEMPRE
+   los decide el Worker, nunca el navegador.
    ===================================================================== */
-const CONFIG={API_URL:'',FORM_URL:'reservar.html',POLL_MS:20000,DUR:60};
+const CONFIG={API_URL:/^https?:$/.test(location.protocol)&&!/(^|\.)github\.io$/.test(location.hostname)?'/api':'',FORM_URL:'reservar.html',POLL_MS:20000,DUR:60};
 
 /* ---------- utilidades ---------- */
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
@@ -382,9 +380,12 @@ function expirarLocal(){const cs=lsGet('citas',[]),now=Date.now();let ch=false;c
 /* ---------- API (local ahora, Cloudflare después) ---------- */
 const API={
  get remote(){return !!CONFIG.API_URL},
- async req(m,p,b){const r=await fetch(CONFIG.API_URL+p,{method:m,headers:{'Content-Type':'application/json',...(S.ses?.token?{Authorization:'Bearer '+S.ses.token}:{})},body:b?JSON.stringify(b):undefined});const j=await r.json().catch(()=>({}));if(r.status===401){localStorage.removeItem('brb_ses');location.reload()}if(!r.ok)throw new Error(j.error||('Error '+r.status));return j},
+ async req(m,p,b){const r=await fetch(CONFIG.API_URL+p,{method:m,credentials:'same-origin',headers:b?{'Content-Type':'application/json'}:{},body:b?JSON.stringify(b):undefined});const j=await r.json().catch(()=>({}));if(r.status===401){localStorage.removeItem('brb_ses');location.reload()}if(!r.ok)throw new Error(j.error||('Error '+r.status));return j},
+ async authCfg(){return this.req('GET','/auth/config')},
+ async google(credential){return this.req('POST','/auth/google',{credential})},
+ async logout(){if(this.remote)await this.req('POST','/auth/logout').catch(()=>{})},
  async login(pin){if(this.remote)return this.req('POST','/auth/login',{pin});seed();const cfg=mergeCfg(lsGet('cfg',{}));if(pin&&pin===cfg.adminPin)return{rol:'dueno',nombre:'Dueño'};const u=lsGet('usuarios',[]).find(x=>x.pin===pin&&x.activo!==false);if(u&&pin)return{rol:u.rol,uid:u.id,nombre:u.nombre,barberoId:u.barberoId||''};const b=lsGet('barberos',[]).find(x=>x.pin===pin&&x.activo!==false);if(b&&pin)return{rol:'barbero',barberoId:b.id,nombre:b.nombre};throw new Error('PIN incorrecto')},
- async load(){if(this.remote)return this.req('GET','/panel');seed();const citas=expirarLocal();return{cfg:lsGet('cfg',{}),barberos:lsGet('barberos',[]),servicios:lsGet('servicios',[]),usuarios:lsGet('usuarios',[]),citas}},
+ async load(){if(this.remote){const r=await this.req('GET','/panel'+(this._d?'?v='+this._v:''));if(r.same)return this._d;this._v=r.v;return this._d=r}seed();const citas=expirarLocal();return{cfg:lsGet('cfg',{}),barberos:lsGet('barberos',[]),servicios:lsGet('servicios',[]),usuarios:lsGet('usuarios',[]),citas}},
  async saveConfig(cfg,barberos,servicios,usuarios){if(this.remote)return this.req('PUT','/config',{cfg,barberos,servicios,usuarios});lsSet('cfg',cfg);lsSet('barberos',barberos);lsSet('servicios',servicios);if(usuarios)lsSet('usuarios',usuarios)},
  async crearCita(d){if(this.remote)return this.req('POST','/citas',d);const cs=expirarLocal();if(d.hora&&ocupado(cs,d.barberoId,d.fecha,d.hora))throw new Error('Ese horario ya está ocupado');const c={id:uid(),codigo:codigo(),creada:Date.now(),...d};cs.push(c);lsSet('citas',cs);return c},
  async updateCita(id,patch){if(this.remote)return this.req('PATCH','/citas/'+id,patch);const cs=lsGet('citas',[]),c=cs.find(x=>x.id===id);if(!c)throw new Error('La cita ya no existe');if(S.ses.rol==='barbero'&&c.barberoId!==S.ses.barberoId)throw new Error('No es tu cita');Object.assign(c,patch,{upd:Date.now()});lsSet('citas',cs);return c},
@@ -394,7 +395,7 @@ const API={
  async delLink(id){if(this.remote)return this.req('DELETE','/links/'+id);lsSet('links',lsGet('links',[]).filter(l=>l.id!==id))},
  async importCitas(arr){if(this.remote)return this.req('POST','/citas/import',{citas:arr});const cs=lsGet('citas',[]);let n=0,u=0;arr.forEach(c=>{const ex=c.codigo&&cs.find(x=>x.codigo===c.codigo);if(ex){Object.assign(ex,c);u++}else{cs.push({id:uid(),creada:Date.now(),...c,codigo:c.codigo||codigo()});n++}});lsSet('citas',cs);return{n,u}},
  async putFoto(data){if(this.remote)return(await this.req('POST','/fotos',{data})).key;const k='f_'+uid();await IDB.put(k,data);return k},
- async foto(k){if(!k)return'';if(/^(data:|https?:)/.test(k))return k;if(FOTO_CACHE.has(k))return FOTO_CACHE.get(k);const v=this.remote?`${CONFIG.API_URL}/fotos/${k}?t=${encodeURIComponent(S.ses?.token||'')}`:(await IDB.get(k))||'';FOTO_CACHE.set(k,v);return v}
+ async foto(k){if(!k)return'';if(/^(data:|https?:)/.test(k))return k;if(FOTO_CACHE.has(k))return FOTO_CACHE.get(k);const v=this.remote?`${CONFIG.API_URL}/fotos/${k}`:(await IDB.get(k))||'';FOTO_CACHE.set(k,v);return v}
 };
 
 /* ---------- estado ---------- */
@@ -421,8 +422,15 @@ function applyTheme(c){const r=document.documentElement.style;const a1=!c.acento
 async function logoHTML(el,c){el.innerHTML=c.logoImg?`<img data-foto="${c.logoImg}">`:esc(c.logo||'💈');hydrate(el)}
 
 /* ---------- login / arranque ---------- */
-async function doLogin(){const pin=$('#pin').value.trim();try{const s=await API.login(pin);S.ses=s;lsSet('ses',s);$('#login').style.display='none';await boot()}catch(e){toast('❌ '+e.message);$('#pin').value=''}}
-function logout(){if(S.dirty&&!confirm('Tienes cambios sin guardar en Config. ¿Salir igual?'))return;if(!confirm('¿Cerrar sesión?'))return;localStorage.removeItem('brb_ses');location.reload()}
+async function doLogin(){const pin=$('#pin').value.trim();try{await entrar(await API.login(pin))}catch(e){toast('❌ '+e.message);$('#pin').value=''}}
+async function entrar(s){S.ses=s;lsSet('ses',s);$('#login').style.display='none';await boot()}
+async function loginGoogle(r){try{await entrar(await API.google(r.credential))}catch(e){toast('❌ '+e.message)}}
+async function initLoginNube(){let ac={google:'',pin:true};try{ac=await API.authCfg()}catch(e){}
+ $('#pinBox').style.display=ac.pin?'':'none';
+ $('#lgHint').innerHTML=ac.google?'Entra con la cuenta de Google que el dueño autorizó.':'⚠️ Falta configurar GOOGLE_CLIENT_ID en Cloudflare.';
+ if(!ac.google)return;const r=()=>{google.accounts.id.initialize({client_id:ac.google,callback:loginGoogle,ux_mode:'popup'});google.accounts.id.renderButton($('#gbtn'),{theme:'filled_black',size:'large',shape:'pill',text:'signin_with',locale:'es'})};
+ if(window.google?.accounts)return r();const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.async=true;s.onload=r;document.head.appendChild(s)}
+async function logout(){if(S.dirty&&!confirm('Tienes cambios sin guardar en Config. ¿Salir igual?'))return;if(!confirm('¿Cerrar sesión?'))return;await API.logout();localStorage.removeItem('brb_ses');location.reload()}
 async function boot(){
  await reload();
  const tabs=[['agenda','📅 Agenda']];if(can('links'))tabs.push(['compartir','🔗 Compartir']);if(can('config'))tabs.push(['config','⚙️ Config']);
@@ -939,8 +947,9 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barbero
   ${c.modFidelidad?`<label class="lb">Corte gratis cada</label><input class="in" type="number" min="2" value="${c.fidelidad}" onchange="setN('fidelidad',this.value)">`:''}`)}
  ${acc('seguridad','🔐 Seguridad y respaldo','PIN admin, exportar, ejemplos',()=>`
   <label class="lb">PIN de administrador</label><input class="in" inputmode="numeric" maxlength="6" value="${esc(c.adminPin)}" onchange="setC('adminPin',this.value.replace(/\\D/g,''))">
-  ${API.remote?'':`<div class="g2" style="margin-top:12px"><button class="btn" onclick="exportar()">⬇️ Exportar</button><label class="btn">⬆️ Importar<input type="file" accept=".json" style="display:none" onchange="importar(this)"></label></div>
-  <p class="hint">El respaldo guarda configuración y citas (las fotos quedan en este equipo).</p>
+  <div class="g2" style="margin-top:12px"><button class="btn" onclick="exportar()">⬇️ Exportar</button><label class="btn">⬆️ Importar<input type="file" accept=".json" style="display:none" onchange="importar(this)"></label></div>
+  <p class="hint">${API.remote?'Para pasar tus datos a la nube: en el panel anterior toca ⬇️ Exportar y aquí ⬆️ Importar (incluye fotos).':'El respaldo guarda configuración, citas y fotos.'}</p>
+  ${API.remote?'':`
   <div class="g2" style="margin-top:12px"><button class="btn" onclick="cargarDemo()">🧪 Cargar ejemplos</button><button class="btn" onclick="quitarDemo()">🧹 Quitar ejemplos</button></div>
   <button class="btn r w" style="margin-top:10px" onclick="borrarTodo()">🗑️ Borrar todas las citas</button>`}`)}`;
  hydrate($('#t-config'))}
@@ -953,6 +962,7 @@ function togPB(k){const c=D().cfg;c.permBarbero={...ROLES.barbero.p,...(c.permBa
 function editUser(id){const u=id?D().usuarios.find(x=>x.id===id):{id:'',nombre:'',pin:'',rol:'recepcion',barberoId:'',permisos:{...ROLES.recepcion.p},activo:true};S._u=clone(u);
  openModal(mHead(id?'✏️ Editar usuario':'➕ Nuevo usuario')+`
  <label class="lb">Nombre</label><input class="in" id="uNom" value="${esc(u.nombre)}" placeholder="Ej: Kiara (recepción)">
+ <label class="lb">Correo de Google (para entrar con Google)</label><input class="in" id="uMail" type="email" value="${esc(u.email||'')}" placeholder="ej: kiara@gmail.com">
  <div class="g2"><div><label class="lb">PIN</label><input class="in" id="uPin" inputmode="numeric" maxlength="6" value="${esc(u.pin)}" placeholder="4-6 dígitos"></div><div><label class="lb">Rol</label><select class="in" id="uRol" onchange="rolUser(this.value)">${Object.entries(ROLES).filter(([k])=>k!=='dueno').map(([k,r])=>`<option value="${k}" ${u.rol===k?'selected':''}>${r.t}</option>`).join('')}</select></div></div>
  <label class="lb">Vincular a un barbero (ve sus citas)</label><select class="in" id="uBarb" onchange="S._u.barberoId=this.value"><option value="">— Ninguno —</option>${D().barberos.map(b=>`<option value="${b.id}" ${u.barberoId===b.id?'selected':''}>${esc(b.nombre)}</option>`).join('')}</select>
  <label class="lb">Permisos</label><div id="uPerms"></div>
@@ -960,9 +970,11 @@ function editUser(id){const u=id?D().usuarios.find(x=>x.id===id):{id:'',nombre:'
  ${id?`<button class="btn r w" style="margin-top:8px" onclick="delUser('${id}')">🗑️ Eliminar usuario</button>`:''}`);uPerms()}
 function uPerms(){$('#uPerms').innerHTML=PERMS.map(([k,t])=>`<div class="perm"><span>${t}</span>${sw(S._u.permisos[k],`S._u.permisos['${k}']=!S._u.permisos['${k}'];S._u.rol='personal';$('#uRol').value='personal';uPerms()`)}</div>`).join('')}
 function rolUser(r){S._u.rol=r;if(r!=='personal')S._u.permisos={...ROLES[r].p};uPerms()}
-function saveUser(){const u=S._u;u.nombre=$('#uNom').value.trim();u.pin=$('#uPin').value.replace(/\D/g,'');u.barberoId=$('#uBarb').value;
- if(!u.nombre)return toast('Falta el nombre');if(u.pin.length<4)return toast('El PIN debe tener 4 a 6 dígitos');
- const usados=[D().cfg.adminPin,...D().barberos.map(b=>b.pin),...D().usuarios.filter(x=>x.id!==u.id).map(x=>x.pin)];if(usados.includes(u.pin))return toast('Ese PIN ya lo usa otra persona');
+function saveUser(){const u=S._u;u.nombre=$('#uNom').value.trim();u.pin=$('#uPin').value.replace(/\D/g,'');u.barberoId=$('#uBarb').value;u.email=$('#uMail').value.trim().toLowerCase();
+ if(!u.nombre)return toast('Falta el nombre');if(u.email&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(u.email))return toast('Correo no válido');
+ if(!u.email&&u.pin.length<4)return toast('Pon un correo de Google o un PIN de 4 a 6 dígitos');if(u.pin&&u.pin.length<4)return toast('El PIN debe tener 4 a 6 dígitos');
+ const usados=[D().cfg.adminPin,...D().barberos.map(b=>b.pin),...D().usuarios.filter(x=>x.id!==u.id).map(x=>x.pin)];if(u.pin&&usados.includes(u.pin))return toast('Ese PIN ya lo usa otra persona');
+ if(u.email&&[...D().barberos.map(b=>b.email),...D().usuarios.filter(x=>x.id!==u.id).map(x=>x.email)].includes(u.email))return toast('Ese correo ya lo usa otra persona');
  if(!Object.values(u.permisos).some(Boolean))return toast('Dale al menos un permiso');
  if(u.id){const i=D().usuarios.findIndex(x=>x.id===u.id);D().usuarios[i]=u}else{u.id='u'+uid();D().usuarios.push(u)}closeModal();dirty();renderConfig()}
 function delUser(id){if(!confirm('¿Eliminar este usuario? Ya no podrá entrar.'))return;D().usuarios=D().usuarios.filter(x=>x.id!==id);closeModal();dirty();renderConfig()}
@@ -985,6 +997,7 @@ function editBarbero(id){const b=id?D().barberos.find(x=>x.id===id):{id:'',nombr
  <label class="upl"><span class="prev" id="bPrev">${b.foto?`<img data-foto="${b.foto}">`:'💈'}</span><span class="btn sm">📷 Foto del barbero</span><input type="file" accept="image/*" onchange="fotoBarb(this)"></label>
  <label class="lb">Nombre</label><input class="in" id="bNom" value="${esc(b.nombre)}">
  <label class="lb">Especialidad (se ve en el formulario)</label><input class="in" id="bEsp" value="${esc(b.esp||'')}" placeholder="Ej: Fades y diseños">
+ <label class="lb">Correo de Google (para entrar con Google)</label><input class="in" id="bMail" type="email" value="${esc(b.email||'')}" placeholder="ej: jhon@gmail.com">
  <label class="lb">Color en la agenda</label><div class="sws" id="bCol"></div>
  <div class="g2"><div><label class="lb">PIN de acceso</label><input class="in" id="bPin" inputmode="numeric" maxlength="6" value="${esc(b.pin)}" placeholder="4 dígitos"></div><div><label class="lb">Comisión %</label><input class="in" id="bCom" type="number" min="0" max="100" value="${b.comision}"></div></div>
  <label class="lb">Días que trabaja</label><div class="dchips" id="bDias"></div>
@@ -993,9 +1006,11 @@ function editBarbero(id){const b=id?D().barberos.find(x=>x.id===id):{id:'',nombr
 function bDias(){$('#bDias').innerHTML=ORDEN.map(x=>`<button class="dchip ${S._b.dias.includes(x)?'on':''}" onclick="S._b.dias.includes(${x})?S._b.dias.splice(S._b.dias.indexOf(${x}),1):S._b.dias.push(${x});bDias()">${DIAS[x]}</button>`).join('')}
 function bCol(){$('#bCol').innerHTML=COLORES.map(x=>`<button class="swc ${S._b.color===x?'on':''}" style="background:${x}" onclick="S._b.color='${x}';bCol()"></button>`).join('')}
 async function fotoBarb(inp){const f=inp.files[0];if(!f)return;try{S._b.foto=await API.putFoto(await compressImg(f,320,.8));$('#bPrev').innerHTML=`<img src="${await API.foto(S._b.foto)}">`}catch(e){toast('❌ '+e.message)}}
-function saveBarbero(){const b=S._b;b.nombre=$('#bNom').value.trim();b.esp=$('#bEsp').value.trim();b.pin=$('#bPin').value.replace(/\D/g,'');b.comision=Math.min(100,Math.max(0,+$('#bCom').value||0));
- if(!b.nombre)return toast('Falta el nombre');if(b.pin.length<4)return toast('El PIN debe tener al menos 4 dígitos');
- if(b.pin===D().cfg.adminPin||D().barberos.some(x=>x.id!==b.id&&x.pin===b.pin)||(D().usuarios||[]).some(x=>x.pin===b.pin))return toast('Ese PIN ya está en uso');
+function saveBarbero(){const b=S._b;b.nombre=$('#bNom').value.trim();b.esp=$('#bEsp').value.trim();b.pin=$('#bPin').value.replace(/\D/g,'');b.email=$('#bMail').value.trim().toLowerCase();b.comision=Math.min(100,Math.max(0,+$('#bCom').value||0));
+ if(!b.nombre)return toast('Falta el nombre');if(b.email&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(b.email))return toast('Correo no válido');
+ if(!b.email&&b.pin.length<4)return toast('Pon un correo de Google o un PIN de al menos 4 dígitos');if(b.pin&&b.pin.length<4)return toast('El PIN debe tener al menos 4 dígitos');
+ if(b.pin&&(b.pin===D().cfg.adminPin||D().barberos.some(x=>x.id!==b.id&&x.pin===b.pin)||(D().usuarios||[]).some(x=>x.pin===b.pin)))return toast('Ese PIN ya está en uso');
+ if(b.email&&[...D().barberos.filter(x=>x.id!==b.id).map(x=>x.email),...(D().usuarios||[]).map(x=>x.email)].includes(b.email))return toast('Ese correo ya lo usa otra persona');
  if(b.id){const i=D().barberos.findIndex(x=>x.id===b.id);D().barberos[i]=b}else{b.id='b'+uid();D().barberos.push(b)}closeModal();dirty();renderConfig()}
 function delBarbero(id){const fut=S.citas.filter(c=>c.barberoId===id&&c.fecha>=hoy()&&activa(c)).length;if(!confirm(fut?`Tiene ${fut} cita(s) próximas. Mejor desactívalo con el interruptor. ¿Eliminar igual?`:'¿Eliminar este barbero?'))return;D().barberos=D().barberos.filter(b=>b.id!==id);closeModal();dirty();renderConfig()}
 function editServicio(id){const s=id?D().servicios.find(x=>x.id===id):{id:'',emoji:'✂️',nombre:'',precio:25,desc:'',foto:'',activo:true};S._s=clone(s);
@@ -1014,17 +1029,23 @@ function delServicio(id){if(!confirm('¿Eliminar este servicio?'))return;D().ser
 async function guardarConfig(){const d=D();if(!d)return;if(!d.cfg.nombre)return toast('Falta el nombre de la barbería');if((d.cfg.adminPin||'').length<4)return toast('El PIN admin debe tener 4+ dígitos');
  if(!slotsDia(d.cfg).length)return toast('⚠️ Revisa el horario: no hay turnos de 1 hora');
  try{await API.saveConfig(d.cfg,d.barberos,d.servicios,d.usuarios);S.draft=null;S.dirty=false;await reload();renderConfig();toast('✅ Configuración guardada')}catch(e){toast('❌ '+e.message)}}
-function exportar(){const data={v:4,usuarios:lsGet('usuarios',[]),fecha:new Date().toISOString(),cfg:lsGet('cfg',{}),barberos:lsGet('barberos',[]),servicios:lsGet('servicios',[]),citas:lsGet('citas',[]),links:lsGet('links',[])};const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,1)],{type:'application/json'}));a.download=`barberia-respaldo-${hoy()}.json`;a.click()}
-function importar(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{try{const d=JSON.parse(r.result);if(!d.cfg||!Array.isArray(d.citas))throw new Error('Archivo no válido');if(!confirm(`¿Reemplazar todo con el respaldo (${d.citas.length} citas)?`))return;lsSet('cfg',d.cfg);lsSet('barberos',d.barberos||[]);lsSet('servicios',d.servicios||[]);lsSet('citas',d.citas);if(Array.isArray(d.links))lsSet('links',d.links);if(Array.isArray(d.usuarios))lsSet('usuarios',d.usuarios);S.draft=null;S.dirty=false;await reload();renderConfig();toast('✅ Respaldo importado')}catch(e){toast('❌ '+e.message)}};r.readAsText(f)}
+async function exportar(){let data;if(API.remote){try{data=await API.req('GET','/exportar')}catch(e){return toast('❌ '+e.message)}}
+ else{data={v:4,usuarios:lsGet('usuarios',[]),fecha:new Date().toISOString(),cfg:lsGet('cfg',{}),barberos:lsGet('barberos',[]),servicios:lsGet('servicios',[]),citas:lsGet('citas',[]),links:lsGet('links',[]),fotos:{}};
+  const keys=new Set(JSON.stringify(data).match(/f_[a-z0-9]+/g)||[]);for(const k of keys){const v=await IDB.get(k);if(v)data.fotos[k]=v}}
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,1)],{type:'application/json'}));a.download=`barberia-respaldo-${hoy()}.json`;a.click()}
+function importar(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{try{const d=JSON.parse(r.result);if(!d.cfg||!Array.isArray(d.citas))throw new Error('Archivo no válido');if(!confirm(`¿Reemplazar todo con el respaldo (${d.citas.length} citas)?`))return;
+ if(API.remote){toast('⏳ Subiendo respaldo a la nube…');const x=await API.req('POST','/importar',d);S.draft=null;S.dirty=false;API._d=null;await reload();renderConfig();return toast(`✅ ${x.citas} citas y ${x.fotos} fotos en la nube`)}
+ if(d.fotos)for(const[k,v]of Object.entries(d.fotos))await IDB.put(k,v);lsSet('cfg',d.cfg);lsSet('barberos',d.barberos||[]);lsSet('servicios',d.servicios||[]);lsSet('citas',d.citas);if(Array.isArray(d.links))lsSet('links',d.links);if(Array.isArray(d.usuarios))lsSet('usuarios',d.usuarios);S.draft=null;S.dirty=false;await reload();renderConfig();toast('✅ Respaldo importado')}catch(e){toast('❌ '+e.message)}};r.readAsText(f)}
 async function cargarDemo(){lsSet('citas',[...lsGet('citas',[]).filter(c=>!c.demo),...demoCitas()]);await reload();toast('🧪 Ejemplos cargados en la Agenda')}
 async function borrarTodo(){if(!confirm('¿Borrar TODAS las citas?')||prompt('Escribe BORRAR para confirmar')!=='BORRAR')return;lsSet('citas',[]);await reload();toast('🗑️ Citas borradas')}
 
 /* ---------- inicio ---------- */
 (async function(){
  if(!API.remote)seed();
- const cfg=mergeCfg(lsGet('cfg',{}));applyTheme(cfg);$('#lgNombre').textContent=cfg.nombre;logoHTML($('#lgLogo'),cfg);
+ let pc={};if(API.remote){try{pc=(await API.req('GET','/publico')).cfg||{}}catch(e){}}else pc=lsGet('cfg',{});
+ const cfg=mergeCfg(pc);applyTheme(cfg);$('#lgNombre').textContent=cfg.nombre;logoHTML($('#lgLogo'),cfg);
  $('#lgHint').innerHTML=API.remote?'':'Modo local · PIN admin: <b>1234</b><br>Barberos de ejemplo: 1111, 2222, 3333…<br>Cámbialos en ⚙️ Config.';
- if(S.ses){$('#login').style.display='none';await boot()}else setTimeout(()=>$('#pin').focus(),200);
+ if(S.ses){$('#login').style.display='none';await boot()}else if(API.remote)initLoginNube();else setTimeout(()=>$('#pin').focus(),200);
 })();
 </script>
 </body>

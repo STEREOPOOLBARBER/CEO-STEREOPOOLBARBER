@@ -1,0 +1,24 @@
+// Configuración de Cloudflare Workers para Stereo Barber Pool.
+// Los HTML de la raíz se sirven como archivos estáticos y /api/* lo atiende worker/index.js.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stereo-pool-barber",
+  "main": "worker/index.js",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "stereo-barber-db" }
+  ],
+  "r2_buckets": [
+    { "binding": "FOTOS", "bucket_name": "stereo-barber-fotos" }
+  ],
+  // Vence cada 5 minutos las reservas que no pagaron a tiempo.
+  "triggers": { "crons": ["*/5 * * * *"] },
+  // OWNER_EMAILS, GOOGLE_CLIENT_ID, TURNSTILE_* se configuran en el panel de Cloudflare.
+  "keep_vars": true,
+  "observability": { "enabled": true }
+}

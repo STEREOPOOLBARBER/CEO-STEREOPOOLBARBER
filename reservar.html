@@ -112,17 +112,18 @@ h2{font:800 24px 'Syne';margin-bottom:12px}
 <script>
 /* =====================================================================
    BARBERÍA · FORMULARIO DE RESERVAS (público)
-   Modo local: comparte datos con index.html en el mismo dominio.
-   Modo nube:  pon la URL del Worker en CONFIG.API_URL y la clave pública
-               de Turnstile en CONFIG.TURNSTILE_SITEKEY.
+   Modo nube:  publicado en Cloudflare usa la API /api (worker/index.js).
+   Modo local: abierto como archivo o en GitHub Pages, comparte datos con
+               index.html en el mismo navegador.
    Endpoints públicos del Worker:
-   GET  /publico                         -> {cfg,barberos,servicios,ocupados:[{b,f,h}]}
-   POST /citas      {servicioId,barberoId|'any',fecha,hora,cliente,nota,refFoto,turnstile}
-                                         -> {id,codigo,expira,barberoId,estado}
-   POST /citas/:id/captura {codigo,data} -> {ok}
+   GET  /publico                 -> {cfg,barberos,servicios,ocupados:[{b,f,h}],ts}
+   GET  /publico/link/:token     -> link personal
+   POST /publico/reservas        {servicioId,barberoId|'any',fecha,hora,cliente,nota,refFoto,turnstile,linkToken}
+                                 -> {id,codigo,expira,barberoId,estado}
+   POST /publico/reservas/:id/captura {codigo,data} -> {ok}
    El Worker vuelve a validar horario, precio y Turnstile: el navegador no decide nada.
    ===================================================================== */
-const CONFIG={API_URL:'',TURNSTILE_SITEKEY:'',DUR:60};
+const CONFIG={API_URL:/^https?:$/.test(location.protocol)&&!/(^|\.)github\.io$/.test(location.hostname)?'/api':'',TURNSTILE_SITEKEY:'',DUR:60};
 
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -211,7 +212,7 @@ const API={
  async req(m,p,b){const r=await fetch(CONFIG.API_URL+p,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||('Error '+r.status));return j},
  async publico(){if(this.remote)return this.req('GET','/publico');seed();const cs=expirarLocal();const cfg=mergeCfg(lsGet('cfg',{}));delete cfg.adminPin;
   return{cfg,barberos:lsGet('barberos',[]).filter(b=>b.activo!==false).map(({pin,comision,...b})=>b),servicios:lsGet('servicios',[]).filter(s=>s.activo!==false),ocupados:cs.filter(c=>activa(c)).map(c=>({b:c.barberoId,f:c.fecha,h:c.hora}))}},
- async crear(d){if(this.remote)return this.req('POST','/citas',d);
+ async crear(d){if(this.remote)return this.req('POST','/publico/reservas',d);
   const cs=expirarLocal(),cfg=mergeCfg(lsGet('cfg',{})),bs=lsGet('barberos',[]),s=lsGet('servicios',[]).find(x=>x.id===d.servicioId&&x.activo!==false);
   if(!s)throw new Error('El servicio ya no está disponible');
   if(!slotsDia(cfg).includes(d.hora))throw new Error('Horario no válido');
@@ -222,10 +223,10 @@ const API={
   const lk=d.linkToken?lsGet('links',[]).find(x=>x.token===d.linkToken):null;if(d.linkToken){if(!lk)throw new Error('Este link ya no existe');if(lk.estado==='usado')throw new Error('Este link ya fue usado');if(lk.vence&&lk.vence<Date.now())throw new Error('Este link ya venció')}
   const ad=lk&&lk.adelanto!=null&&lk.adelanto!==''?+lk.adelanto:+cfg.adelanto,np=!(cfg.modAdelanto&&cfg.yapeNum&&ad>0),c={id:uid(),codigo:codigo(),creada:Date.now(),fecha:d.fecha,hora:d.hora,barberoId:bid,servicioId:s.id,servicioNombre:s.nombre,precio:+s.precio||0,cliente:d.cliente,nota:d.nota,refFoto:ref,adelanto:np?0:ad,linkId:lk?.id||'',adelantoOk:false,estado:np?'por_validar':'pendiente_pago',expira:np?null:Date.now()+(+cfg.holdMin||20)*60000,origen:lk?'link':'web'};if(lk?.nota)c.nota=('🎁 '+lk.nota+(c.nota?' · '+c.nota:''));
   cs.push(c);lsSet('citas',cs);if(lk){const ls=lsGet('links',[]),x=ls.find(y=>y.id===lk.id);Object.assign(x,{estado:'usado',citaId:c.id,usado:Date.now()});lsSet('links',ls)}return{id:c.id,codigo:c.codigo,expira:c.expira,barberoId:bid,estado:c.estado}},
- async captura(id,cod,data){if(this.remote)return this.req('POST',`/citas/${id}/captura`,{codigo:cod,data});
+ async captura(id,cod,data){if(this.remote)return this.req('POST',`/publico/reservas/${id}/captura`,{codigo:cod,data});
   const cs=expirarLocal(),c=cs.find(x=>x.id===id&&x.codigo===cod);if(!c)throw new Error('Reserva no encontrada');if(c.estado!=='pendiente_pago')throw new Error(c.estado==='expirada'?'Se venció el tiempo de pago':'Esta reserva ya fue procesada');
   const k='f_'+uid();await IDB.put(k,data);c.yapeCaptura=k;c.estado='por_validar';c.expira=null;c.upd=Date.now();lsSet('citas',cs);return{ok:true}},
- async link(t){if(this.remote)return this.req('GET','/links/'+encodeURIComponent(t));return lsGet('links',[]).find(l=>l.token===t)||null},
+ async link(t){if(this.remote)return this.req('GET','/publico/link/'+encodeURIComponent(t));return lsGet('links',[]).find(l=>l.token===t)||null},
  async foto(k){if(!k)return'';if(/^(data:|https?:)/.test(k))return k;if(this.remote)return `${CONFIG.API_URL}/fotos/${k}`;return(await IDB.get(k))||''}
 };
 
@@ -410,7 +411,7 @@ async function cargarLink(){const t=new URLSearchParams(location.search).get('l'
  F.link=l;if(l.cliente?.nombre)F.cli={...F.cli,nombre:l.cliente.nombre,...(l.cliente.tel?{tel:l.cliente.tel}:{})};
  if(l.servicioId&&P.servicios.find(x=>x.id===l.servicioId))F.serv=l.servicioId;if(l.barberoId&&P.barberos.find(x=>x.id===l.barberoId))F.barb=l.barberoId;
  F.step=F.serv&&F.barb?2:F.serv?1:0;return true}
-(async function(){try{P=await API.publico();hero();const ok=await cargarLink();if(ok)render();narrInit();splashListo();if(ok)setTimeout(()=>say(F.link?.cliente?.nombre?'holaLink':'hola'),SPL.cfg?.splashOn===false?300:1800)}catch(e){splashListo();$('#app').innerHTML=`<div class="empty">⚠️ No pudimos cargar la agenda.<br>${esc(e.message)}<br><br><button class="btn" style="margin:auto" onclick="location.reload()">Reintentar</button></div>`}})();
+(async function(){try{P=await API.publico();if(P.ts)CONFIG.TURNSTILE_SITEKEY=P.ts;hero();const ok=await cargarLink();if(ok)render();narrInit();splashListo();if(ok)setTimeout(()=>say(F.link?.cliente?.nombre?'holaLink':'hola'),SPL.cfg?.splashOn===false?300:1800)}catch(e){splashListo();$('#app').innerHTML=`<div class="empty">⚠️ No pudimos cargar la agenda.<br>${esc(e.message)}<br><br><button class="btn" style="margin:auto" onclick="location.reload()">Reintentar</button></div>`}})();
 </script>
 </body>
 </html>

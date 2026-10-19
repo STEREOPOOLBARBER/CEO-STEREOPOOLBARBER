@@ -1,0 +1,13 @@
+# Lo que NO se publica como archivo estático
+.git
+.github
+node_modules
+worker
+test
+package.json
+package-lock.json
+wrangler.jsonc
+.wrangler
+.dev.vars
+*.md
+.assetsignore
