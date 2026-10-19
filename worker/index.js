@@ -3,16 +3,13 @@
    - D1  (env.DB)    : configuración, barberos, servicios, usuarios,
                        citas, links y sesiones.
    - R2  (env.FOTOS) : fotos (logo, barberos, servicios, cortes, Yape).
-   - Login del personal con Google (y PIN opcional).
+   - Login del personal con PIN (sesión en cookie segura).
    - El navegador nunca decide: horarios, precios, permisos y Turnstile
      se validan aquí.
 
    Variables (Cloudflare → Worker → Settings → Variables and Secrets):
-     OWNER_EMAILS       correos de los dueños, separados por coma
-     GOOGLE_CLIENT_ID   ID de cliente OAuth (termina en .apps.googleusercontent.com)
      TURNSTILE_SITEKEY  clave pública de Turnstile (opcional)
      TURNSTILE_SECRET   clave secreta de Turnstile (tipo Secret, opcional)
-     ALLOW_PIN          "false" para desactivar el login con PIN
      TZ                 zona horaria del local (por defecto America/Lima)
    ===================================================================== */
 
@@ -73,6 +70,23 @@ const trabaja = (cfg, b, f) => { const d = pYmd(f).getUTCDay(); return b && b.ac
 /* ---------- base de datos ---------- */
 let schemaListo = null;
 function asegurarSchema(env) { return schemaListo ||= env.DB.batch(SCHEMA.map(s => env.DB.prepare(s))).catch(e => { schemaListo = null; throw e }) }
+
+// Primera vez: deja la app lista para usar con el PIN del dueño 1234 (cámbialo en ⚙️ Config).
+const COLORES = ['#ff3fd2', '#8a3ffc', '#4d6bff', '#ffb057', '#3fb950'];
+const SEED = {
+  cfg: { nombre: 'Stereo Barber Pool', adminPin: '1234' },
+  barberos: [['Jhon', 'Fades y degradados'], ['Brayan', 'Diseños y freestyle'], ['Piero', 'Cortes clásicos'], ['Alexis', 'Barba y perfilado'], ['Renzo', 'Taper y mullet']]
+    .map(([nombre, esp], i) => ({ id: 'b' + (i + 1), nombre, esp, foto: '', color: COLORES[i], pin: String(i + 1).repeat(4), comision: 50, dias: [1, 2, 3, 4, 5, 6], activo: true })),
+  servicios: [['✂️', 'Corte clásico', 25, 'Tijera y máquina, acabado limpio'], ['🔥', 'Fade / Degradado', 30, 'Low, mid o high fade'], ['💈', 'Taper', 30, 'Degradado suave en patillas y nuca'], ['🧔', 'Corte + Barba', 40, 'Corte completo y perfilado de barba'], ['🪒', 'Barba', 15, 'Perfilado con toalla caliente'], ['🎨', 'Diseño / Freestyle', 35, 'Líneas y figuras a mano alzada']]
+    .map(([emoji, nombre, precio, desc], i) => ({ id: 's' + (i + 1), emoji, nombre, precio, desc, foto: '', activo: true })),
+  usuarios: [],
+};
+let sembrado = false;
+async function sembrar(env) {
+  if (sembrado) return;
+  await env.DB.batch(Object.entries(SEED).map(([k, v]) => env.DB.prepare('INSERT OR IGNORE INTO kv(k, v) VALUES(?, ?)').bind(k, JSON.stringify(v))));
+  sembrado = true;
+}
 
 async function leerKV(env, keys) {
   const r = await env.DB.prepare(`SELECT k, v FROM kv WHERE k IN (${keys.map(() => '?').join(',')})`).bind(...keys).all();
@@ -143,21 +157,9 @@ function fotosPublicas(d) {
 /* ---------- autenticación ---------- */
 function cookieDe(req) { const m = (req.headers.get('Cookie') || '').match(/(?:^|;\s*)brb_s=([^;]+)/); return m ? m[1] : '' }
 const setCookie = (val, maxAge) => `${COOKIE}=${val}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
-const pinPermitido = env => env.ALLOW_PIN !== 'false';
-const pinDebil = p => !/^\d{4,6}$/.test(p) || /^(\d)\1+$/.test(p) || '0123456789'.includes(p) || '9876543210'.includes(p);
+const pinValido = p => /^\d{4,6}$/.test(p);
 
-function porEmail(email, d, env) {
-  const e = norm(email); if (!e) return null;
-  const duenos = (env.OWNER_EMAILS || '').split(/[,\s;]+/).map(norm).filter(Boolean);
-  if (duenos.includes(e)) return { rol: 'dueno', nombre: 'Dueño' };
-  const u = d.usuarios.find(x => norm(x.email) === e && x.activo !== false);
-  if (u) return { rol: u.rol, uid: u.id, nombre: u.nombre, barberoId: u.barberoId || '' };
-  const b = d.barberos.find(x => norm(x.email) === e && x.activo !== false);
-  if (b) return { rol: 'barbero', barberoId: b.id, nombre: b.nombre };
-  return null;
-}
 function porPin(pin, d) {
-  if (pinDebil(pin)) return null;
   if (pin === d.cfg.adminPin) return { ident: { rol: 'dueno', nombre: 'Dueño' }, ref: 'admin' };
   const u = d.usuarios.find(x => x.pin === pin && x.activo !== false);
   if (u) return { ident: { rol: u.rol, uid: u.id, nombre: u.nombre, barberoId: u.barberoId || '' }, ref: 'u:' + u.id };
@@ -183,39 +185,15 @@ async function sesion(req, env, d) {
   if (!r || r.exp < Date.now()) return null;
   const s = JSON.parse(r.data);
   let ident = null;
-  if (s.via === 'google') ident = porEmail(s.email, d, env);
-  else if (s.via === 'pin' && pinPermitido(env)) { const p = pinDeRef(s.ref, d); if (p && await sha256(p) === s.pinH) ident = s.ident }
+  if (s.via === 'pin') { const p = pinDeRef(s.ref, d); if (p && await sha256(p) === s.pinH) ident = s.ident }
   if (!ident) return null;
   const perm = permisos(ident, d); if (!perm) return null;
-  return { ...ident, email: s.email, perm };
+  return { ...ident, perm };
 }
 async function abrirSesion(env, data) {
   const t = rnd();
   await env.DB.prepare('INSERT INTO sesiones(id, data, exp) VALUES(?, ?, ?)').bind(await sha256(t), JSON.stringify(data), Date.now() + SES_MS).run();
   return setCookie(t, SES_MS / 1000);
-}
-
-let jwks = { exp: 0, keys: [] };
-async function clavesGoogle(fetcher = fetch) {
-  if (jwks.exp > Date.now()) return jwks.keys;
-  const r = await fetcher('https://www.googleapis.com/oauth2/v3/certs'); if (!r.ok) fail(502, 'No se pudo contactar a Google');
-  const max = +(/max-age=(\d+)/.exec(r.headers.get('Cache-Control') || '')?.[1] || 3600);
-  jwks = { exp: Date.now() + max * 1000, keys: (await r.json()).keys || [] };
-  return jwks.keys;
-}
-const b64u = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0));
-// Verifica el ID token (JWT RS256) que entrega el botón de Google.
-export async function verificarGoogle(token, clientId, fetcher) {
-  const partes = String(token || '').split('.'); if (partes.length !== 3) fail(400, 'Token de Google no válido');
-  const [h, p, firma] = partes, dec = x => JSON.parse(new TextDecoder().decode(b64u(x)));
-  const cab = dec(h), datos = dec(p);
-  if (cab.alg !== 'RS256') fail(400, 'Token de Google no válido');
-  const jwk = (await clavesGoogle(fetcher)).find(k => k.kid === cab.kid); if (!jwk) fail(400, 'Token de Google no válido');
-  const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-  if (!await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, b64u(firma), new TextEncoder().encode(`${h}.${p}`))) fail(400, 'Token de Google no válido');
-  const ahora = Date.now() / 1000;
-  if (!['accounts.google.com', 'https://accounts.google.com'].includes(datos.iss) || datos.aud !== clientId || !(datos.exp > ahora - 60) || datos.email_verified !== true) fail(400, 'Token de Google no válido o vencido');
-  return datos;
 }
 
 async function limitar(env, clave, max, ventanaMs) {
@@ -232,8 +210,8 @@ function vistaPanel(d, citas, s) {
   let barberos = d.barberos, usuarios = d.usuarios;
   if (!esConfig) {
     delete cfg.adminPin;
-    barberos = barberos.map(({ pin, email, ...b }) => b);
-    usuarios = usuarios.filter(u => u.id === s.uid).map(({ pin, email, ...u }) => u);
+    barberos = barberos.map(({ pin, ...b }) => b);
+    usuarios = usuarios.filter(u => u.id === s.uid).map(({ pin, ...u }) => u);
   }
   if (!s.perm.verTodas) citas = citas.filter(c => c.barberoId === s.barberoId);
   if (!s.perm.verTel) citas = citas.map(c => c.cliente?.tel ? { ...c, cliente: { ...c.cliente, tel: '••• ••• ' + String(c.cliente.tel).slice(-3) } } : c);
@@ -243,7 +221,7 @@ function vistaPublica(d) {
   const { adminPin, permBarbero, ...cfg } = d.cfg;
   return {
     cfg,
-    barberos: d.barberos.filter(b => b.activo !== false).map(({ pin, comision, email, ...b }) => b),
+    barberos: d.barberos.filter(b => b.activo !== false).map(({ pin, comision, ...b }) => b),
     servicios: d.servicios.filter(s => s.activo !== false),
   };
 }
@@ -259,6 +237,7 @@ async function api(req, env, path) {
     if (!ok) fail(403, 'Origen no permitido');
   }
   await asegurarSchema(env);
+  await sembrar(env);
 
   /* ----- público (formulario de reservas) ----- */
   if (path === '/publico' && m === 'GET') {
@@ -295,21 +274,10 @@ async function api(req, env, path) {
   }
 
   /* ----- autenticación ----- */
-  if (path === '/auth/config' && m === 'GET') return json({ google: env.GOOGLE_CLIENT_ID || '', pin: pinPermitido(env) });
-  if (path === '/auth/google' && m === 'POST') {
-    if (!env.GOOGLE_CLIENT_ID) fail(400, 'Falta configurar GOOGLE_CLIENT_ID en Cloudflare');
-    await limitar(env, 'g:' + ipDe(req), 30, 15 * 60e3);
-    const g = await verificarGoogle((await body()).credential, env.GOOGLE_CLIENT_ID);
-    const d = await datos(env), ident = porEmail(g.email, d, env);
-    if (!ident) fail(403, `El correo ${g.email} no está autorizado. Pide al dueño que lo agregue en ⚙️ Config.`);
-    const cookie = await abrirSesion(env, { via: 'google', email: norm(g.email) });
-    return json({ ...ident, email: norm(g.email) }, 200, { 'Set-Cookie': cookie });
-  }
   if (path === '/auth/login' && m === 'POST') {
-    if (!pinPermitido(env)) fail(403, 'El acceso con PIN está desactivado. Entra con Google.');
     await limitar(env, 'p:' + ipDe(req), 8, 15 * 60e3);
     const pin = str((await body()).pin, 8);
-    if (pinDebil(pin)) fail(403, 'PIN incorrecto o demasiado fácil (ej. 1234 o 1111). Entra con Google o pide uno nuevo.');
+    if (!pinValido(pin)) fail(403, 'PIN incorrecto');
     const d = await datos(env), r = porPin(pin, d);
     if (!r) fail(403, 'PIN incorrecto');
     const cookie = await abrirSesion(env, { via: 'pin', ref: r.ref, pinH: await sha256(pin), ident: r.ident });

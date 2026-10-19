@@ -11,8 +11,8 @@ async function call(m, p, b, cookie) {
 }
 const d = new Date(Date.now() + 2 * 864e5).toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
 
-let r = await call('POST', '/auth/login', { pin: '1111' });
-check('PIN débil rechazado', r.s === 403, JSON.stringify(r));
+let r = await call('POST', '/auth/login', { pin: '12' });
+check('PIN demasiado corto rechazado', r.s === 403, JSON.stringify(r));
 r = await call('POST', '/auth/login', { pin: '9999' });
 check('PIN incorrecto rechazado', r.s === 403);
 r = await call('GET', '/panel');

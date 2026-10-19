@@ -8,28 +8,28 @@ La app es un **Cloudflare Worker** que sirve `index.html` (panel) y `reservar.ht
 | Base de datos | D1 | `stereo-barber-db` |
 | Fotos | R2 | `stereo-barber-fotos` |
 | Antibots | Turnstile | (opcional) |
-| Login | Google Identity Services | ID de cliente OAuth |
+| Login | PIN | (sin servicios externos) |
 
 Las tablas se crean solas en la primera petición. Cada 5 minutos una tarea
 programada vence las reservas que no pagaron.
 
-## Variables del Worker
+## Primer uso
 
-Cloudflare → Workers & Pages → `ceo-stereopoolbarber` → Settings → Variables and Secrets:
+Al abrir la app por primera vez, el Worker crea las tablas y carga datos de ejemplo
+(5 barberos y 6 servicios). **PIN del dueño: `1234`**, y los barberos `1111`, `2222`,
+`3333`, `4444` y `5555`. Cámbialos en ⚙️ Config → Seguridad y Usuarios.
+
+Variables opcionales (Settings → Variables and Secrets):
 
 | Nombre | Tipo | Valor |
 |---|---|---|
-| `OWNER_EMAILS` | Text | Correo(s) de Google de los dueños, separados por coma |
-| `GOOGLE_CLIENT_ID` | Text | `xxxx.apps.googleusercontent.com` |
-| `TURNSTILE_SITEKEY` | Text | Clave pública de Turnstile (opcional) |
-| `TURNSTILE_SECRET` | Secret | Clave secreta de Turnstile (opcional) |
-| `ALLOW_PIN` | Text | `false` para permitir solo Google |
+| `TURNSTILE_SITEKEY` | Text | Clave pública de Turnstile (antibots del formulario) |
+| `TURNSTILE_SECRET` | Secret | Clave secreta de Turnstile |
 
 ## Desarrollo local
 
 ```bash
 npm install
 npx wrangler dev          # http://localhost:8787
-npm test                  # verificación del token de Google
-npm run test:e2e          # prueba la API contra wrangler dev (con datos sembrados)
+npm test                  # prueba la API contra wrangler dev (con datos sembrados)
 ```
