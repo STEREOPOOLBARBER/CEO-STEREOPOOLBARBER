@@ -18,7 +18,11 @@
   ],
   // Vence cada 5 minutos las reservas que no pagaron a tiempo.
   "triggers": { "crons": ["*/5 * * * *"] },
-  // OWNER_EMAILS, GOOGLE_CLIENT_ID, TURNSTILE_* se configuran en el panel de Cloudflare.
+  // ID de cliente de Google (dato público). Va en el código para que no se pierda al desplegar.
+  "vars": {
+    "GOOGLE_CLIENT_ID": "186206646457-tu114jpn4uqdtpe2sb6v6l7g17shfq8b.apps.googleusercontent.com"
+  },
+  // OWNER_EMAILS (correos de los dueños), ALLOW_PIN y TURNSTILE_* se configuran en el panel de Cloudflare.
   "keep_vars": true,
   "observability": { "enabled": true }
 }
