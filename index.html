@@ -329,6 +329,7 @@ function compressImg(file,max=1000,q=.72,type='image/jpeg'){return new Promise((
 const FOTO_CACHE=new Map();
 
 /* ---------- valores por defecto (todo editable en ⚙️ Config) ---------- */
+const PALETA=['#ff3fd2','#8a3ffc','#5b2bd6','#c48cff','#4d6bff','#ffb057'];
 const COLORES=['#ff3fd2','#8a3ffc','#4d6bff','#ffb057','#3fb950','#f0883e','#d29922','#f85149','#39c5cf','#db61a2'];
 const DEF_EST={pendiente_pago:{t:'Esperando Yape',i:'⏳',c:'#d29922'},por_validar:{t:'Yape por validar',i:'💸',c:'#f0883e'},confirmada:{t:'Confirmada',i:'✅',c:'#8a3ffc'},en_silla:{t:'En silla',i:'💺',c:'#ff3fd2'},atendida:{t:'Atendido',i:'✔️',c:'#3fb950'},no_vino:{t:'No vino',i:'❌',c:'#f85149'},cancelada:{t:'Cancelada',i:'🚫',c:'#a397b8'},expirada:{t:'Expirada',i:'⌛',c:'#a397b8'}};
 const DEF_CFG={nombre:'Stereo Barber Pool',eslogan:'Barber · Pool · Lima',logo:'🎱',logoImg:'',acento:'#8a3ffc',acento2:'#ff3fd2',
@@ -869,8 +870,8 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barbero
   <label class="lb">Eslogan</label><input class="in" value="${esc(c.eslogan)}" placeholder="Ej: Cortes con estilo desde 2020" onchange="setC('eslogan',this.value.trim())">
   <label class="lb">Logo</label><div class="row"><label class="upl"><span class="prev" style="background:linear-gradient(135deg,${c.acento},${c.acento2})">${c.logoImg?`<img data-foto="${c.logoImg}">`:esc(c.logo)}</span><span class="btn sm">📷 Subir logo</span><input type="file" accept="image/*" onchange="subirLogo(this)"></label>${c.logoImg?`<button class="btn sm r" onclick="setC('logoImg','');renderConfig()">Quitar</button>`:''}</div>
   <label class="lb">…o usa un emoji</label><div class="sws">${['💈','✂️','🪒','💇‍♂️','🔥','👑','⚡','💀'].map(e=>`<button class="btn sm" style="font-size:20px;${c.logo===e&&!c.logoImg?'border-color:var(--blue)':''}" onclick="setC('logo','${e}');setC('logoImg','');renderConfig()">${e}</button>`).join('')}</div>
-  <label class="lb">Color principal</label><div class="sws">${COLORES.map(x=>`<button class="swc ${c.acento===x?'on':''}" style="background:${x}" onclick="setC('acento','${x}');renderConfig()"></button>`).join('')}<input type="color" value="${c.acento}" onchange="setC('acento',this.value);renderConfig()" style="width:36px;height:36px;border:0;background:none"></div>
-  <label class="lb">Color secundario</label><div class="sws">${COLORES.map(x=>`<button class="swc ${c.acento2===x?'on':''}" style="background:${x}" onclick="setC('acento2','${x}');renderConfig()"></button>`).join('')}<input type="color" value="${c.acento2}" onchange="setC('acento2',this.value);renderConfig()" style="width:36px;height:36px;border:0;background:none"></div>`)}
+  <label class="lb">Color principal</label><div class="sws">${PALETA.map(x=>`<button class="swc ${c.acento===x?'on':''}" style="background:${x}" onclick="setC('acento','${x}');renderConfig()"></button>`).join('')}</div>
+  <label class="lb">Color secundario</label><div class="sws">${PALETA.map(x=>`<button class="swc ${c.acento2===x?'on':''}" style="background:${x}" onclick="setC('acento2','${x}');renderConfig()"></button>`).join('')}</div>`)}
  ${acc('negocio','🏪 Datos del negocio','WhatsApp, ciudad, dirección y mapa',()=>`
   <label class="lb">WhatsApp (recibe las reservas)</label><div class="pre"><span>+51</span><input class="in" inputmode="tel" value="${esc(c.whatsapp)}" placeholder="9XXXXXXXX" onchange="setC('whatsapp',this.value.replace(/\\D/g,''))"></div>
   <label class="lb">Ciudad</label><input class="in" value="${esc(c.ciudad)}" onchange="setC('ciudad',this.value.trim())">
