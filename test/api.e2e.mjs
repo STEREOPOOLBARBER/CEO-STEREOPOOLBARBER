@@ -1,5 +1,6 @@
 // Prueba de punta a punta contra `wrangler dev` (BASE=http://127.0.0.1:8787).
-// Requiere datos de prueba sembrados en la D1 local.
+// Requiere datos de prueba sembrados en la D1 local y wrangler dev con --var ALLOW_PIN:true
+// (el acceso con PIN está apagado por defecto; aquí se enciende solo para probar permisos).
 const BASE = process.env.BASE || 'http://127.0.0.1:8787';
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 let ok = 0, bad = 0;

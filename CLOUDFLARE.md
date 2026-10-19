@@ -16,8 +16,8 @@ programada vence las reservas que no pagaron.
 ## Primer uso
 
 Al abrir la app por primera vez, el Worker crea las tablas y carga datos de ejemplo
-(5 barberos y 6 servicios). **PIN del dueño: `1234`**, y los barberos `1111`, `2222`,
-`3333`, `4444` y `5555`. Cámbialos en ⚙️ Config → Seguridad y Usuarios.
+(5 barberos y 6 servicios). **No hay PIN: se entra solo con Google.** El dueño se define con
+`OWNER_EMAILS`; barberos y personal entran con el correo que se les ponga en ⚙️ Config.
 
 Variables (Settings → Variables and Secrets):
 
@@ -25,7 +25,7 @@ Variables (Settings → Variables and Secrets):
 |---|---|---|
 | `GOOGLE_CLIENT_ID` | Text | `xxxx.apps.googleusercontent.com` (activa el botón de Google) |
 | `OWNER_EMAILS` | Text | Gmail(s) del dueño, separados por coma |
-| `ALLOW_PIN` | Text | `false` apaga el acceso con PIN (recomendado cuando Google ya funciona) |
+| `ALLOW_PIN` | Text | No lo pongas. `true` enciende el PIN y existe solo para pruebas locales |
 | `TURNSTILE_SITEKEY` | Text | Clave pública de Turnstile (antibots del formulario) |
 | `TURNSTILE_SECRET` | Secret | Clave secreta de Turnstile |
 
@@ -43,6 +43,6 @@ Variables (Settings → Variables and Secrets):
 ```bash
 npm install
 npx wrangler dev          # http://localhost:8787
-npm test                  # API (PIN, reservas, fotos) contra wrangler dev con datos sembrados
+npm test                  # API (permisos, reservas, fotos); arrancar wrangler dev con --var ALLOW_PIN:true y datos sembrados
 npm run test:google       # login con Google; ver instrucciones al inicio de test/google.e2e.mjs
 ```

@@ -28,6 +28,8 @@ const entrar = async (claims, par) => call('POST', '/auth/google', { credential:
 
 let r = await call('GET', '/auth/config');
 check('config expone el ID de cliente (público)', r.j.google === CID, JSON.stringify(r.j));
+check('el PIN está apagado', r.j.pin === false, JSON.stringify(r.j));
+for (const pin of ['1234', '1111', '0000']) { const x = await call('POST', '/auth/login', { pin }); check(`entrar con PIN ${pin} → 403`, x.s === 403, JSON.stringify(x.j)) }
 
 r = await entrar({ email: 'dueno@gmail.com' });
 check('dueño entra con Google', r.s === 200 && r.j.rol === 'dueno' && /brb_s=/.test(r.cookie), JSON.stringify(r));
@@ -63,9 +65,12 @@ check('y no recibe sesión', r.s === 401);
 
 // El dueño autoriza a un barbero por correo
 const panel = (await call('GET', '/panel', null, dueno)).j;
-const barberos = panel.barberos.map(b => b.id === 'b1' ? { ...b, email: 'Jhon@Gmail.com' } : b);
-r = await call('PUT', '/config', { cfg: panel.cfg, barberos, servicios: panel.servicios, usuarios: panel.usuarios }, dueno);
+check('los datos del panel no traen ningún PIN', !JSON.stringify(panel).match(/"pin"|adminPin/), JSON.stringify(panel).slice(0, 200));
+// aunque un panel viejo intente guardar PIN, el servidor los descarta
+const barberos = panel.barberos.map(b => b.id === 'b1' ? { ...b, email: 'Jhon@Gmail.com', pin: '4826' } : b);
+r = await call('PUT', '/config', { cfg: { ...panel.cfg, adminPin: '1234' }, barberos, servicios: panel.servicios, usuarios: panel.usuarios }, dueno);
 check('dueño autoriza el correo de un barbero', r.s === 200);
+check('el servidor descarta PIN enviados al guardar', !JSON.stringify((await call('GET', '/panel', null, dueno)).j).match(/"pin"|adminPin/));
 r = await entrar({ email: 'jhon@gmail.com' });
 check('barbero entra con Google (sin importar mayúsculas)', r.s === 200 && r.j.rol === 'barbero' && r.j.barberoId === 'b1', JSON.stringify(r));
 const barb = r.cookie;

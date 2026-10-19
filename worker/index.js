@@ -3,15 +3,15 @@
    - D1  (env.DB)    : configuración, barberos, servicios, usuarios,
                        citas, links y sesiones.
    - R2  (env.FOTOS) : fotos (logo, barberos, servicios, cortes, Yape).
-   - Login del personal con Google (verificado aquí, con nonce de un solo uso)
-     y PIN de respaldo. Sesión en cookie HttpOnly. Registro de accesos.
+   - Login del personal SOLO con Google (verificado aquí, con nonce de un solo uso).
+     Sesión en cookie HttpOnly. Registro de accesos.
    - El navegador nunca decide: horarios, precios, permisos y Turnstile
      se validan aquí.
 
    Variables (Cloudflare → Worker → Settings → Variables and Secrets):
      OWNER_EMAILS       correos de Google de los dueños, separados por coma
      GOOGLE_CLIENT_ID   ID de cliente OAuth (termina en .apps.googleusercontent.com)
-     ALLOW_PIN          "false" para desactivar el acceso con PIN (recomendado con Google)
+     ALLOW_PIN          "true" enciende el acceso con PIN (apagado por defecto; solo para pruebas)
      TURNSTILE_SITEKEY  clave pública de Turnstile (opcional)
      TURNSTILE_SECRET   clave secreta de Turnstile (tipo Secret, opcional)
      TZ                 zona horaria del local (por defecto America/Lima)
@@ -77,12 +77,12 @@ const trabaja = (cfg, b, f) => { const d = pYmd(f).getUTCDay(); return b && b.ac
 let schemaListo = null;
 function asegurarSchema(env) { return schemaListo ||= env.DB.batch(SCHEMA.map(s => env.DB.prepare(s))).catch(e => { schemaListo = null; throw e }) }
 
-// Primera vez: deja la app lista para usar con el PIN del dueño 1234 (cámbialo en ⚙️ Config).
+// Primera vez: deja la app lista con barberos y servicios de ejemplo (sin PIN: se entra con Google).
 const COLORES = ['#ff3fd2', '#8a3ffc', '#4d6bff', '#ffb057', '#3fb950'];
 const SEED = {
-  cfg: { nombre: 'Stereo Barber Pool', adminPin: '1234' },
+  cfg: { nombre: 'Stereo Barber Pool' },
   barberos: [['Jhon', 'Fades y degradados'], ['Brayan', 'Diseños y freestyle'], ['Piero', 'Cortes clásicos'], ['Alexis', 'Barba y perfilado'], ['Renzo', 'Taper y mullet']]
-    .map(([nombre, esp], i) => ({ id: 'b' + (i + 1), nombre, esp, foto: '', color: COLORES[i], pin: String(i + 1).repeat(4), comision: 50, dias: [1, 2, 3, 4, 5, 6], activo: true })),
+    .map(([nombre, esp], i) => ({ id: 'b' + (i + 1), nombre, esp, foto: '', color: COLORES[i], comision: 50, dias: [1, 2, 3, 4, 5, 6], activo: true })),
   servicios: [['✂️', 'Corte clásico', 25, 'Tijera y máquina, acabado limpio'], ['🔥', 'Fade / Degradado', 30, 'Low, mid o high fade'], ['💈', 'Taper', 30, 'Degradado suave en patillas y nuca'], ['🧔', 'Corte + Barba', 40, 'Corte completo y perfilado de barba'], ['🪒', 'Barba', 15, 'Perfilado con toalla caliente'], ['🎨', 'Diseño / Freestyle', 35, 'Líneas y figuras a mano alzada']]
     .map(([emoji, nombre, precio, desc], i) => ({ id: 's' + (i + 1), emoji, nombre, precio, desc, foto: '', activo: true })),
   usuarios: [],
@@ -91,7 +91,17 @@ let sembrado = false;
 async function sembrar(env) {
   if (sembrado) return;
   await env.DB.batch(Object.entries(SEED).map(([k, v]) => env.DB.prepare('INSERT OR IGNORE INTO kv(k, v) VALUES(?, ?)').bind(k, JSON.stringify(v))));
+  if (!pinPermitido(env)) await quitarPines(env);
   sembrado = true;
+}
+// Borra los PIN que quedaron guardados (el acceso es solo con Google). Los que no sean los de ejemplo se conservan.
+async function quitarPines(env) {
+  const d = await leerKV(env, ['cfg', 'barberos', 'usuarios']); const cambios = [];
+  if (d.cfg?.adminPin) { const { adminPin, ...cfg } = d.cfg; cambios.push(kvStmt(env, 'cfg', cfg)) }
+  const sinPin = a => a.map(({ pin, ...x }) => x);
+  if ((d.barberos || []).some(b => b.pin)) cambios.push(kvStmt(env, 'barberos', sinPin(d.barberos)));
+  if ((d.usuarios || []).some(u => u.pin)) cambios.push(kvStmt(env, 'usuarios', sinPin(d.usuarios)));
+  if (cambios.length) await env.DB.batch(cambios);
 }
 
 async function leerKV(env, keys) {
@@ -165,7 +175,8 @@ function fotosPublicas(d) {
 function cookieDe(req) { const m = (req.headers.get('Cookie') || '').match(/(?:^|;\s*)brb_s=([^;]+)/); return m ? m[1] : '' }
 const setCookie = (val, maxAge) => `${COOKIE}=${val}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 const pinValido = p => /^\d{4,6}$/.test(p);
-const pinPermitido = env => env.ALLOW_PIN !== 'false';
+// El PIN está apagado: el acceso es solo con Google. Solo se enciende con ALLOW_PIN=true (pruebas locales).
+const pinPermitido = env => env.ALLOW_PIN === 'true';
 function porEmail(email, d, env) {
   const e = norm(email); if (!e) return null;
   if ((env.OWNER_EMAILS || '').split(/[,\s;]+/).map(norm).filter(Boolean).includes(e)) return { rol: 'dueno', nombre: 'Dueño' };
@@ -403,6 +414,7 @@ async function api(req, env, path) {
   if (path === '/config' && m === 'PUT') {
     exigir('config'); const b = await body();
     if (!b.cfg || typeof b.cfg !== 'object' || !Array.isArray(b.barberos) || !Array.isArray(b.servicios)) fail(400, 'Datos no válidos');
+    if (!pinPermitido(env)) { delete b.cfg.adminPin; b.barberos = b.barberos.map(({ pin, ...x }) => x); if (Array.isArray(b.usuarios)) b.usuarios = b.usuarios.map(({ pin, ...x }) => x) }
     await env.DB.batch([kvStmt(env, 'cfg', b.cfg), kvStmt(env, 'barberos', b.barberos), kvStmt(env, 'servicios', b.servicios), ...(Array.isArray(b.usuarios) ? [kvStmt(env, 'usuarios', b.usuarios)] : []), bumpStmt(env)]);
     return json({ ok: true });
   }
@@ -462,6 +474,7 @@ async function api(req, env, path) {
   if (path === '/importar' && m === 'POST') {
     exigir('config'); const b = await body();
     if (!b.cfg || !Array.isArray(b.citas)) fail(400, 'Archivo no válido');
+    if (!pinPermitido(env)) { delete b.cfg.adminPin; b.barberos = (b.barberos || []).map(({ pin, ...x }) => x); b.usuarios = (b.usuarios || []).map(({ pin, ...x }) => x) }
     let fotos = 0;
     for (const [k, v] of Object.entries(b.fotos || {})) if (/^f_[\w-]+$/.test(k)) { try { await guardarFoto(env, v, k); fotos++ } catch { } }
     await env.DB.batch([
