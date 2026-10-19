@@ -3,11 +3,15 @@
    - D1  (env.DB)    : configuración, barberos, servicios, usuarios,
                        citas, links y sesiones.
    - R2  (env.FOTOS) : fotos (logo, barberos, servicios, cortes, Yape).
-   - Login del personal con PIN (sesión en cookie segura).
+   - Login del personal con Google (verificado aquí, con nonce de un solo uso)
+     y PIN de respaldo. Sesión en cookie HttpOnly. Registro de accesos.
    - El navegador nunca decide: horarios, precios, permisos y Turnstile
      se validan aquí.
 
    Variables (Cloudflare → Worker → Settings → Variables and Secrets):
+     OWNER_EMAILS       correos de Google de los dueños, separados por coma
+     GOOGLE_CLIENT_ID   ID de cliente OAuth (termina en .apps.googleusercontent.com)
+     ALLOW_PIN          "false" para desactivar el acceso con PIN (recomendado con Google)
      TURNSTILE_SITEKEY  clave pública de Turnstile (opcional)
      TURNSTILE_SECRET   clave secreta de Turnstile (tipo Secret, opcional)
      TZ                 zona horaria del local (por defecto America/Lima)
@@ -18,7 +22,7 @@ const DUR = 60;
 const PERMS = ['verTodas', 'verTel', 'verMontos', 'crear', 'cancelar', 'yape', 'links', 'dash', 'excel', 'config'];
 const ALLP = Object.fromEntries(PERMS.map(k => [k, true]));
 const ROL_BARBERO = { verTel: true, crear: true, links: true };
-const SES_MS = 30 * 864e5;
+const SES_MS = 14 * 864e5;
 const COOKIE = 'brb_s';
 const MAX_FOTO = 3 * 1024 * 1024;
 const DEF = { dias: [1, 2, 3, 4, 5, 6], apertura: '09:00', cierre: '20:00', refIni: '13:00', refFin: '14:00', anticipacion: 0, ventana: 14, modAdelanto: true, yapeNum: '', adelanto: 10, holdMin: 20, bloqueos: [] };
@@ -35,12 +39,14 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS sesiones(id TEXT PRIMARY KEY, data TEXT NOT NULL, exp INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS intentos(ip TEXT NOT NULL, ts INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS ix_intentos ON intentos(ip, ts)`,
+  `CREATE TABLE IF NOT EXISTS nonces(h TEXT PRIMARY KEY, exp INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS accesos(id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, via TEXT NOT NULL, quien TEXT, ok INTEGER NOT NULL, motivo TEXT, ip TEXT)`,
 ];
 
 /* ---------- utilidades ---------- */
 class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status } }
 const fail = (status, msg) => { throw new HttpError(status, msg) };
-const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers } });
+const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers } });
 const uid = () => Date.now().toString(36) + rnd(6).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 6);
 const codigo = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), b => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
 const pad = n => String(n).padStart(2, '0');
@@ -159,6 +165,16 @@ function fotosPublicas(d) {
 function cookieDe(req) { const m = (req.headers.get('Cookie') || '').match(/(?:^|;\s*)brb_s=([^;]+)/); return m ? m[1] : '' }
 const setCookie = (val, maxAge) => `${COOKIE}=${val}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 const pinValido = p => /^\d{4,6}$/.test(p);
+const pinPermitido = env => env.ALLOW_PIN !== 'false';
+function porEmail(email, d, env) {
+  const e = norm(email); if (!e) return null;
+  if ((env.OWNER_EMAILS || '').split(/[,\s;]+/).map(norm).filter(Boolean).includes(e)) return { rol: 'dueno', nombre: 'Dueño' };
+  const u = d.usuarios.find(x => norm(x.email) === e && x.activo !== false);
+  if (u) return { rol: u.rol, uid: u.id, nombre: u.nombre, barberoId: u.barberoId || '' };
+  const b = d.barberos.find(x => norm(x.email) === e && x.activo !== false);
+  if (b) return { rol: 'barbero', barberoId: b.id, nombre: b.nombre };
+  return null;
+}
 
 function porPin(pin, d) {
   if (pin === d.cfg.adminPin) return { ident: { rol: 'dueno', nombre: 'Dueño' }, ref: 'admin' };
@@ -186,16 +202,53 @@ async function sesion(req, env, d) {
   if (!r || r.exp < Date.now()) return null;
   const s = JSON.parse(r.data);
   let ident = null;
-  if (s.via === 'pin') { const p = pinDeRef(s.ref, d); if (p && await sha256(p) === s.pinH) ident = s.ident }
+  if (s.via === 'google') ident = porEmail(s.email, d, env);
+  else if (s.via === 'pin' && pinPermitido(env)) { const p = pinDeRef(s.ref, d); if (p && await sha256(p) === s.pinH) ident = s.ident }
   if (!ident) return null;
   const perm = permisos(ident, d); if (!perm) return null;
-  return { ...ident, perm };
+  return { ...ident, email: s.email, perm };
 }
 async function abrirSesion(env, data) {
   const t = rnd();
   await env.DB.prepare('INSERT INTO sesiones(id, data, exp) VALUES(?, ?, ?)').bind(await sha256(t), JSON.stringify(data), Date.now() + SES_MS).run();
   return setCookie(t, SES_MS / 1000);
 }
+
+let jwks = { exp: 0, keys: [] };
+async function clavesGoogle(env, fetcher = fetch) {
+  if (jwks.exp > Date.now()) return jwks.keys;
+  const r = await fetcher(env?.GOOGLE_CERTS_URL || 'https://www.googleapis.com/oauth2/v3/certs'); if (!r.ok) fail(502, 'No se pudo contactar a Google');
+  const max = +(/max-age=(\d+)/.exec(r.headers.get('Cache-Control') || '')?.[1] || 3600);
+  jwks = { exp: Date.now() + max * 1000, keys: (await r.json()).keys || [] };
+  return jwks.keys;
+}
+const b64u = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0));
+// Verifica el ID token (JWT RS256) de Google: firma, emisor, destinatario, vencimiento y correo verificado.
+export async function verificarGoogle(token, clientId, env, fetcher) {
+  const malo = () => fail(400, 'Token de Google no válido o vencido');
+  const partes = String(token || '').split('.'); if (partes.length !== 3 || token.length > 4096) malo();
+  const [h, p, firma] = partes, dec = x => JSON.parse(new TextDecoder().decode(b64u(x)));
+  let cab, datos; try { cab = dec(h); datos = dec(p) } catch { malo() }
+  if (cab.alg !== 'RS256') malo();
+  const jwk = (await clavesGoogle(env, fetcher)).find(k => k.kid === cab.kid); if (!jwk) malo();
+  const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+  if (!await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, b64u(firma), new TextEncoder().encode(`${h}.${p}`))) malo();
+  const ahora = Date.now() / 1000;
+  if (!['accounts.google.com', 'https://accounts.google.com'].includes(datos.iss) || datos.aud !== clientId || !(datos.exp > ahora - 60) || !(datos.iat <= ahora + 300) || datos.email_verified !== true || !datos.email) malo();
+  return datos;
+}
+// El nonce lo emite el servidor y se usa una sola vez: un token robado no se puede reutilizar.
+async function nuevoNonce(env) {
+  const n = rnd(24);
+  await env.DB.prepare('INSERT INTO nonces(h, exp) VALUES(?, ?)').bind(await sha256(n), Date.now() + 5 * 60e3).run();
+  return n;
+}
+async function gastarNonce(env, n) {
+  if (!n) return false;
+  const r = await env.DB.prepare('DELETE FROM nonces WHERE h = ? AND exp > ?').bind(await sha256(String(n)), Date.now()).run();
+  return !!r.meta?.changes;
+}
+const anotar = (env, via, quien, ok, motivo, req) => env.DB.prepare('INSERT INTO accesos(ts, via, quien, ok, motivo, ip) VALUES(?,?,?,?,?,?)').bind(Date.now(), via, str(quien, 120), ok ? 1 : 0, str(motivo, 120), ipDe(req)).run().catch(() => { });
 
 async function limitar(env, clave, max, ventanaMs) {
   const desde = Date.now() - ventanaMs;
@@ -211,8 +264,8 @@ function vistaPanel(d, citas, s) {
   let barberos = d.barberos, usuarios = d.usuarios;
   if (!esConfig) {
     delete cfg.adminPin;
-    barberos = barberos.map(({ pin, ...b }) => b);
-    usuarios = usuarios.filter(u => u.id === s.uid).map(({ pin, ...u }) => u);
+    barberos = barberos.map(({ pin, email, ...b }) => b);
+    usuarios = usuarios.filter(u => u.id === s.uid).map(({ pin, email, ...u }) => u);
   }
   if (!s.perm.verTodas) citas = citas.filter(c => c.barberoId === s.barberoId);
   if (!s.perm.verTel) citas = citas.map(c => c.cliente?.tel ? { ...c, cliente: { ...c.cliente, tel: '••• ••• ' + String(c.cliente.tel).slice(-3) } } : c);
@@ -222,7 +275,7 @@ function vistaPublica(d) {
   const { adminPin, permBarbero, ...cfg } = d.cfg;
   return {
     cfg,
-    barberos: d.barberos.filter(b => b.activo !== false).map(({ pin, comision, ...b }) => b),
+    barberos: d.barberos.filter(b => b.activo !== false).map(({ pin, comision, email, ...b }) => b),
     servicios: d.servicios.filter(s => s.activo !== false),
   };
 }
@@ -276,13 +329,33 @@ async function api(req, env, path) {
   }
 
   /* ----- autenticación ----- */
+  if (path === '/auth/config' && m === 'GET') return json({ google: env.GOOGLE_CLIENT_ID || '', pin: pinPermitido(env) });
+  if (path === '/auth/nonce' && m === 'GET') {
+    if (!env.GOOGLE_CLIENT_ID) fail(400, 'Falta configurar GOOGLE_CLIENT_ID en Cloudflare');
+    await limitar(env, 'n:' + ipDe(req), 60, 15 * 60e3);
+    return json({ nonce: await nuevoNonce(env) });
+  }
+  if (path === '/auth/google' && m === 'POST') {
+    if (!env.GOOGLE_CLIENT_ID) fail(400, 'Falta configurar GOOGLE_CLIENT_ID en Cloudflare');
+    await limitar(env, 'g:' + ipDe(req), 20, 15 * 60e3);
+    let g;
+    try { g = await verificarGoogle((await body()).credential, env.GOOGLE_CLIENT_ID, env) }
+    catch (e) { await anotar(env, 'google', '', false, e.message, req); throw e }
+    if (!await gastarNonce(env, g.nonce)) { await anotar(env, 'google', g.email, false, 'nonce inválido o repetido', req); fail(400, 'La verificación venció. Recarga la página e inténtalo otra vez.') }
+    const d = await datos(env), ident = porEmail(g.email, d, env);
+    if (!ident) { await anotar(env, 'google', g.email, false, 'correo no autorizado', req); fail(403, `El correo ${norm(g.email)} no está autorizado. Pide al dueño que lo agregue en ⚙️ Config.`) }
+    const cookie = await abrirSesion(env, { via: 'google', email: norm(g.email) });
+    await anotar(env, 'google', g.email, true, ident.rol, req);
+    return json({ ...ident, email: norm(g.email) }, 200, { 'Set-Cookie': cookie });
+  }
   if (path === '/auth/login' && m === 'POST') {
+    if (!pinPermitido(env)) fail(403, 'El acceso con PIN está desactivado. Entra con Google.');
     await limitar(env, 'p:' + ipDe(req), 8, 15 * 60e3);
     const pin = str((await body()).pin, 8);
-    if (!pinValido(pin)) fail(403, 'PIN incorrecto');
-    const d = await datos(env), r = porPin(pin, d);
-    if (!r) fail(403, 'PIN incorrecto');
+    const d = await datos(env), r = pinValido(pin) ? porPin(pin, d) : null;
+    if (!r) { await anotar(env, 'pin', '', false, 'PIN incorrecto', req); fail(403, 'PIN incorrecto') }
     const cookie = await abrirSesion(env, { via: 'pin', ref: r.ref, pinH: await sha256(pin), ident: r.ident });
+    await anotar(env, 'pin', r.ident.nombre, true, r.ident.rol, req);
     return json(r.ident, 200, { 'Set-Cookie': cookie });
   }
   if (path === '/auth/logout' && m === 'POST') {
@@ -297,6 +370,11 @@ async function api(req, env, path) {
   const exigir = p => { if (!s.perm[p]) fail(403, 'No tienes permiso para esto') };
   const propia = c => { if (!s.perm.verTodas && c.barberoId !== s.barberoId) fail(403, 'No es tu cita') };
 
+  if (path === '/accesos' && m === 'GET') {
+    exigir('config');
+    const r = await env.DB.prepare('SELECT ts, via, quien, ok, motivo, ip FROM accesos ORDER BY id DESC LIMIT 100').all();
+    return json(r.results);
+  }
   if (path === '/diagnostico' && m === 'GET') {
     exigir('config');
     const out = { db: { ok: false }, fotos: { ok: false } };
@@ -484,6 +562,8 @@ export default {
     await env.DB.batch([
       env.DB.prepare('DELETE FROM sesiones WHERE exp < ?').bind(Date.now()),
       env.DB.prepare('DELETE FROM intentos WHERE ts < ?').bind(Date.now() - 864e5),
+      env.DB.prepare('DELETE FROM nonces WHERE exp < ?').bind(Date.now()),
+      env.DB.prepare('DELETE FROM accesos WHERE ts < ?').bind(Date.now() - 90 * 864e5),
     ]);
   },
 };

@@ -8,7 +8,7 @@ La app es un **Cloudflare Worker** que sirve `index.html` (panel) y `reservar.ht
 | Base de datos | D1 | `stereo-barber-db` |
 | Fotos | R2 | `stereo-barber-fotos` |
 | Antibots | Turnstile | (opcional) |
-| Login | PIN | (sin servicios externos) |
+| Login | Google (+ PIN de respaldo) | ID de cliente OAuth |
 
 Las tablas se crean solas en la primera petición. Cada 5 minutos una tarea
 programada vence las reservas que no pagaron.
@@ -19,17 +19,30 @@ Al abrir la app por primera vez, el Worker crea las tablas y carga datos de ejem
 (5 barberos y 6 servicios). **PIN del dueño: `1234`**, y los barberos `1111`, `2222`,
 `3333`, `4444` y `5555`. Cámbialos en ⚙️ Config → Seguridad y Usuarios.
 
-Variables opcionales (Settings → Variables and Secrets):
+Variables (Settings → Variables and Secrets):
 
 | Nombre | Tipo | Valor |
 |---|---|---|
+| `GOOGLE_CLIENT_ID` | Text | `xxxx.apps.googleusercontent.com` (activa el botón de Google) |
+| `OWNER_EMAILS` | Text | Gmail(s) del dueño, separados por coma |
+| `ALLOW_PIN` | Text | `false` apaga el acceso con PIN (recomendado cuando Google ya funciona) |
 | `TURNSTILE_SITEKEY` | Text | Clave pública de Turnstile (antibots del formulario) |
 | `TURNSTILE_SECRET` | Secret | Clave secreta de Turnstile |
+
+## Seguridad del acceso
+
+- Google se verifica en el Worker: firma, emisor, aplicación (`aud`), vencimiento y correo verificado.
+- Cada intento usa un **nonce de un solo uso** emitido por el servidor: un token robado no sirve dos veces.
+- Solo entran los correos autorizados (dueño por variable; barberos y usuarios por su correo en ⚙️ Config). Quitar el correo cierra la sesión al instante.
+- Sesión en cookie `HttpOnly; Secure; SameSite=Lax` (14 días); las peticiones de otro origen se rechazan.
+- Límite de intentos por IP y **registro de accesos** (⚙️ Config → Seguridad → 📜).
+- Los PIN y correos solo los ve quien tiene permiso de Config.
 
 ## Desarrollo local
 
 ```bash
 npm install
 npx wrangler dev          # http://localhost:8787
-npm test                  # prueba la API contra wrangler dev (con datos sembrados)
+npm test                  # API (PIN, reservas, fotos) contra wrangler dev con datos sembrados
+npm run test:google       # login con Google; ver instrucciones al inicio de test/google.e2e.mjs
 ```
