@@ -314,6 +314,11 @@ const lsSet=(k,v)=>{try{localStorage.setItem('brb_'+k,JSON.stringify(v));return 
 const clone=o=>JSON.parse(JSON.stringify(o));
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),2800)}
 function copiar(txt){navigator.clipboard?.writeText(txt).then(()=>toast('📋 Copiado')).catch(()=>prompt('Copia:',txt))}
+/* iPhone/Safari bloquea ventanas y copiado que ocurren DESPUÉS de esperar a la red:
+   se abre la ventana (o se prepara el copiado) en el mismo toque y se completa al terminar. */
+const ventana=()=>{try{return window.open('','_blank')}catch(e){return null}};
+const irA=(w,url)=>{if(w&&!w.closed)w.location.href=url;else location.href=url};
+async function copiarP(p){if(window.ClipboardItem&&navigator.clipboard?.write){try{await navigator.clipboard.write([new ClipboardItem({'text/plain':p.then(x=>new Blob([x],{type:'text/plain'}))})]);return toast('📋 Copiado')}catch(e){}}copiar(await p)}
 function beep(){try{const a=new(window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),g=a.createGain();o.frequency.value=880;g.gain.value=.08;o.connect(g);g.connect(a.destination);o.start();o.stop(a.currentTime+.18)}catch(e){}}
 
 /* ---------- fotos ---------- */
@@ -566,7 +571,9 @@ async function verYape(id){const c=cita(id);if(!c)return;
  <div id="yimg" class="empty" style="padding:20px">${c.yapeCaptura?'Cargando…':'⚠️ El cliente no adjuntó captura. Revisa tu Yape antes de validar.'}</div>
  <div class="row" style="margin-top:12px"><button class="btn r" style="flex:1" onclick="rechazar('${id}')">✕ Rechazar</button><button class="btn g" style="flex:2" onclick="closeModal();validar('${id}')">✔ Validar y confirmar</button></div>`);
  if(c.yapeCaptura){const src=await API.foto(c.yapeCaptura);$('#yimg').innerHTML=src?`<img src="${src}" style="width:100%;border-radius:14px">`:'No se encontró la imagen'}}
-async function validar(id){await setEstado(id,'confirmada',{adelantoOk:true},'✅ Cita confirmada');const c=cita(id);if(c?.cliente?.tel&&confirm('¿Enviar la confirmación al cliente por WhatsApp?'))abrirWA(c.cliente.tel,tpl(S.cfg.waConfirma,c))}
+async function validar(id){const c0=cita(id),enviar=!!c0?.cliente?.tel&&confirm('¿Enviar la confirmación al cliente por WhatsApp?\n\nAceptar: valida el pago y abre WhatsApp\nCancelar: solo valida el pago'),w=enviar?ventana():null;
+ await setEstado(id,'confirmada',{adelantoOk:true},'✅ Cita confirmada');const c=cita(id);
+ if(w){if(c?.estado==='confirmada')irA(w,`https://wa.me/${waNum(c.cliente.tel)}?text=${encodeURIComponent(tpl(S.cfg.waConfirma,c))}`);else w.close()}}
 async function rechazar(id){if(!confirm('¿Rechazar el pago y cancelar la cita? El horario se libera.'))return;closeModal();await setEstado(id,'cancelada',{motivo:'Yape no válido'})}
 async function terminar(id){const c=cita(id);if(!c)return;if(S.cfg.modFotos&&!c.fotoDespues&&!confirm('Aún no tiene foto DESPUÉS 📷 (tómala en el recuadro de la tarjeta).\n\n¿Terminar igual?'))return;
  const n=S.cfg.modFidelidad?+S.cfg.fidelidad||0:0,v=contarVisitas()[telKey(c.cliente?.tel)]||0,extra={atendidaTs:Date.now()};
@@ -728,13 +735,15 @@ function listaLinks(){const f=S.lkF||'todos';let ls=(S.links||[]).filter(l=>isAd
 async function genLink(modo){const nom=$('#lkNom').value.trim(),tel=$('#lkTel').value.replace(/\D/g,'').slice(-9),sid=$('#lkServ').value,bid=$('#lkBarb').value,ade=$('#lkAde').value,dias=+$('#lkVen').value;
  if(!nom)return toast('Escribe el nombre del cliente');const s=S.servicios.find(x=>x.id===sid);
  const l={id:uid(),token:tokenL(),tipo:'personal',creado:Date.now(),creadoPor:S.ses.barberoId||'admin',estado:'disponible',cliente:{nombre:nom,tel},servicioId:sid||'',servicioNombre:s?.nombre||'',barberoId:bid||'',adelanto:ade===''?null:Math.max(0,+ade),nota:$('#lkNota').value.trim(),vence:dias?Date.now()+dias*864e5:null};
- try{await API.saveLink(l);const url=linkUrl(l);
-  if(modo==='copiar'){copiar(url)}else{const msg=`Hola ${nom} 👋 Te dejo tu link personal para reservar en *${S.cfg.nombre}*, sobrino 💈${l.nota?`\n🎁 ${l.nota}`:''}\n${url}${l.vence?`\n⏱ Válido hasta el ${fCorta(l.vence)}`:''}`;tel?abrirWA(tel,msg):window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank')}
-  toast('🔑 Link generado');renderCompartir()}catch(e){toast('❌ '+e.message)}}
+ const w=modo==='copiar'?null:ventana();
+ try{const g=API.saveLink(l).then(()=>linkUrl(l));
+  if(modo==='copiar'){await copiarP(g)}else{const url=await g,msg=`Hola ${nom} 👋 Te dejo tu link personal para reservar en *${S.cfg.nombre}*, sobrino 💈${l.nota?`\n🎁 ${l.nota}`:''}\n${url}${l.vence?`\n⏱ Válido hasta el ${fCorta(l.vence)}`:''}`;irA(w,`https://wa.me/${tel?waNum(tel):''}?text=${encodeURIComponent(msg)}`)}
+  toast('🔑 Link generado');renderCompartir()}catch(e){w?.close();toast('❌ '+e.message)}}
 async function linkRapido(modo){const l={id:uid(),token:tokenL(),tipo:'rapido',creado:Date.now(),creadoPor:S.ses.barberoId||'admin',estado:'disponible',cliente:null,barberoId:isAdmin()?'':S.ses.barberoId,adelanto:null,vence:Date.now()+7*864e5};
- try{await API.saveLink(l);const url=linkUrl(l);
-  if(modo==='copiar')copiar(url);else if(modo==='abrir')window.open(url,'_blank');else window.open('https://wa.me/?text='+encodeURIComponent(`💈 Reserva tu corte en *${S.cfg.nombre}*, sobrino 👇\n${url}`),'_blank');
-  renderCompartir()}catch(e){toast('❌ '+e.message)}}
+ const w=modo==='copiar'?null:ventana();
+ try{const g=API.saveLink(l).then(()=>linkUrl(l));
+  if(modo==='copiar')await copiarP(g);else{const url=await g;irA(w,modo==='abrir'?url:'https://wa.me/?text='+encodeURIComponent(`💈 Reserva tu corte en *${S.cfg.nombre}*, sobrino 👇\n${url}`))}
+  renderCompartir()}catch(e){w?.close();toast('❌ '+e.message)}}
 function compartirLink(id){const l=S.links.find(x=>x.id===id);if(!l)return;const url=linkUrl(l),msg=l.tipo==='rapido'?`💈 Reserva tu corte en *${S.cfg.nombre}*, sobrino 👇\n${url}`:`Hola ${l.cliente?.nombre||''} 👋 Tu link personal para reservar en *${S.cfg.nombre}* 💈\n${url}`;
  l.cliente?.tel?abrirWA(l.cliente.tel,msg):window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank')}
 async function borrarLink(id){if(!confirm('¿Eliminar este link? Si alguien lo abre verá que ya no es válido.'))return;await API.delLink(id);renderCompartir()}
