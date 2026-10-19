@@ -15,7 +15,7 @@ programada vence las reservas que no pagaron.
 
 ## Variables del Worker
 
-Cloudflare → Workers & Pages → `stereo-pool-barber` → Settings → Variables and Secrets:
+Cloudflare → Workers & Pages → `ceo-stereopoolbarber` → Settings → Variables and Secrets:
 
 | Nombre | Tipo | Valor |
 |---|---|---|

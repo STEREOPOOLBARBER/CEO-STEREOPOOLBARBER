@@ -2,7 +2,7 @@
 // Los HTML de la raíz se sirven como archivos estáticos y /api/* lo atiende worker/index.js.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "stereo-pool-barber",
+  "name": "ceo-stereopoolbarber",
   "main": "worker/index.js",
   "compatibility_date": "2025-09-01",
   "assets": {
