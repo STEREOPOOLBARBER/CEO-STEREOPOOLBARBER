@@ -374,7 +374,7 @@ function s6(){const c=P.cfg,i=F.info;if(!i)return s0();
  const fl=()=>{const d=(ts-Date.now())/1000;return viva?(d>0?`⏳ Faltan ${fmtF(d)}`:'🕘 Es su hora'):''};
  shell(`<div class="est"><b class="i">${e.i}</b><h2 style="color:${e.c}">${esc(e.t)}</h2><div class="fl" id="fl" style="color:var(--tx)">${fl()}</div></div>
  <div class="card"><div class="res"><span>🔖</span><span>Código <b>${esc(i.codigo)}</b></span><span>👤</span><span>${esc(i.cliente?.nombre||'')}</span><span>✂️</span><span><b>${esc(i.servicio||'')}</b> · ${soles(i.precio)}</span><span>💈</span><span>${esc(i.barbero||'')}</span><span>📅</span><span>${fLarga(i.fecha)} · ${h12(i.hora)}</span><span>💸</span><span>${pago}</span></div></div>
- ${(viva&&(+i.tolerancia>0||c.politicaTxt))?`<div class="card" style="font-size:14px;line-height:1.45">📜 <b>Política</b>${+i.tolerancia>0?`<br>⏱️ Tienes <b>${+i.tolerancia} minutos</b> de tolerancia. Pasado ese tiempo la cita puede liberarse.`:''}${c.politicaTxt?`<br>${esc(c.politicaTxt)}`:''}</div>`:''}
+ ${viva&&c.politicaTxt?`<div class="card" style="font-size:14px;line-height:1.45">📜 <b>Política</b><div style="white-space:pre-line;margin-top:4px">${esc(c.politicaTxt)}</div></div>`:''}
  ${puedeRep(i)?`<button class="btn w" style="margin-top:10px" onclick="reprogUI()">📅 Reprogramar mi cita</button><p class="pt" style="text-align:center;margin-top:6px">Puedes cambiarla hasta ${i.horasReprog||24} h antes de tu corte.</p>`:''}
  ${mapaHTML(c)}`,
  `${c.whatsapp?`<button class="btn g" onclick="escribirBarberia()">💬 Escribir a la barbería</button>`:''}<button class="btn" onclick="verEstado(F.codigo,F.volver)">🔄 Actualizar</button>${F.volver?'<button class="btn" onclick="F.info=null;F.volver=false;go(0)">← Volver</button>':''}`);
