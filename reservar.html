@@ -238,6 +238,7 @@ const API={
   const cs=expirarLocal(),c=cs.find(x=>x.id===id&&x.codigo===cod);if(!c)throw new Error('Reserva no encontrada');if(c.estado==='expirada')throw new Error('Se venció el tiempo de pago');if(c.estado!=='por_validar'||!c.expira)throw new Error('Esta reserva ya fue procesada');
   const k='f_'+uid();await IDB.put(k,data);c.yapeCaptura=k;c.estado='por_validar';c.expira=null;c.upd=Date.now();lsSet('citas',cs);return{ok:true}},
  async audioUrl(k){if(NR.cache.has(k))return NR.cache.get(k);let u;if(this.remote){const r=await fetch(`${CONFIG.API_URL}/audio/${k}`);if(!r.ok)throw new Error('audio');u=URL.createObjectURL(await r.blob())}else{u=await IDB.get(k);if(!u)throw new Error('audio')}NR.cache.set(k,u);return u},
+ async reprogramar(cod,fecha,hora){return this.req('POST','/publico/cita/'+encodeURIComponent(cod)+'/reprogramar',{fecha,hora})},
  async estado(cod){if(this.remote)return this.req('GET','/publico/cita/'+encodeURIComponent(cod));const c=lsGet('citas',[]).find(x=>x.codigo===String(cod).toUpperCase());if(!c)throw new Error('No encontramos una cita con ese código');const b=lsGet('barberos',[]).find(x=>x.id===c.barberoId);return{codigo:c.codigo,estado:c.estado,fecha:c.fecha,hora:c.hora,servicio:c.servicioNombre,precio:c.precio,adelanto:c.adelanto,adelantoOk:!!c.adelantoOk,barbero:b?.nombre||'',cliente:{nombre:c.cliente?.nombre||''},sinComprobante:c.estado==='por_validar'&&!c.yapeCaptura&&!!c.expira,expira:c.expira||null}},
  async link(t){if(this.remote)return this.req('GET','/publico/link/'+encodeURIComponent(t));return lsGet('links',[]).find(l=>l.token===t)||null},
  async foto(k){if(!k)return'';if(/^(data:|https?:)/.test(k))return k;if(this.remote)return `${CONFIG.API_URL}/fotos/${k}`;return(await IDB.get(k))||''}
@@ -373,9 +374,26 @@ function s6(){const c=P.cfg,i=F.info;if(!i)return s0();
  const fl=()=>{const d=(ts-Date.now())/1000;return viva?(d>0?`⏳ Faltan ${fmtF(d)}`:'🕘 Es su hora'):''};
  shell(`<div class="est"><b class="i">${e.i}</b><h2 style="color:${e.c}">${esc(e.t)}</h2><div class="fl" id="fl" style="color:var(--tx)">${fl()}</div></div>
  <div class="card"><div class="res"><span>🔖</span><span>Código <b>${esc(i.codigo)}</b></span><span>👤</span><span>${esc(i.cliente?.nombre||'')}</span><span>✂️</span><span><b>${esc(i.servicio||'')}</b> · ${soles(i.precio)}</span><span>💈</span><span>${esc(i.barbero||'')}</span><span>📅</span><span>${fLarga(i.fecha)} · ${h12(i.hora)}</span><span>💸</span><span>${pago}</span></div></div>
+ ${(viva&&(+i.tolerancia>0||c.politicaTxt))?`<div class="card" style="font-size:14px;line-height:1.45">📜 <b>Política</b>${+i.tolerancia>0?`<br>⏱️ Tienes <b>${+i.tolerancia} minutos</b> de tolerancia. Pasado ese tiempo la cita puede liberarse.`:''}${c.politicaTxt?`<br>${esc(c.politicaTxt)}`:''}</div>`:''}
+ ${puedeRep(i)?`<button class="btn w" style="margin-top:10px" onclick="reprogUI()">📅 Reprogramar mi cita</button><p class="pt" style="text-align:center;margin-top:6px">Puedes cambiarla hasta ${i.horasReprog||24} h antes de tu corte.</p>`:''}
  ${mapaHTML(c)}`,
  `${c.whatsapp?`<button class="btn g" onclick="escribirBarberia()">💬 Escribir a la barbería</button>`:''}<button class="btn" onclick="verEstado(F.codigo,F.volver)">🔄 Actualizar</button>${F.volver?'<button class="btn" onclick="F.info=null;F.volver=false;go(0)">← Volver</button>':''}`);
  let n=0;timerInt=setInterval(async()=>{const x=$('#fl');if(x)x.textContent=fl();if(++n%30)return;try{const nuevo=await API.estado(F.codigo);if(nuevo.estado!==F.info.estado){F.info=nuevo;s6();say('estado_'+nuevo.estado,nvEst(nuevo))}else F.info=nuevo}catch(_){}},1000)}
+const puedeRep=i=>!!(i&&i.puedeReprog&&API.remote&&startOf(i.fecha,i.hora)-Date.now()>=(+i.horasReprog||24)*3600e3);
+async function reprogUI(){const i=F.info;if(!puedeRep(i))return render();clearInterval(timerInt);
+ const guard={barb:F.barb,fecha:F.fecha,hora:F.hora};F._rg=F._rg||guard;F.barb=i.barberoId;
+ try{const d=await API.publico();P.ocupados=d.ocupados}catch(e){}
+ const ini=addD(hoy(),+P.cfg.anticipacion||0),dias=[];for(let k=0;k<Math.max(1,+P.cfg.ventana||14);k++){const f=addD(ini,k),l=libres(f);dias.push({f,ok:l.some(x=>x.ok)})}
+ if(!F.rf||!dias.find(d=>d.f===F.rf&&d.ok))F.rf=dias.find(d=>d.ok)?.f||null;
+ const sl=F.rf?libres(F.rf):[];if(F.rh&&!sl.find(x=>x.h===F.rh&&x.ok))F.rh=null;
+ shell(`<h2>📅 Reprogramar</h2><p class="pt">Ahora: <b>${fLarga(i.fecha)} · ${h12(i.hora)}</b> con ${esc(i.barbero||'')}. Elige el nuevo día y hora.</p>
+ ${dias.some(d=>d.ok)?`<div class="days">${dias.map(d=>{const x=pYmd(d.f);return `<button class="day ${F.rf===d.f?'on':''}" ${d.ok?'':'disabled'} onclick="F.rf='${d.f}';F.rh=null;reprogUI()"><small>${d.f===hoy()?'Hoy':DIAS[x.getDay()]}</small><b>${x.getDate()}</b><small>${MESC[x.getMonth()]}</small></button>`}).join('')}</div>
+ <div class="slots" style="margin-top:10px">${sl.map(x=>`<button class="slot ${F.rh===x.h?'on':''}" ${x.ok?'':'disabled'} onclick="F.rh='${x.h}';reprogUI()">${h12(x.h)}</button>`).join('')}</div>`:`<div class="empty">😕 Tu barbero no tiene horarios libres en los próximos días. Escríbenos por WhatsApp.</div>`}`,
+ `<button class="btn" onclick="reprogSalir()">←</button><button class="btn p" ${F.rh?'':'disabled'} onclick="reprogOk()">✅ Confirmar cambio</button>`)}
+function reprogSalir(){if(F._rg){Object.assign(F,{barb:F._rg.barb,fecha:F._rg.fecha,hora:F._rg.hora});F._rg=null}F.rf=F.rh=null;render()}
+async function reprogOk(){const i=F.info;if(!F.rf||!F.rh)return;if(!confirm(`¿Cambiar tu cita al ${fLarga(F.rf)} a las ${h12(F.rh)}?`))return;
+ try{await API.reprogramar(i.codigo,F.rf,F.rh);toast('✅ Cita reprogramada');F.rf=F.rh=null;if(F._rg){Object.assign(F,{barb:F._rg.barb,fecha:F._rg.fecha,hora:F._rg.hora});F._rg=null}await verEstado(i.codigo,F.volver)}
+ catch(e){toast('❌ '+e.message);reprogUI()}}
 function escribirBarberia(){const i=F.info;if(!i)return;window.open(waUrl(waNum(P.cfg.whatsapp),`Hola 👋 Soy ${(i.cliente?.nombre||'').split(' ')[0]}. Mi código de cita es ${i.codigo}.`),'_blank')}
 async function verEstado(cod,desdeForm){try{const codigo=(cod||F.cita?.codigo||'').toUpperCase();F.codigo=codigo;F.info=await API.estado(codigo);F.volver=!!desdeForm;go(6);say('estado_'+F.info.estado,nvEst(F.info))}catch(e){toast('❌ '+e.message)}}
 function reiniciar(){Object.assign(F,{link:null,info:null,codigo:'',step:0,serv:null,barb:null,fecha:null,hora:null,nota:'',ref:'',cap:'',cita:null});render();scrollTo(0,0)}

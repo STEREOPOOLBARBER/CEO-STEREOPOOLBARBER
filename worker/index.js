@@ -28,7 +28,7 @@ const SES_MS = 14 * 864e5;
 const COOKIE = 'brb_s', COOKIE_P = 'brb_g';
 const MAX_FOTO = 3 * 1024 * 1024;
 const MAX_AUDIO = 2.5 * 1024 * 1024;
-const DEF = { dias: [1, 2, 3, 4, 5, 6], apertura: '09:00', cierre: '20:00', refIni: '13:00', refFin: '14:00', anticipacion: 0, ventana: 14, modAdelanto: true, yapeNum: '', adelanto: 10, holdMin: 20, bloqueos: [] };
+const DEF = { dias: [1, 2, 3, 4, 5, 6], apertura: '09:00', cierre: '20:00', refIni: '13:00', refFin: '14:00', anticipacion: 0, ventana: 14, modAdelanto: true, yapeNum: '', adelanto: 10, holdMin: 20, bloqueos: [], tolerancia: 10, horasReprog: 24, maxReprog: 1, politicaTxt: '' };
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT NOT NULL)`,
@@ -74,6 +74,17 @@ function ahoraLocal(env) {
 }
 
 /* ---------- reglas de agenda (mismas que el formulario) ---------- */
+// Minutos desde ahora (hora de Lima) hasta una fecha y hora de la agenda.
+const minutosHasta = (env, fecha, hora) => { const a = ahoraLocal(env); return Math.round((pYmd(fecha) - pYmd(a.fecha)) / 60e3) + toMin(hora || '00:00') - a.min };
+// ¿Puede el cliente reprogramar esta cita? Solo si falta al menos `horasReprog` y no agotó sus cambios.
+function reglaReprog(env, cfg, c) {
+  const h = +cfg.horasReprog || 24, max = cfg.maxReprog === 0 || cfg.maxReprog === '0' ? 0 : (+cfg.maxReprog || 1);
+  if (!['por_validar', 'confirmada'].includes(c.estado)) return { ok: false, motivo: 'Esta cita ya no se puede reprogramar' };
+  if ((c.reprog || 0) >= max) return { ok: false, motivo: max ? `Ya reprogramaste ${max === 1 ? 'una vez' : max + ' veces'}. Escríbenos por WhatsApp.` : 'Las citas no se reprograman en línea. Escríbenos por WhatsApp.' };
+  if (minutosHasta(env, c.fecha, c.hora) < h * 60) return { ok: false, motivo: `Solo se puede reprogramar hasta ${h} horas antes de tu cita.` };
+  return { ok: true, horas: h };
+}
+
 function slotsDia(cfg) {
   const out = [], fin = toMin(cfg.cierre), ri = toMin(cfg.refIni), rf = toMin(cfg.refFin); let t = toMin(cfg.apertura), g = 0;
   if (t == null || fin == null) return out;
@@ -431,7 +442,28 @@ async function api(req, env, path) {
     const r = await env.DB.prepare('SELECT * FROM citas WHERE codigo = ?').bind(x[1].toUpperCase()).first();
     if (!r) fail(404, 'No encontramos una cita con ese código');
     const c = filaCita(r), d = await datos(env), b = d.barberos.find(y => y.id === c.barberoId);
-    return json({ codigo: c.codigo, estado: c.estado, fecha: c.fecha, hora: c.hora, servicio: c.servicioNombre || '', precio: +c.precio || 0, adelanto: +c.adelanto || 0, adelantoOk: !!c.adelantoOk, barbero: b?.nombre || '', cliente: { nombre: c.cliente?.nombre || '', tel: '••• ••• ' + String(c.cliente?.tel || '').slice(-3) }, sinComprobante: c.estado === 'por_validar' && !c.yapeCaptura && !!c.expira, expira: c.expira ?? null });
+    const cfg = { ...DEF, ...d.cfg }, rg = reglaReprog(env, cfg, c);
+    return json({ barberoId: c.barberoId, reprog: c.reprog || 0, puedeReprog: rg.ok, tolerancia: +cfg.tolerancia || 0, horasReprog: +cfg.horasReprog || 24, codigo: c.codigo, estado: c.estado, fecha: c.fecha, hora: c.hora, servicio: c.servicioNombre || '', precio: +c.precio || 0, adelanto: +c.adelanto || 0, adelantoOk: !!c.adelantoOk, barbero: b?.nombre || '', cliente: { nombre: c.cliente?.nombre || '', tel: '••• ••• ' + String(c.cliente?.tel || '').slice(-3) }, sinComprobante: c.estado === 'por_validar' && !c.yapeCaptura && !!c.expira, expira: c.expira ?? null });
+  }
+  if ((x = path.match(/^\/publico\/cita\/([A-Za-z0-9]{6})\/reprogramar$/)) && m === 'POST') {
+    await limitar(env, 'rp:' + ipDe(req), 10, 60 * 60e3);
+    await expirar(env);
+    const r = await env.DB.prepare('SELECT * FROM citas WHERE codigo = ?').bind(x[1].toUpperCase()).first();
+    if (!r) fail(404, 'No encontramos una cita con ese código');
+    const c = filaCita(r), d = await datos(env), cfg = { ...DEF, ...d.cfg }, b = await body();
+    const rg = reglaReprog(env, cfg, c); if (!rg.ok) fail(403, rg.motivo);
+    const fecha = String(b.fecha || ''), hora = String(b.hora || ''), ahora = ahoraLocal(env);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) fail(400, 'Fecha no válida');
+    if (fecha === c.fecha && hora === c.hora) fail(400, 'Elige un día u hora distinto al actual');
+    const ini = addD(ahora.fecha, +cfg.anticipacion || 0), fin = addD(ini, Math.max(1, +cfg.ventana || 14) - 1);
+    if (fecha < ini || fecha > fin) fail(400, 'Esa fecha no está disponible');
+    if (!slotsDia(cfg).includes(hora)) fail(400, 'Horario no válido');
+    if (minutosHasta(env, fecha, hora) <= 10) fail(400, 'Esa hora ya pasó, elige otra');
+    if (!trabaja(cfg, d.barberos.find(y => y.id === c.barberoId), fecha)) fail(400, 'Tu barbero no atiende ese día');
+    const antes = { fecha: c.fecha, hora: c.hora };
+    Object.assign(c, { fecha, hora, reprog: (c.reprog || 0) + 1, reprogDe: antes, reprogTs: Date.now(), upd: Date.now() });
+    await guardarCita(env, c);
+    return json({ ok: true, fecha, hora });
   }
   if (path === '/publico/reservas' && m === 'POST') return reservar(req, env, await body());
   if ((x = path.match(/^\/publico\/reservas\/([\w-]+)\/captura$/)) && m === 'POST') {

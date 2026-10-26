@@ -75,3 +75,6 @@ Al escribir los 8 dígitos del DNI, el formulario de reserva y el panel buscan e
 
 ### Pegar mensajes de WhatsApp (Nueva cita)
 La caja verde de **Nueva cita** acepta (1) el mensaje de un cliente (rellena DNI, teléfono y nombre) o (2) una agenda completa tipo «Jesús / Domingo 9 am André…». En el caso 2 muestra una vista previa y solo crea las citas al tocar **Crear**. Reglas de servicio: sin palabra clave → corte + asesoría; «barba» → corte + barba; «facial» → facial + corte; «semi» → semiondulación + corte; «platinado» → platinado. Prueba: `test/agenda.ui.mjs`.
+
+### Política y reprogramación
+⚙️ Config → **📜 Política**: minutos de tolerancia, hasta cuántas horas antes se puede reprogramar (24 por defecto), cuántas veces (1 por defecto, o «No permitir») y un texto libre. En «Ver estado de cita» el cliente ve la política y el botón **📅 Reprogramar mi cita** solo si faltan al menos esas horas; el servidor vuelve a comprobarlo (`POST /api/publico/cita/:codigo/reprogramar`). Mismo barbero, solo días/horas libres. El panel marca la cita «🔁 Reprogramada (antes …)» y avisa. Prueba: `npm run test:reprog`.

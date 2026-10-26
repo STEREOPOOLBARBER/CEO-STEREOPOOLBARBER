@@ -363,7 +363,7 @@ const DEF_EST={por_validar:{t:'Yape por validar',i:'💸',c:'#f0883e'},confirmad
 const DEF_CFG={nombre:'Stereo Barber Pool',eslogan:'Barber · Pool · Lima',logo:'🎱',logoImg:'',acento:'#8a3ffc',acento2:'#ff3fd2',
  whatsapp:'',ciudad:'Lima, Perú',direccion:'Av. Principal 123, Puente Piedra',maps:'',lat:'',lng:'',
  modAdelanto:true,yapeNum:'',yapeTitular:'',yapeQR:'',adelanto:10,holdMin:20,
- dias:[1,2,3,4,5,6],apertura:'09:00',cierre:'20:00',refIni:'13:00',refFin:'14:00',anticipacion:0,ventana:14,
+ dias:[1,2,3,4,5,6],apertura:'09:00',cierre:'20:00',refIni:'13:00',refFin:'14:00',anticipacion:0,ventana:14,tolerancia:10,horasReprog:24,maxReprog:1,politicaTxt:'',
  modFotos:true,modFidelidad:true,fidelidad:6,modComision:true,modWalkin:true,
  txtBienvenida:'¿Qué te hacemos hoy?',txtFinal:'¡Reserva recibida!',
  waConfirma:'Hola {cliente} 👋\nTu cita en *{negocio}* está *CONFIRMADA* ✅\n\n📅 {fecha} a las {hora}\n💈 Barbero: {barbero}\n✂️ {servicio}\n🔖 Código: {codigo}\n📍 {direccion}\n🗺️ {maps}\n\n🔎 Mira el estado de tu cita: {seguimiento}\n\nTe esperamos 💪',
@@ -489,7 +489,9 @@ async function boot(){
 async function reload(notify){
  try{const d=await API.load();Object.assign(S,{cfg:mergeCfg(d.cfg),barberos:d.barberos||[],servicios:d.servicios||[],usuarios:d.usuarios||[],citas:(d.citas||[]).map(c=>c.estado==='pendiente_pago'?{...c,estado:'por_validar'}:c)})}catch(e){toast('⚠️ '+e.message);return}
  const pm=permsFor(S.ses);if(pm===null){toast('Tu usuario fue desactivado');localStorage.removeItem('brb_ses');return setTimeout(()=>location.reload(),900)}S.perm=pm;
- if(notify&&S.loaded){const nuevas=S.citas.filter(c=>!S.known.has(c.id)&&mine(c)&&c.origen==='web');if(nuevas.length){toast(`🔔 ${nuevas.length} reserva(s) nueva(s)`);navigator.vibrate?.([120,60,120]);beep()}}
+ if(notify&&S.loaded){const nuevas=S.citas.filter(c=>!S.known.has(c.id)&&mine(c)&&c.origen==='web');if(nuevas.length){toast(`🔔 ${nuevas.length} reserva(s) nueva(s)`);navigator.vibrate?.([120,60,120]);beep()}
+  const rep=S.citas.filter(c=>c.reprogTs&&mine(c)&&S.known.has(c.id)&&c.reprogTs>(S.repVisto||0));if(rep.length){toast(`🔁 ${rep.map(c=>c.cliente?.nombre?.split(' ')[0]).join(', ')} reprogramó: ${fLarga(rep[0].fecha)} · ${h12(rep[0].hora)}`);navigator.vibrate?.([120,60,120]);beep()}}
+ S.repVisto=Math.max(S.repVisto||0,...S.citas.map(c=>c.reprogTs||0));
  S.known=new Set(S.citas.map(c=>c.id));S.loaded=true;if(!S.dirty)applyTheme(S.cfg);renderHeader();renderProx();
  if(S.tab==='agenda'&&document.activeElement?.id==='q')renderLista();else if(S.tab==='agenda')renderTab();
 }
@@ -621,7 +623,7 @@ function cardCita(c,global,vis){
   </div>
   <div class="sub2">✂️ ${esc(c.servicioNombre||'')}${cl.ciudad?' · 📍 '+esc(cl.ciudad):''}</div>
   ${c.nota?`<div class="nota">📝 ${esc(c.nota)}</div>`:''}
-  <div class="tags"><span class="tag">#${esc(c.codigo||'')}</span>${v?`<span class="tag">⭐ ${v} visita${v>1?'s':''}</span>`:''}${gratis?'<span class="tag" style="color:var(--pur);border-color:var(--pur)">🎁 Le toca gratis</span>':''}${(c.links||[]).slice(0,1).map(l=>`<span class="tag lk" style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="window.open(cita('${c.id}').links[0].url,'_blank')">🔗 ${esc(l.url.replace(/^https?:\/\//,'').slice(0,22))}…</span>`).join('')}${(c.links||[]).length>1?`<span class="tag">+${c.links.length-1}</span>`:''}${c.origen==='web'?'<span class="tag">🌐 Web</span>':c.origen==='walkin'?'<span class="tag">⚡ Sin cita</span>':''}</div>
+  <div class="tags"><span class="tag">#${esc(c.codigo||'')}</span>${c.reprog?`<span class="tag" style="color:var(--blue);border-color:var(--blue)" title="Antes: ${c.reprogDe?esc(fLarga(c.reprogDe.fecha)+' · '+h12(c.reprogDe.hora)):''}">🔁 Reprogramada${c.reprogDe?' (antes '+esc(fLarga(c.reprogDe.fecha).split(' ').slice(0,2).join(' ')+' '+h12(c.reprogDe.hora))+')':''}</span>`:''}${v?`<span class="tag">⭐ ${v} visita${v>1?'s':''}</span>`:''}${gratis?'<span class="tag" style="color:var(--pur);border-color:var(--pur)">🎁 Le toca gratis</span>':''}${(c.links||[]).slice(0,1).map(l=>`<span class="tag lk" style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="window.open(cita('${c.id}').links[0].url,'_blank')">🔗 ${esc(l.url.replace(/^https?:\/\//,'').slice(0,22))}…</span>`).join('')}${(c.links||[]).length>1?`<span class="tag">+${c.links.length-1}</span>`:''}${c.origen==='web'?'<span class="tag">🌐 Web</span>':c.origen==='walkin'?'<span class="tag">⚡ Sin cita</span>':''}</div>
   ${pagoBox}${S.cfg.modFotos&&(['confirmada','en_silla','atendida'].includes(c.estado)||c.fotoAntes||c.fotoDespues||c.refFoto)?`<div class="box"><h5>📷 <span>Fotos del corte</span>${c.adelantoOk?`<span class="pill" style="color:var(--grn);border-color:var(--grn)">✔ Adelanto ${soles(c.adelanto)}</span>`:''}</h5><div class="phs3">${ph(c,'antes')}${ph(c,'despues')}${ph(c,'ref')}</div></div>`:''}
   <div class="acts"><button class="big" style="color:${ac?ac.c:e.c};border-color:${ac?ac.c:e.c};background:${ac?ac.c:e.c}1a" onclick="${ac?ac.fn:can('crear')?`formCita('${c.id}')`:''}">${ac?ac.t:`${e.i} ${esc(e.t)} 🔒`}</button>${can('crear')?`<button class="sq" onclick="formCita('${c.id}')">✏️</button>`:''}${can('cancelar')?`<button class="sq r" onclick="quitar('${c.id}')">🗑️</button>`:''}</div>
  </div>`}
@@ -1084,6 +1086,11 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barbero
  ${acc('funciones','🧩 Funciones','Activa solo lo que usas',()=>`
   ${[['modFotos','📷 Fotos antes y después','En cada cita confirmada'],['modFidelidad','🎁 Tarjeta de fidelidad','Corte gratis cada N visitas'],['modComision','💰 Comisiones','% por barbero en la Caja'],['modWalkin','⚡ Clientes sin cita','Botón para pasar directo a silla']].map(([k,t,s])=>`<div class="li"><div class="t"><b>${t}</b><small>${s}</small></div>${sw(c[k],`setB('${k}')`)}</div>`).join('')}
   ${c.modFidelidad?`<label class="lb">Corte gratis cada</label><input class="in" type="number" min="2" value="${c.fidelidad}" onchange="setN('fidelidad',this.value)">`:''}`)}
+ ${acc('politica','📜 Política','Tolerancia y reprogramación',()=>`
+  <div class="g2"><div><label class="lb">Tolerancia (minutos)</label><input class="in" type="number" min="0" max="120" value="${c.tolerancia??10}" onchange="setN('tolerancia',this.value)"></div><div><label class="lb">Reprogramar hasta (horas antes)</label><input class="in" type="number" min="1" max="168" value="${c.horasReprog??24}" onchange="setN('horasReprog',Math.max(1,+this.value||24))"></div></div>
+  <label class="lb">Veces que el cliente puede reprogramar</label><select class="in" onchange="setN('maxReprog',this.value)">${[0,1,2,3].map(n=>`<option value="${n}" ${+(c.maxReprog??1)===n?'selected':''}>${n===0?'No permitir':n===1?'1 vez':n+' veces'}</option>`).join('')}</select>
+  <label class="lb">Texto de la política (lo ve el cliente en su cita)</label><textarea class="in" rows="3" placeholder="Ej: Si no llegas a tiempo, la cita se libera y el adelanto no se devuelve." onchange="setC('politicaTxt',this.value.trim())">${esc(c.politicaTxt||'')}</textarea>
+  <p class="hint">En «Ver estado de cita» el cliente ve la tolerancia y el texto. El botón <b>📅 Reprogramar</b> solo le aparece si faltan ${c.horasReprog??24} horas o más para su corte.</p>`)}
  ${acc('seguridad','🔐 Seguridad y respaldo',API.remote?'Accesos, respaldo y pruebas':'PIN admin, exportar, ejemplos',()=>`
   ${API.remote?'<p class="hint" style="margin-top:0">🔒 El acceso es solo con Google. Los dueños se definen en Cloudflare (variable OWNER_EMAILS); barberos y personal, por su correo.</p>':`<label class="lb">PIN de administrador</label><input class="in" inputmode="numeric" maxlength="6" value="${esc(c.adminPin)}" onchange="setC('adminPin',this.value.replace(/\\D/g,''))">`}
   ${API.remote?`<button class="btn w" style="margin-top:12px" onclick="probarDni()">🪪 Probar consulta de DNI</button>`:''}
