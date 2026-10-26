@@ -1,0 +1,38 @@
+// Prueba de pantalla: Google abre la puerta, luego se elige perfil (dueño con clave, barbero con clave).
+// Requiere wrangler dev con GOOGLE_CLIENT_ID=cid.apps.googleusercontent.com, OWNER_EMAILS=dueno@gmail.com y GOOGLE_CERTS_URL=http://127.0.0.1:8799/certs
+import http from 'node:http';
+import { createRequire } from 'node:module';
+const { chromium } = createRequire(import.meta.url)(process.env.PW_PATH || 'playwright');
+const BASE = process.env.BASE || 'http://localhost:8787', CID = 'cid.apps.googleusercontent.com';
+const enc = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+const par = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
+const jwk = { ...(await crypto.subtle.exportKey('jwk', par.publicKey)), kid: 'k1', alg: 'RS256', use: 'sig' };
+const srv = http.createServer((_q, r) => { r.setHeader('Content-Type', 'application/json'); r.end(JSON.stringify({ keys: [jwk] })) }).listen(8799);
+let ok = 0, bad = 0;
+const check = (n, c, x = '') => { c ? ok++ : bad++; console.log(`${c ? '✅' : '❌'} ${n} ${c ? '' : x}`) };
+const br = await chromium.launch(), ctx = await br.newContext({ viewport: { width: 420, height: 900 } });
+const P = await ctx.newPage(); P.on('pageerror', e => { if (!/gis/.test(e.message)) console.log('PAGEERR', e.message) }); P.on('dialog', d => d.accept('x'));
+const nonce = (await (await ctx.request.get(BASE + '/api/auth/nonce')).json()).nonce;
+const h = enc({ alg: 'RS256', kid: 'k1' }), pl = enc({ iss: 'https://accounts.google.com', aud: CID, iat: Date.now() / 1000, exp: Date.now() / 1000 + 600, email_verified: true, nonce, email: 'dueno@gmail.com' });
+const sig = Buffer.from(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', par.privateKey, new TextEncoder().encode(`${h}.${pl}`))).toString('base64url');
+const g = await ctx.request.post(BASE + '/api/auth/google', { data: { credential: `${h}.${pl}.${sig}` }, headers: { Origin: BASE } });
+check('Google abre la puerta', g.ok(), await g.text());
+await P.goto(BASE + '/index.html'); await P.waitForSelector('#pfGrid .btn');
+const nombres = await P.locator('#pfGrid .btn b').allInnerTexts();
+check('el selector muestra Dueño y barberos', nombres.includes('Dueño') && nombres.length >= 3, nombres.join());
+check('el botón de Google ya no se muestra', !(await P.locator('#gbtn').isVisible()));
+await P.click('#pfGrid .btn:has-text("Dueño")'); await P.fill('#cClave', '9999'); await P.click('text=🔑 Entrar con clave'); await P.waitForTimeout(500);
+check('clave del dueño incorrecta no entra', await P.locator('#login').isVisible());
+await P.fill('#cClave', '1111'); await P.click('text=🔑 Entrar con clave'); await P.waitForSelector('#login', { state: 'hidden' });
+check('dueño entra con su clave', true);
+await P.click('text=⚙️ Config'); await P.evaluate(() => { S.open = 'barberos'; renderConfig() });
+await P.evaluate(() => editBarbero(D().barberos[0].id)); await P.waitForSelector('#accC');
+await P.fill('#accC', 'claveJhon7'); await P.click('text=Poner clave'); await P.waitForSelector('text=activa');
+check('dueño pone clave al barbero', true);
+const nom = await P.evaluate(() => D().barberos[0].nombre);
+await P.evaluate(() => API.logout()); await P.evaluate(() => localStorage.removeItem('brb_ses')); await P.reload(); await P.waitForSelector('#pfGrid .btn');
+check('al cerrar sesión vuelve al selector (sin pedir Google)', true);
+await P.click(`#pfGrid .btn:has-text("${nom}")`); await P.fill('#cClave', 'claveJhon7'); await P.click('text=🔑 Entrar con clave'); await P.waitForSelector('#login', { state: 'hidden' });
+check('el barbero entra con su clave', true);
+check('el barbero no ve Config', !(await P.locator('text=⚙️ Config').count()));
+console.log(`\n${ok} OK · ${bad} fallos`); srv.close(); await br.close(); process.exit(bad ? 1 : 0);

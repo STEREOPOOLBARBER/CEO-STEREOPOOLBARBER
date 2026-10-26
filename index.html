@@ -264,11 +264,18 @@ th{color:var(--mu);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
   <div class="logo" id="lgLogo">💈</div>
   <h2 id="lgNombre">Barbería</h2>
   <div id="gbtn" style="min-height:0;margin-top:12px"></div>
-  <button class="btn" id="hBtn" style="display:none;width:260px;padding:14px;margin-top:12px" onclick="loginHuella()">👆 Entrar con huella</button>
-  <div id="cBox" style="display:none;flex-direction:column;align-items:center;gap:8px;margin-top:14px">
-    <select class="in" id="cQuien" style="width:260px"></select>
-    <input class="in" id="cClave" type="password" autocomplete="current-password" placeholder="Tu clave" style="width:260px" onkeydown="if(event.key==='Enter')loginClave()">
-    <button class="btn" style="width:260px;padding:12px" onclick="loginClave()">🔑 Entrar con clave</button>
+  <div id="pfBox" style="display:none;width:100%;max-width:340px;flex-direction:column;align-items:center;gap:10px;margin-top:6px">
+    <p style="color:var(--mu)">¿Quién eres?</p>
+    <div id="pfGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;width:100%"></div>
+    <div id="pfAcc" style="display:none;flex-direction:column;align-items:center;gap:8px;width:100%">
+      <button class="btn" id="hBtn" style="width:100%;padding:14px" onclick="loginHuella()">👆 Entrar con huella</button>
+      <div id="cBox" style="display:flex;flex-direction:column;gap:8px;width:100%">
+        <input class="in" id="cClave" type="password" autocomplete="current-password" placeholder="Tu clave" onkeydown="if(event.key==='Enter')loginClave()">
+        <button class="btn" style="padding:12px" onclick="loginClave()">🔑 Entrar con clave</button>
+      </div>
+      <button class="btn p" id="dBtn" style="width:100%;padding:14px;display:none" onclick="loginDirecto()">Entrar</button>
+    </div>
+    <button class="btn sm" style="margin-top:6px" onclick="salirPuerta()">Cambiar cuenta de Google</button>
   </div>
   <div id="pinBox" style="display:flex;flex-direction:column;align-items:center;gap:inherit">
   <p style="color:var(--mu);margin-top:4px">Ingresa tu PIN</p>
@@ -460,9 +467,9 @@ let GCFG=null;
 async function gPintar(){const n=(await API.req('GET','/auth/nonce')).nonce;
  google.accounts.id.initialize({client_id:GCFG.google,callback:loginGoogle,nonce:n,ux_mode:'popup',auto_select:false});
  $('#gbtn').innerHTML='';google.accounts.id.renderButton($('#gbtn'),{theme:'filled_black',size:'large',shape:'pill',text:'signin_with',locale:'es'})}
-async function loginGoogle(r){try{await entrar(await API.google(r.credential))}catch(e){toast('❌ '+e.message);gPintar().catch(()=>{})}}
+async function loginGoogle(r){try{const x=await API.google(r.credential);if(x.puerta){await initLoginNube();return}await entrar(x)}catch(e){toast('❌ '+e.message);gPintar().catch(()=>{})}}
 async function initLoginNube(){let ac={google:'',pin:true};try{ac=await API.authCfg()}catch(e){}
- GCFG=ac;$('#pinBox').style.display=ac.pin?'flex':'none';loginExtras(ac);
+ GCFG=ac;$('#pinBox').style.display=ac.pin?'flex':'none';await loginExtras(ac);if($('#pfBox').style.display==='flex')return;
  $('#lgHint').innerHTML=ac.google?'Entra con la cuenta de Google que el dueño autorizó.':'⚠️ Falta configurar GOOGLE_CLIENT_ID en Cloudflare.';
  if(!ac.google)return;const r=()=>gPintar().catch(e=>toast('❌ '+e.message));
  if(window.google?.accounts)return r();const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.async=true;s.onload=r;document.head.appendChild(s)}
@@ -1077,6 +1084,7 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barbero
   ${c.modFidelidad?`<label class="lb">Corte gratis cada</label><input class="in" type="number" min="2" value="${c.fidelidad}" onchange="setN('fidelidad',this.value)">`:''}`)}
  ${acc('seguridad','🔐 Seguridad y respaldo',API.remote?'Accesos, respaldo y pruebas':'PIN admin, exportar, ejemplos',()=>`
   ${API.remote?'<p class="hint" style="margin-top:0">🔒 El acceso es solo con Google. Los dueños se definen en Cloudflare (variable OWNER_EMAILS); barberos y personal, por su correo.</p>':`<label class="lb">PIN de administrador</label><input class="in" inputmode="numeric" maxlength="6" value="${esc(c.adminPin)}" onchange="setC('adminPin',this.value.replace(/\\D/g,''))">`}
+  ${API.remote?`<button class="btn w" style="margin-top:12px" onclick="accDueno()">🔑 Mi clave y huella (dueño)</button>`:''}
   ${API.remote?`<div class="g2" style="margin-top:12px"><button class="btn" onclick="probarNube()">🔍 Probar nube</button><button class="btn" onclick="verAccesos()">📜 Registro de accesos</button></div>`:''}
   <div class="g2" style="margin-top:12px"><button class="btn" onclick="exportar()">⬇️ Exportar</button><label class="btn">⬆️ Importar<input type="file" accept=".json" style="display:none" onchange="importar(this)"></label></div>
   <p class="hint">${API.remote?'Para pasar tus datos a la nube: en el panel anterior toca ⬇️ Exportar y aquí ⬆️ Importar (incluye fotos).':'El respaldo guarda configuración, citas y fotos.'}</p>
@@ -1181,10 +1189,22 @@ const b64u={enc:b=>{let t='';for(const x of new Uint8Array(b))t+=String.fromChar
  dec:t=>Uint8Array.from(atob(t.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((t.length+3)%4)),c=>c.charCodeAt(0)).buffer};
 const hayHuella=()=>!!(window.PublicKeyCredential&&navigator.credentials);
 async function loginExtras(ac){
- $('#hBtn').style.display=ac.huella&&hayHuella()?'inline-flex':'none';
- if(ac.clave){try{const l=await API.req('GET','/auth/personal');if(l.length){$('#cQuien').innerHTML='<option value="">¿Quién eres?</option>'+l.map(x=>`<option value="${esc(x.sujeto)}">${esc(x.nombre)}</option>`).join('');$('#cBox').style.display='flex'}}catch(e){}}}
-async function loginClave(){const q=$('#cQuien').value,c=$('#cClave').value;if(!q)return toast('Elige quién eres');if(!c)return toast('Escribe tu clave');
- try{const r=await API.req('POST','/auth/clave',{sujeto:q,clave:c});$('#cClave').value='';await entrar(r)}catch(e){toast('❌ '+e.message);$('#cClave').value=''}}
+ let r={puerta:false};try{r=await API.req('GET','/auth/perfiles')}catch(e){}
+ if(!r.puerta)return;
+ $('#gbtn').style.display='none';$('#lgHint').textContent='';$('#pfBox').style.display='flex';S.perf=r.perfiles;
+ const ini=n=>esc((n||'?').trim()[0]||'?').toUpperCase();
+ $('#pfGrid').innerHTML=r.perfiles.map(p=>`<button class="btn" data-s="${esc(p.sujeto)}" onclick="elegirPerfil('${esc(p.sujeto)}')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px"><span style="width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-size:22px;font-weight:800;overflow:hidden;background:${esc(p.color||'var(--blue)')}">${p.rol==='dueno'?'👑':p.foto?`<img data-foto="${esc(p.foto)}" style="width:100%;height:100%;object-fit:cover">`:ini(p.nombre)}</span><b>${esc(p.nombre)}</b><small style="color:var(--mu)">${p.huella?'👆 ':''}${p.clave?'🔑':''}${p.directo?'Google':''}</small></button>`).join('');
+ hydrate($('#pfGrid'));
+ const ult=lsGet('ultimoPerfil','');if(ult&&r.perfiles.some(p=>p.sujeto===ult))elegirPerfil(ult)}
+function elegirPerfil(suj){const p=(S.perf||[]).find(x=>x.sujeto===suj);if(!p)return;S.selP=suj;
+ document.querySelectorAll('#pfGrid .btn').forEach(b=>b.style.outline=b.dataset.s===suj?'2px solid var(--blue)':'none');
+ $('#pfAcc').style.display='flex';$('#hBtn').style.display=p.huella&&hayHuella()?'inline-flex':'none';
+ $('#cBox').style.display=p.clave?'flex':'none';$('#dBtn').style.display=p.directo?'inline-flex':'none';
+ $('#cClave').placeholder=p.rol==='dueno'?'Clave del dueño':'Tu clave';if(p.clave)setTimeout(()=>$('#cClave').focus(),50)}
+async function loginClave(){const q=S.selP,c=$('#cClave').value;if(!q)return toast('Elige quién eres');if(!c)return toast('Escribe tu clave');
+ try{const r=await API.req('POST','/auth/clave',{sujeto:q,clave:c});$('#cClave').value='';lsSet('ultimoPerfil',q);await entrar(r)}catch(e){toast('❌ '+e.message);$('#cClave').value=''}}
+async function loginDirecto(){try{const r=await API.req('POST','/auth/perfil/directo',{sujeto:S.selP});lsSet('ultimoPerfil',S.selP);await entrar(r)}catch(e){toast('❌ '+e.message)}}
+async function salirPuerta(){try{await API.req('POST','/auth/puerta/salir',{})}catch(e){}localStorage.removeItem('brb_ses');location.reload()}
 async function loginHuella(){
  try{const r=await API.req('GET','/auth/huella/reto');
   const cr=await navigator.credentials.get({publicKey:{challenge:b64u.dec(r.challenge),rpId:r.rpId,userVerification:'required',timeout:60000}});
@@ -1216,14 +1236,15 @@ async function accCargar(suj){const el=$('#acc');if(!el)return;
  const tiene=a.claves.includes(suj),hs=a.huellas.filter(h=>h.sujeto===suj);
  el.innerHTML=`<b>🔐 Acceso propio</b><p class="hint" style="margin-top:4px">Solo tú (administrador) puedes darle o quitarle clave y huella.</p>
  <label class="lb">Clave ${tiene?'<span class="tag" style="margin-left:6px">activa</span>':''}</label>
- <input class="in" id="accC" type="text" autocomplete="off" placeholder="${tiene?'Escribe una nueva para cambiarla':'Mínimo 6 caracteres'}">
+ <input class="in" id="accC" type="text" autocomplete="off" placeholder="${tiene?'Escribe una nueva para cambiarla':suj==='admin'?'Mínimo 4 caracteres':'Mínimo 6 caracteres'}">
  <div class="g2" style="margin-top:8px"><button class="btn sm" onclick="accGenerar()">🎲 Generar</button><button class="btn sm p" onclick="accClave('${suj}')">💾 ${tiene?'Cambiar':'Poner'} clave</button></div>
  ${tiene?`<button class="btn sm r w" style="margin-top:8px" onclick="accQuitar('${suj}')">Quitar clave</button>`:''}
  <label class="lb">Huella / Face ID</label>
  ${hs.length?hs.map(h=>`<div class="li"><div class="t"><b>👆 ${esc(h.etiqueta)}</b><small>${new Date(h.creada).toLocaleDateString('es-PE')}</small></div><button class="btn sm r" onclick="accHuellaDel('${h.id}','${suj}')">Quitar</button></div>`).join(''):'<p class="hint" style="margin-top:0">Sin dispositivos registrados.</p>'}
  <button class="btn w" style="margin-top:8px" onclick="accInvitar('${suj}')">👆 Invitar a activar huella</button><div id="accInv"></div>`}
+function accDueno(){openModal(mHead('🔑 Acceso del dueño')+'<p class="hint" style="margin-top:0">Después de entrar con Google, el dueño elige su perfil y escribe su clave. Mientras no la cambies aquí, vale la de arranque.</p>'+accHTML('admin'));accCargar('admin')}
 function accGenerar(){const a='abcdefghjkmnpqrstuvwxyz23456789',r=crypto.getRandomValues(new Uint8Array(8));$('#accC').value=[...r].map(x=>a[x%a.length]).join('')}
-async function accClave(suj){const c=$('#accC').value;if(c.length<6)return toast('Mínimo 6 caracteres');
+async function accClave(suj){const c=$('#accC').value,mn=suj==='admin'?4:6;if(c.length<mn)return toast('Mínimo '+mn+' caracteres');
  try{await API.req('PUT','/acceso/'+suj+'/clave',{clave:c});toast('✅ Clave guardada. Pásasela por WhatsApp: '+c);prompt('Clave (cópiala y envíala; no se vuelve a mostrar):',c);accCargar(suj)}catch(e){toast('❌ '+e.message)}}
 async function accQuitar(suj){if(!confirm('¿Quitar la clave? Se cierra su sesión.'))return;try{await API.req('DELETE','/acceso/'+suj+'/clave');accCargar(suj)}catch(e){toast('❌ '+e.message)}}
 async function accHuellaDel(id,suj){if(!confirm('¿Quitar este dispositivo?'))return;try{await API.req('DELETE','/acceso/huella/'+id);accCargar(suj)}catch(e){toast('❌ '+e.message)}}

@@ -56,3 +56,9 @@ Solo el administrador (permiso `config`) configura el acceso de cada persona, en
 - **Huella / Face ID** (passkeys): el admin toca «👆 Invitar a activar huella» y envía el link (un solo uso, 24 h). El barbero lo abre en **Safari/Chrome** (no dentro de WhatsApp) y toca «Activar huella». Hasta 5 dispositivos por persona; el admin puede quitarlos. La huella nunca sale del celular: el servidor solo guarda la llave pública.
 - Las llaves quedan atadas al dominio (hostname). Si cambias de dominio, hay que volver a invitar.
 - Google sigue siendo el acceso del dueño. Pruebas: `npm run test:acceso` (API) y `test/acceso.ui.mjs` (pantalla, con Playwright).
+
+### Entrada en dos pasos (Google → perfil)
+1. El dispositivo entra con **Google** (correo autorizado). Eso solo "abre la puerta": todavía no hay panel.
+2. Aparece **¿Quién eres?** con los perfiles. El **Dueño** entra con su clave (de arranque **1111** hasta que la cambie en ⚙️ Config → Seguridad → 🔑 Mi clave y huella). Cada barbero/usuario entra con su **clave** o **huella**; los permisos son los que asignó el admin.
+3. Un correo que no es del dueño solo ve su propio perfil (y entra directo si no tiene clave ni huella). Un barbero sin correo queda autorizado en su celular al activar su huella (90 días).
+Pruebas: `test/google.e2e.mjs` y `test/perfiles.ui.mjs` (con GOOGLE_CLIENT_ID de prueba); `acceso.e2e`/`acceso.ui` corren con `--var GOOGLE_CLIENT_ID:` vacío.

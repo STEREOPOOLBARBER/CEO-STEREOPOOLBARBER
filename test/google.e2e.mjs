@@ -32,8 +32,22 @@ check('el PIN está apagado', r.j.pin === false, JSON.stringify(r.j));
 for (const pin of ['1234', '1111', '0000']) { const x = await call('POST', '/auth/login', { pin }); check(`entrar con PIN ${pin} → 403`, x.s === 403, JSON.stringify(x.j)) }
 
 r = await entrar({ email: 'dueno@gmail.com' });
-check('dueño entra con Google', r.s === 200 && r.j.rol === 'dueno' && /brb_s=/.test(r.cookie), JSON.stringify(r));
+check('Google abre solo la puerta del dispositivo (aún sin panel)', r.s === 200 && r.j.puerta === true && /brb_g=/.test(r.cookie) && !/brb_s=/.test(r.raw), JSON.stringify(r));
 check('cookie HttpOnly + Secure + SameSite', /HttpOnly/i.test(r.raw) && /Secure/i.test(r.raw) && /SameSite=Lax/i.test(r.raw), r.raw);
+const puertaD = r.cookie;
+r = await call('GET', '/panel', null, puertaD);
+check('la puerta sola no abre el panel', r.s === 401);
+r = await call('GET', '/auth/perfiles');
+check('sin Google no se ven perfiles', r.j.puerta === false);
+r = await call('POST', '/auth/clave', { sujeto: 'admin', clave: '1111' });
+check('clave del dueño sin pasar por Google → 403', r.s === 403, JSON.stringify(r));
+r = await call('GET', '/auth/perfiles', null, puertaD);
+check('dueño ve su perfil y los barberos', r.j.puerta && r.j.perfiles.some(x => x.sujeto === 'admin') && r.j.perfiles.some(x => x.sujeto === 'b_b1'), JSON.stringify(r.j).slice(0, 200));
+check('los perfiles no traen correos ni PIN', !JSON.stringify(r.j.perfiles).match(/gmail|"pin"|email/));
+r = await call('POST', '/auth/clave', { sujeto: 'admin', clave: '0000' }, puertaD);
+check('clave del dueño incorrecta → 403', r.s === 403);
+r = await call('POST', '/auth/clave', { sujeto: 'admin', clave: '1111' }, puertaD);
+check('dueño elige su perfil con la clave de arranque', r.s === 200 && r.j.rol === 'dueno' && /brb_s=/.test(r.cookie), JSON.stringify(r));
 const dueno = r.cookie;
 r = await call('GET', '/panel', null, dueno);
 check('la sesión de Google abre el panel', r.s === 200 && Array.isArray(r.j.citas));
@@ -72,7 +86,16 @@ r = await call('PUT', '/config', { cfg: { ...panel.cfg, adminPin: '1234' }, barb
 check('dueño autoriza el correo de un barbero', r.s === 200);
 check('el servidor descarta PIN enviados al guardar', !JSON.stringify((await call('GET', '/panel', null, dueno)).j).match(/"pin"|adminPin/));
 r = await entrar({ email: 'jhon@gmail.com' });
-check('barbero entra con Google (sin importar mayúsculas)', r.s === 200 && r.j.rol === 'barbero' && r.j.barberoId === 'b1', JSON.stringify(r));
+check('el correo del barbero abre la puerta (sin importar mayúsculas)', r.s === 200 && r.j.puerta === true, JSON.stringify(r));
+const puertaB = r.cookie;
+r = await call('GET', '/auth/perfiles', null, puertaB);
+check('el barbero solo ve su propio perfil', r.j.perfiles.length === 1 && r.j.perfiles[0].sujeto === 'b_b1' && r.j.perfiles[0].directo === true, JSON.stringify(r.j));
+r = await call('POST', '/auth/clave', { sujeto: 'admin', clave: '1111' }, puertaB);
+check('el barbero no puede elegir el perfil del dueño', r.s === 403);
+r = await call('POST', '/auth/perfil/directo', { sujeto: 'b_b2' }, puertaB);
+check('ni el de otro barbero', r.s === 403);
+r = await call('POST', '/auth/perfil/directo', { sujeto: 'b_b1' }, puertaB);
+check('entra a su perfil', r.s === 200 && r.j.rol === 'barbero' && r.j.barberoId === 'b1', JSON.stringify(r));
 const barb = r.cookie;
 r = await call('GET', '/panel', null, barb);
 check('barbero no ve PIN ni correos', r.s === 200 && !JSON.stringify(r.j).match(/"pin"|gmail/i), JSON.stringify(r.j).slice(0, 200));
@@ -93,6 +116,14 @@ check('el registro guarda éxitos y fallos', r.s === 200 && fallos.length >= 8 &
 check('el registro anota el motivo', fallos.some(x => /no autorizado/.test(x.motivo)) && fallos.some(x => /nonce/.test(x.motivo)));
 check('el registro no guarda tokens', !JSON.stringify(r.j).includes('eyJ'));
 
+r = await call('PUT', '/acceso/admin/clave', { clave: '1111' }, dueno);
+check('el dueño no puede dejar una clave floja', r.s === 400);
+r = await call('PUT', '/acceso/admin/clave', { clave: '7342' }, dueno);
+check('el dueño cambia su clave', r.s === 200);
+r = await call('POST', '/auth/clave', { sujeto: 'admin', clave: '1111' }, puertaD);
+check('la clave de arranque deja de valer', r.s === 403);
+r = await call('POST', '/auth/clave', { sujeto: 'admin', clave: '7342' }, puertaD);
+check('la nueva clave entra', r.s === 200);
 r = await call('POST', '/auth/logout', {}, dueno);
 r = await call('GET', '/panel', null, dueno);
 check('cerrar sesión invalida la cookie', r.s === 401);

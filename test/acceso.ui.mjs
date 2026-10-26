@@ -41,14 +41,13 @@ await B.goto(link); await B.waitForSelector('text=Activar huella');
 check('muestra el nombre del barbero', /Jhon/.test(await B.locator('#pkMsg').innerText()));
 await B.click('text=👆 Activar huella'); await B.waitForSelector('text=Listo,');
 check('huella activada', true);
-await B.goto(BASE + '/index.html'); await B.waitForSelector('#hBtn', { state: 'visible' });
+await B.goto(BASE + '/index.html'); await B.click('#pfGrid .btn:has-text("Jhon")'); await B.waitForSelector('#hBtn', { state: 'visible' });
 check('login muestra botón de huella', true);
 await B.click('#hBtn'); await B.waitForSelector('#login', { state: 'hidden' });
 check('entra con huella como barbero', /Jhon/i.test(await B.locator('body').innerText()) || true);
 check('barbero sin pestaña Config', !(await B.locator('text=⚙️ Config').count()));
 // barbero con clave
-const C = await (await br.newContext()).newPage(); await C.goto(BASE + '/index.html'); await C.waitForSelector('#cBox', { state: 'visible' });
-await C.selectOption('#cQuien', 'b_b1'); await C.fill('#cClave', 'incorrecta1'); await C.click('text=🔑 Entrar con clave'); await C.waitForTimeout(500);
+const C = await (await br.newContext()).newPage(); await C.goto(BASE + '/index.html'); await C.waitForSelector('#pfGrid .btn'); await C.click('#pfGrid .btn:has-text("Jhon")'); await C.waitForSelector('#cBox', { state: 'visible' }); await C.fill('#cClave', 'incorrecta1'); await C.click('text=🔑 Entrar con clave'); await C.waitForTimeout(500);
 check('clave mala rechazada', await C.locator('#login').isVisible());
 await C.fill('#cClave', clave); await C.click('text=🔑 Entrar con clave'); await C.waitForSelector('#login', { state: 'hidden' });
 check('entra con clave', true);
