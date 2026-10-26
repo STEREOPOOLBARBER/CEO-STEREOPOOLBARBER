@@ -534,7 +534,7 @@ function renderAgenda(){
   ${esRango()?`<div class="row" style="margin-top:10px;justify-content:space-between"><button class="btn sm" onclick="S.off=(+S.off||0)-1;renderAgenda()">‹</button><b style="text-transform:capitalize;text-align:center;flex:1">${S.fecha==='semana'?'Semana':'Mes'} · ${rangoAg().t}${(+S.off||0)?` <button class="btn sm" onclick="S.off=0;renderAgenda()">Hoy</button>`:''}</b><button class="btn sm" onclick="S.off=(+S.off||0)+1;renderAgenda()">›</button></div>`:''}
   <div class="chiprow"><button class="chip ${S.filtro==='todos'?'on':''}" onclick="tapTodos()">Todos<i class="cc">${dia.filter(c=>c.estado!=='expirada').length}</i></button><div class="chips">${FILTROS.slice(1).map(k=>{const n=['por_validar'].includes(k)?all.filter(c=>c.estado===k).length:dia.filter(c=>k==='cancelada'?['cancelada','expirada'].includes(c.estado):c.estado===k).length;return `<button class="chip ${S.filtro===k?'on':''}" onclick="setFiltro('${k}')">${est(k).i} ${esc(est(k).t)}${n?`<i class="cc">${n}</i>`:''}</button>`}).join('')}</div></div>
   <p class="hint" style="margin-top:4px;font-size:11px">Toca 2 veces "Todos" para ver todas las etiquetas</p>
-  <div class="tools">${can('dash')?`<button class="tool" title="Clientes" onclick="abrirClientes()">👥</button>`:''}${can('verMontos')?`<button class="tool" title="Caja" onclick="abrirCaja()">📊</button>`:''}<button class="tool" title="Actualizar" onclick="reload().then(()=>toast('🔄 Actualizado'))">🔄</button><button class="tool" title="Ayuda" onclick="ayuda()">📖</button>${can('crear')?`<button class="tool p" title="Nueva cita" onclick="formCita()">➕</button>`:''}${S.cfg.modWalkin&&can('crear')?`<button class="tool pu" title="Cliente sin cita" onclick="walkIn()">⚡</button>`:''}</div>
+  <div class="tools">${can('dash')?`<button class="tool" title="Clientes" onclick="abrirClientes()">👥</button>`:''}${can('verMontos')?`<button class="tool" title="Caja" onclick="abrirCaja()">📊</button>`:''}<button class="tool" title="Actualizar" onclick="reload().then(()=>toast('🔄 Actualizado'))">🔄</button><button class="tool" title="Ayuda" onclick="ayuda()">📖</button>${isAdmin()&&can('crear')?`<button class="tool" title="Mover citas a otro día" onclick="moverCitas()">📅</button>`:''}${can('crear')?`<button class="tool p" title="Nueva cita" onclick="formCita()">➕</button>`:''}${S.cfg.modWalkin&&can('crear')?`<button class="tool pu" title="Cliente sin cita" onclick="walkIn()">⚡</button>`:''}</div>
  </div>
  <div id="lista"></div>`;
  $('#t-agenda').insertAdjacentHTML('afterbegin','<div id="nextBox"></div>');renderNext();renderLista();
@@ -1149,6 +1149,25 @@ async function agendaCrear(){const est=$('#agEst').value,l=S._ag.filter(e=>e.ok&
   try{await API.crearCita({fecha:e.fecha,hora:e.hora,barberoId:e.barberoId,servicioId:s?.id,servicioNombre:s?.nombre||'',precio:+s?.precio||0,cliente:{nombre:e.nombre.trim(),tel:e.tel||'',ciudad:'',dni:e.dni||''},nota:'',estado:est,...(est==='atendida'?{atendidaTs:new Date(e.fecha+'T'+e.hora).getTime()}:{}),adelanto:0,adelantoOk:false,origen:'panel',creadoPor:S.ses.uid||S.ses.barberoId||'dueno'});n++}catch(x){err.push(e.nombre)}}
  closeModal();if(l[0])S.fecha=l[0].fecha;await reload();toast(`✅ ${n} cita${n!==1?'s':''} creada${n!==1?'s':''}${err.length?` · ❌ fallaron: ${err.join(', ')}`:''}`)}
 
+/* Mover varias citas a otro día (p. ej. una carga masiva que quedó con la fecha equivocada) */
+function moverCitas(){const now=Date.now(),dom=(()=>{const t=hoy(),w=pYmd(t).getDay();return addD(t,w?-w:-7)})();
+ const cs=S.citas.filter(c=>c.estado!=='cancelada').sort((a,b)=>(b.creada||0)-(a.creada||0)||(a.fecha+a.hora).localeCompare(b.fecha+b.hora));
+ const rec=c=>c.origen==='panel'&&(c.creada||0)>now-48*3600e3;
+ S._mv=Object.fromEntries(cs.map(c=>[c.id,rec(c)]));
+ const grupos={};cs.forEach(c=>{const k=rec(c)?'Cargadas en las últimas 48 h':'Otras citas';(grupos[k]=grupos[k]||[]).push(c)});
+ openModal(mHead('📅 Mover citas a otro día')+`<p class="hint" style="margin-top:0">Marca las citas y elige el nuevo día. La hora, el barbero y el servicio no cambian.</p>
+ <div class="g2"><div><label class="lb">Nuevo día</label><input class="in" type="date" id="mvF" value="${dom}" onchange="$('#mvAt').checked=this.value<hoy()"></div><div><label class="lb">&nbsp;</label><label style="display:flex;gap:8px;align-items:center;min-height:44px"><input type="checkbox" id="mvAt" ${dom<hoy()?'checked':''}> Marcar como atendidas</label></div></div>
+ <div style="display:flex;gap:8px;margin-top:10px"><button class="btn sm" onclick="mvTodas(true)">Marcar todas</button><button class="btn sm" onclick="mvTodas(false)">Ninguna</button></div>
+ <div id="mvL" style="margin-top:8px;max-height:50vh;overflow:auto">${Object.entries(grupos).map(([g,l])=>`<p class="lb">${g} (${l.length})</p>`+l.map(c=>`<label class="li" style="cursor:pointer"><input type="checkbox" data-id="${c.id}" ${S._mv[c.id]?'checked':''} onchange="S._mv['${c.id}']=this.checked;mvCuenta()"><div class="t"><b>${esc(c.cliente?.nombre||'')}</b><small>${fLarga(c.fecha)} · ${h12(c.hora)} · ${esc(barb(c.barberoId)?.nombre||'')} · ${esc(c.servicioNombre||'')}</small></div></label>`).join('')).join('')}</div>
+ <button class="btn p w" id="mvBtn" style="margin-top:12px;padding:14px" onclick="mvAplicar()"></button>`);mvCuenta()}
+function mvTodas(v){$$('#mvL input[type=checkbox]').forEach(x=>{x.checked=v;S._mv[x.dataset.id]=v});mvCuenta()}
+function mvCuenta(){const n=Object.values(S._mv).filter(Boolean).length,b=$('#mvBtn');b.textContent=n?`📅 Mover ${n} cita${n>1?'s':''}`:'Marca al menos una';b.disabled=!n}
+async function mvAplicar(){const f=$('#mvF').value,at=$('#mvAt').checked;if(!f)return toast('Elige el nuevo día');
+ const ids=Object.keys(S._mv).filter(k=>S._mv[k]);if(!confirm(`¿Mover ${ids.length} cita(s) al ${fLarga(f)}${at?' y marcarlas como atendidas':''}?`))return;
+ $('#mvBtn').disabled=true;let n=0;const err=[];
+ for(const id of ids){const c=cita(id);if(!c)continue;
+  try{await API.updateCita(id,{fecha:f,...(at?{estado:'atendida',atendidaTs:c.atendidaTs||new Date(f+'T'+(c.hora||'12:00')).getTime()}:{})});n++}catch(e){err.push(`${c.cliente?.nombre} (${e.message})`)}}
+ closeModal();S.fecha=f;await reload();toast(`✅ ${n} cita${n!==1?'s':''} movida${n!==1?'s':''} al ${fLarga(f)}`);if(err.length)alert('No se pudieron mover:\n'+err.join('\n'))}
 let dniAutoP='';
 async function buscarDniP(inp){const v=inp.value.replace(/\D/g,'');inp.value=v;const est=$('#fDniEst');if(!est)return;
  if(v.length!==8||!API.remote){est.textContent='';return}

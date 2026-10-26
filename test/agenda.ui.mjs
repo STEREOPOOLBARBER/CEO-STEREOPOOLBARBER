@@ -32,4 +32,12 @@ const n = await P.evaluate(() => S.citas.filter(c => c.cliente.nombre === 'Franc
 check('las citas quedaron guardadas', n === 3, n);
 const f = await P.evaluate(() => S.citas.find(c => c.cliente.nombre === 'Franco Vásquez')?.servicioNombre);
 check('Franco (barba) guardado con servicio de barba', /barba/i.test(f || ''), f);
+// Mover todo lo cargado a otro día
+await P.click('button[title="Mover citas a otro día"]'); await P.waitForSelector('#mvL');
+check('el botón de mover sugiere las citas recién cargadas', /Mover 8 citas/.test(await P.locator('#mvBtn').innerText()), await P.locator('#mvBtn').innerText());
+P.removeAllListeners('dialog'); P.on('dialog', d => d.accept());
+await P.fill('#mvF', '2026-10-24'); await P.evaluate(() => $('#mvAt').checked = true);
+await P.click('#mvBtn'); await P.waitForSelector('#mvL', { state: 'hidden' }); await P.waitForTimeout(800);
+const mv = await P.evaluate(() => S.citas.filter(c => c.origen === 'panel').map(c => c.fecha + '/' + c.estado));
+check('las 8 citas pasaron al nuevo día como atendidas', mv.length === 8 && mv.every(x => x === '2026-10-24/atendida'), mv.join());
 console.log(`\n${ok} OK · ${bad} fallos`); await br.close(); process.exit(bad ? 1 : 0);
