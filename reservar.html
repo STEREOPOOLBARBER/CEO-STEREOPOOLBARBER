@@ -154,7 +154,7 @@ function compressImg(file,max=1000,q=.72){return new Promise((res,rej)=>{const i
 /* mismos valores por defecto que el panel */
 const hoyD=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
 const COLORES=['#ff3fd2','#8a3ffc','#3fb950','#f0883e','#d29922','#f85149','#39c5cf','#db61a2'];
-const DEF_EST={pendiente_pago:{t:'Esperando Yape',i:'⏳',c:'#d29922'},por_validar:{t:'Yape por validar',i:'💸',c:'#f0883e'},confirmada:{t:'Confirmada',i:'✅',c:'#8a3ffc'},en_silla:{t:'En silla',i:'💺',c:'#ff3fd2'},atendida:{t:'Atendido',i:'✔️',c:'#3fb950'},no_vino:{t:'No vino',i:'❌',c:'#f85149'},cancelada:{t:'Cancelada',i:'🚫',c:'#a397b8'},expirada:{t:'Expirada',i:'⌛',c:'#a397b8'}};
+const DEF_EST={por_validar:{t:'Yape por validar',i:'💸',c:'#f0883e'},confirmada:{t:'Confirmada',i:'✅',c:'#8a3ffc'},en_silla:{t:'En silla',i:'💺',c:'#ff3fd2'},atendida:{t:'Atendido',i:'✔️',c:'#3fb950'},no_vino:{t:'No vino',i:'❌',c:'#f85149'},cancelada:{t:'Cancelada',i:'🚫',c:'#a397b8'},expirada:{t:'Expirada',i:'⌛',c:'#a397b8'}};
 const DEF_CFG={nombre:'Stereo Barber Pool',eslogan:'Barber · Pool · Lima',logo:'🎱',logoImg:'',acento:'#8a3ffc',acento2:'#ff3fd2',
  whatsapp:'',ciudad:'Lima, Perú',direccion:'Av. Principal 123, Puente Piedra',maps:'',
  modAdelanto:true,yapeNum:'',yapeTitular:'',yapeQR:'',adelanto:10,holdMin:20,
@@ -185,7 +185,7 @@ function demoCitas(){const h=hoyD(),m=addD(h,1),sv=DEF_SERV(),mk=(f,hr,b,s,nom,t
   mk(h,'11:00','b1',1,'Jhon Paredes Huamán','998877665','Comas','por_validar'),
   mk(h,'15:00','b1',0,'Kevin Rojas Silva','955443322','Los Olivos','confirmada'),
   mk(h,'10:00','b2',5,'Miguel Ángel Flores','944556677','Puente Piedra','confirmada',{nota:'Diseño de rayo al costado'}),
-  mk(h,'12:00','b2',2,'Diego Salazar Chávez','966778899','Ancón','pendiente_pago',{expira:Date.now()+14*60000}),
+  mk(h,'12:00','b2',2,'Diego Salazar Chávez','966778899','Ancón','por_validar',{expira:Date.now()+14*60000}),
   mk(h,'09:00','b3',4,'Bryan Mendoza Ríos','933221100','Puente Piedra','no_vino'),
   mk(h,'16:00','b3',0,'Renzo Castillo Vega','977665544','Comas','confirmada',{adelanto:0,adelantoOk:false,origen:'panel'}),
   mk(m,'10:00','b1',1,'Carlos Ramírez Quispe','987654321','Puente Piedra','confirmada'),
@@ -193,13 +193,13 @@ function demoCitas(){const h=hoyD(),m=addD(h,1),sv=DEF_SERV(),mk=(f,hr,b,s,nom,t
 function seed(){if(!lsGet('cfg',null))lsSet('cfg',DEF_CFG);if(!lsGet('barberos',null))lsSet('barberos',DEF_BARB());if(!lsGet('servicios',null))lsSet('servicios',DEF_SERV());if(!lsGet('citas',null))lsSet('citas',demoCitas())}
 const mergeCfg=c=>({...DEF_CFG,...c,est:{...(c?.est||{})},narr:{...DEF_CFG.narr,...(c?.narr||{})}});
 
-const ACTIVOS=['pendiente_pago','por_validar','confirmada','en_silla','atendida'];
-const activa=(c,now=Date.now())=>ACTIVOS.includes(c.estado)&&!(c.estado==='pendiente_pago'&&c.expira&&c.expira<now);
+const ACTIVOS=['por_validar','confirmada','en_silla','atendida'];
+const activa=(c,now=Date.now())=>ACTIVOS.includes(c.estado)&&!(c.estado==='por_validar'&&c.expira&&c.expira<now);
 function slotsDia(cfg){const out=[],dur=CONFIG.DUR,fin=toMin(cfg.cierre),ri=toMin(cfg.refIni),rf=toMin(cfg.refFin);let t=toMin(cfg.apertura),g=0;if(t==null||fin==null)return out;while(t+dur<=fin&&g++<60){if(ri!=null&&rf!=null&&rf>ri&&t<rf&&t+dur>ri){t=rf;continue}out.push(fromMin(t));t+=dur}return out}
 const bloqueado=(cfg,f,bid)=>(cfg.bloqueos||[]).some(b=>b.fecha===f&&(!b.barberoId||b.barberoId===bid));
 const trabaja=(cfg,b,f)=>{const d=pYmd(f).getDay();return b&&b.activo!==false&&(cfg.dias||[]).includes(d)&&(b.dias||[]).includes(d)&&!bloqueado(cfg,f,b.id)};
 const ocupadoLocal=(cs,bid,f,h)=>cs.some(c=>c.barberoId===bid&&c.fecha===f&&c.hora===h&&activa(c));
-function expirarLocal(){const cs=lsGet('citas',[]),now=Date.now();let ch=false;cs.forEach(c=>{if(c.estado==='pendiente_pago'&&c.expira&&c.expira<now){c.estado='expirada';ch=true}});if(ch)lsSet('citas',cs);return cs}
+function expirarLocal(){const cs=lsGet('citas',[]),now=Date.now();let ch=false;cs.forEach(c=>{if(c.estado==='pendiente_pago'){c.estado='por_validar';ch=true}if(c.estado==='por_validar'&&c.expira&&c.expira<now){c.estado='expirada';ch=true}});if(ch)lsSet('citas',cs);return cs}
 const sinPago=cfg=>!(cfg.modAdelanto&&cfg.yapeNum&&+cfg.adelanto>0);
 const adel=()=>F.link&&F.link.adelanto!=null&&F.link.adelanto!==''?+F.link.adelanto:+P.cfg.adelanto;
 const sinPagoF=()=>!(P.cfg.modAdelanto&&P.cfg.yapeNum&&adel()>0);
@@ -221,10 +221,10 @@ const API={
   else{const b=bs.find(x=>x.id===bid);if(!trabaja(cfg,b,d.fecha))throw new Error('Ese barbero no atiende ese día');if(ocupadoLocal(cs,bid,d.fecha,d.hora))throw new Error('Ese horario se acaba de ocupar 😕')}
   let ref='';if(d.refFoto){ref='f_'+uid();await IDB.put(ref,d.refFoto)}
   const lk=d.linkToken?lsGet('links',[]).find(x=>x.token===d.linkToken):null;if(d.linkToken){if(!lk)throw new Error('Este link ya no existe');if(lk.estado==='usado')throw new Error('Este link ya fue usado');if(lk.vence&&lk.vence<Date.now())throw new Error('Este link ya venció')}
-  const ad=lk&&lk.adelanto!=null&&lk.adelanto!==''?+lk.adelanto:+cfg.adelanto,np=!(cfg.modAdelanto&&cfg.yapeNum&&ad>0),c={id:uid(),codigo:codigo(),creada:Date.now(),fecha:d.fecha,hora:d.hora,barberoId:bid,servicioId:s.id,servicioNombre:s.nombre,precio:+s.precio||0,cliente:d.cliente,nota:d.nota,refFoto:ref,adelanto:np?0:ad,linkId:lk?.id||'',adelantoOk:false,estado:np?'por_validar':'pendiente_pago',expira:np?null:Date.now()+(+cfg.holdMin||20)*60000,origen:lk?'link':'web'};if(lk?.nota)c.nota=('🎁 '+lk.nota+(c.nota?' · '+c.nota:''));
+  const ad=lk&&lk.adelanto!=null&&lk.adelanto!==''?+lk.adelanto:+cfg.adelanto,np=!(cfg.modAdelanto&&cfg.yapeNum&&ad>0),c={id:uid(),codigo:codigo(),creada:Date.now(),fecha:d.fecha,hora:d.hora,barberoId:bid,servicioId:s.id,servicioNombre:s.nombre,precio:+s.precio||0,cliente:d.cliente,nota:d.nota,refFoto:ref,adelanto:np?0:ad,linkId:lk?.id||'',adelantoOk:false,estado:'por_validar',expira:np?null:Date.now()+(+cfg.holdMin||20)*60000,origen:lk?'link':'web'};if(lk?.nota)c.nota=('🎁 '+lk.nota+(c.nota?' · '+c.nota:''));
   cs.push(c);lsSet('citas',cs);if(lk){const ls=lsGet('links',[]),x=ls.find(y=>y.id===lk.id);Object.assign(x,{estado:'usado',citaId:c.id,usado:Date.now()});lsSet('links',ls)}return{id:c.id,codigo:c.codigo,expira:c.expira,barberoId:bid,estado:c.estado}},
  async captura(id,cod,data){if(this.remote)return this.req('POST',`/publico/reservas/${id}/captura`,{codigo:cod,data});
-  const cs=expirarLocal(),c=cs.find(x=>x.id===id&&x.codigo===cod);if(!c)throw new Error('Reserva no encontrada');if(c.estado!=='pendiente_pago')throw new Error(c.estado==='expirada'?'Se venció el tiempo de pago':'Esta reserva ya fue procesada');
+  const cs=expirarLocal(),c=cs.find(x=>x.id===id&&x.codigo===cod);if(!c)throw new Error('Reserva no encontrada');if(c.estado==='expirada')throw new Error('Se venció el tiempo de pago');if(c.estado!=='por_validar'||!c.expira)throw new Error('Esta reserva ya fue procesada');
   const k='f_'+uid();await IDB.put(k,data);c.yapeCaptura=k;c.estado='por_validar';c.expira=null;c.upd=Date.now();lsSet('citas',cs);return{ok:true}},
  async link(t){if(this.remote)return this.req('GET','/publico/link/'+encodeURIComponent(t));return lsGet('links',[]).find(l=>l.token===t)||null},
  async foto(k){if(!k)return'';if(/^(data:|https?:)/.test(k))return k;if(this.remote)return `${CONFIG.API_URL}/fotos/${k}`;return(await IDB.get(k))||''}
@@ -305,7 +305,7 @@ async function reservar(){if(F.busy)return;guardaCli();const e=$('#err'),c=F.cli
  F.busy=true;const b=$('#bRes');b.disabled=true;b.textContent='Reservando…';
  try{c.tel=c.tel.slice(-9);lsSet('yo',c);
   F.cita=await API.crear({servicioId:F.serv,barberoId:F.barb,fecha:F.fecha,hora:F.hora,cliente:c,nota:F.nota,refFoto:F.ref,turnstile:F.ts,linkToken:F.link?.token||''});
-  go(F.cita.estado==='pendiente_pago'?4:5);say(F.cita.estado==='pendiente_pago'?'datos':'listo')}
+  go(F.cita.expira?4:5);say(F.cita.expira?'datos':'listo')}
  catch(err){e.textContent='❌ '+err.message;b.disabled=false;b.textContent='Reintentar';if(/link/i.test(err.message)){F.link=null}if(/ocupa/i.test(err.message)){say('ocupado');F.hora=null;setTimeout(()=>go(2),1400)}}
  finally{F.busy=false;window.turnstile?.reset?.('#ts');F.ts=''}}
 /* paso 4: adelanto Yape */
@@ -327,7 +327,7 @@ async function enviarCap(){if(F.busy)return;F.busy=true;const b=$('#bCap');b.dis
  try{await API.captura(F.cita.id,F.cita.codigo,F.cap);go(5);say('listo')}catch(e){$('#err').textContent='❌ '+e.message;b.disabled=false;b.textContent='📤 Reintentar';if(/venci/i.test(e.message))vencido()}finally{F.busy=false}}
 function vencido(){clearInterval(timerInt);say('vencido');$('#app').innerHTML=`<div class="ok"><b>⌛</b><h2>Se acabó el tiempo</h2><p style="color:var(--mu)">Tu horario se liberó porque no recibimos el comprobante a tiempo. Puedes volver a reservar.</p></div><div class="foot"><button class="btn p" onclick="reiniciar()">🔄 Reservar de nuevo</button></div>`}
 /* paso 5: listo */
-function s5(){const cfg=P.cfg,s=serv(),c=F.cita,np=c.estado!=='pendiente_pago'&&sinPagoF();lsSet('ultima',{codigo:c.codigo,fecha:F.fecha,hora:F.hora});
+function s5(){const cfg=P.cfg,s=serv(),c=F.cita,np=!c.expira&&sinPagoF();lsSet('ultima',{codigo:c.codigo,fecha:F.fecha,hora:F.hora});
  const msg=tpl(cfg.waReserva,{cliente:F.cli.nombre,telefono:F.cli.tel,ciudad:F.cli.ciudad,servicio:s.nombre,precio:soles(s.precio),barbero:barbNom(c.barberoId),fecha:fLarga(F.fecha),hora:h12(F.hora),codigo:c.codigo,negocio:cfg.nombre,direccion:cfg.direccion||cfg.ciudad,nota:F.nota,adelanto:soles(adel()),pago:np?'':`Adelanto ${soles(adel())} enviado por Yape (adjunto captura)`});
  shell(`<div class="ok"><b>✅</b><h2>${esc(cfg.txtFinal||'¡Reserva recibida!')}</h2><p style="color:var(--mu)">Tu código</p><div class="code">${esc(c.codigo)}</div></div>
  <div class="card"><div class="res"><span>✂️</span><span><b>${esc(s.nombre)}</b> · ${soles(s.precio)}</span><span>💈</span><span>${esc(barbNom(c.barberoId))}</span><span>📅</span><span>${fLarga(F.fecha)} · ${h12(F.hora)}</span><span>📍</span><span>${esc(cfg.direccion||cfg.ciudad)}</span></div></div>

@@ -207,6 +207,15 @@ th{color:var(--mu);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
 .chiprow .chips{padding-top:0;flex:1;min-width:0}
 .chiprow.all{flex-wrap:wrap}.chips.wrap{display:contents}
 .chip .cc{font-style:normal;margin-left:6px;background:rgba(255,255,255,.12);border-radius:99px;padding:1px 7px;font-size:11px}
+.rb.al{background:var(--card2);border-color:var(--line);color:var(--tx)}
+.rb.al.ok{background:#238636;border-color:#3fb950;box-shadow:0 0 0 3px #3fb95033}
+.prox{background:var(--bg);border-bottom:1px solid var(--line);padding:8px 0 10px 14px}
+.pxh{font:700 11px 'DM Sans';letter-spacing:.1em;color:var(--blue);margin-bottom:6px;text-transform:uppercase}.pxh b{background:var(--pur);color:#fff;border-radius:99px;padding:1px 7px;margin-left:4px}
+.pxl{display:flex;gap:10px;overflow-x:auto;padding:2px 14px 2px 0;scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch}.pxl::-webkit-scrollbar{display:none}
+.pc{flex:none;scroll-snap-align:start;min-width:220px;max-width:260px;position:relative;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 56px 10px 12px;cursor:pointer}
+.pc.late{border-color:var(--yel)}.pc .pt{display:flex;justify-content:space-between;gap:8px}.pc .pt span{color:var(--blue);font-weight:700;white-space:nowrap}
+.pc .ps{font-size:12px;color:var(--mu);margin-top:4px}.pc .ps b{color:var(--tx)}
+.pc .rb{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:40px;height:40px;font-size:17px}
 .next{background:linear-gradient(135deg,color-mix(in srgb,var(--blue) 16%,var(--card)),color-mix(in srgb,var(--pur) 14%,var(--card)));border:1px solid color-mix(in srgb,var(--blue) 45%,var(--line));border-radius:var(--r);padding:14px;margin-bottom:12px}
 .next .lbl{font:700 12px 'DM Sans';letter-spacing:.12em;color:var(--blue);flex:1}
 .next .big2{font:800 26px 'Syne'}
@@ -269,6 +278,7 @@ th{color:var(--mu);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
   <button class="ibtn bare" onclick="verPorValidar()" title="Yape por validar">🔔<span class="dot" id="hDot" style="display:none">0</span></button>
   <button class="ibtn out" onclick="abrirMenu()" title="Menú">☰</button>
 </header>
+<div id="proxBar"></div>
 <nav class="tabs" id="tabs"></nav>
 
 <main>
@@ -334,7 +344,7 @@ const FOTO_CACHE=new Map();
 /* ---------- valores por defecto (todo editable en ⚙️ Config) ---------- */
 const PALETA=['#ff3fd2','#8a3ffc','#5b2bd6','#c48cff','#4d6bff','#ffb057'];
 const COLORES=['#ff3fd2','#8a3ffc','#4d6bff','#ffb057','#3fb950','#f0883e','#d29922','#f85149','#39c5cf','#db61a2'];
-const DEF_EST={pendiente_pago:{t:'Esperando Yape',i:'⏳',c:'#d29922'},por_validar:{t:'Yape por validar',i:'💸',c:'#f0883e'},confirmada:{t:'Confirmada',i:'✅',c:'#8a3ffc'},en_silla:{t:'En silla',i:'💺',c:'#ff3fd2'},atendida:{t:'Atendido',i:'✔️',c:'#3fb950'},no_vino:{t:'No vino',i:'❌',c:'#f85149'},cancelada:{t:'Cancelada',i:'🚫',c:'#a397b8'},expirada:{t:'Expirada',i:'⌛',c:'#a397b8'}};
+const DEF_EST={por_validar:{t:'Yape por validar',i:'💸',c:'#f0883e'},confirmada:{t:'Confirmada',i:'✅',c:'#8a3ffc'},en_silla:{t:'En silla',i:'💺',c:'#ff3fd2'},atendida:{t:'Atendido',i:'✔️',c:'#3fb950'},no_vino:{t:'No vino',i:'❌',c:'#f85149'},cancelada:{t:'Cancelada',i:'🚫',c:'#a397b8'},expirada:{t:'Expirada',i:'⌛',c:'#a397b8'}};
 const DEF_CFG={nombre:'Stereo Barber Pool',eslogan:'Barber · Pool · Lima',logo:'🎱',logoImg:'',acento:'#8a3ffc',acento2:'#ff3fd2',
  whatsapp:'',ciudad:'Lima, Perú',direccion:'Av. Principal 123, Puente Piedra',maps:'',
  modAdelanto:true,yapeNum:'',yapeTitular:'',yapeQR:'',adelanto:10,holdMin:20,
@@ -365,7 +375,7 @@ function demoCitas(){const h=hoy(),m=addD(h,1),sv=DEF_SERV(),mk=(f,hr,b,s,nom,te
   mk(h,'11:00','b1',1,'Jhon Paredes Huamán','998877665','Comas','por_validar'),
   mk(h,'15:00','b1',0,'Kevin Rojas Silva','955443322','Los Olivos','confirmada'),
   mk(h,'10:00','b2',5,'Miguel Ángel Flores','944556677','Puente Piedra','confirmada',{nota:'Diseño de rayo al costado'}),
-  mk(h,'12:00','b2',2,'Diego Salazar Chávez','966778899','Ancón','pendiente_pago',{expira:Date.now()+14*60000}),
+  mk(h,'12:00','b2',2,'Diego Salazar Chávez','966778899','Ancón','por_validar',{expira:Date.now()+14*60000}),
   mk(h,'09:00','b3',4,'Bryan Mendoza Ríos','933221100','Puente Piedra','no_vino'),
   mk(h,'16:00','b3',0,'Renzo Castillo Vega','977665544','Comas','confirmada',{adelanto:0,adelantoOk:false,origen:'panel'}),
   mk(m,'10:00','b1',1,'Carlos Ramírez Quispe','987654321','Puente Piedra','confirmada'),
@@ -374,13 +384,13 @@ function seed(){if(!lsGet('cfg',null))lsSet('cfg',DEF_CFG);if(!lsGet('barberos',
 const mergeCfg=c=>({...DEF_CFG,...c,est:{...(c?.est||{})},narr:{...DEF_CFG.narr,...(c?.narr||{})}});
 
 /* ---------- reglas del negocio ---------- */
-const ACTIVOS=['pendiente_pago','por_validar','confirmada','en_silla','atendida'];
-const activa=(c,now=Date.now())=>ACTIVOS.includes(c.estado)&&!(c.estado==='pendiente_pago'&&c.expira&&c.expira<now);
+const ACTIVOS=['por_validar','confirmada','en_silla','atendida'];
+const activa=(c,now=Date.now())=>ACTIVOS.includes(c.estado)&&!(c.estado==='por_validar'&&c.expira&&c.expira<now&&!c.yapeCaptura);
 function slotsDia(cfg){const out=[],dur=CONFIG.DUR,fin=toMin(cfg.cierre),ri=toMin(cfg.refIni),rf=toMin(cfg.refFin);let t=toMin(cfg.apertura),g=0;if(t==null||fin==null)return out;while(t+dur<=fin&&g++<60){if(ri!=null&&rf!=null&&rf>ri&&t<rf&&t+dur>ri){t=rf;continue}out.push(fromMin(t));t+=dur}return out}
 const bloqueado=(cfg,f,bid)=>(cfg.bloqueos||[]).some(b=>b.fecha===f&&(!b.barberoId||b.barberoId===bid));
 const trabaja=(cfg,b,f)=>{const d=pYmd(f).getDay();return b&&b.activo!==false&&(cfg.dias||[]).includes(d)&&(b.dias||[]).includes(d)&&!bloqueado(cfg,f,b.id)};
 const ocupado=(cs,bid,f,h,ign)=>cs.some(c=>c.id!==ign&&c.barberoId===bid&&c.fecha===f&&c.hora===h&&activa(c));
-function expirarLocal(){const cs=lsGet('citas',[]),now=Date.now();let ch=false;cs.forEach(c=>{if(c.estado==='pendiente_pago'&&c.expira&&c.expira<now){c.estado='expirada';ch=true}});if(ch)lsSet('citas',cs);return cs}
+function expirarLocal(){const cs=lsGet('citas',[]),now=Date.now();let ch=false;cs.forEach(c=>{if(c.estado==='pendiente_pago'){c.estado='por_validar';ch=true}if(c.estado==='por_validar'&&c.expira&&c.expira<now&&!c.yapeCaptura){c.estado='expirada';ch=true}});if(ch)lsSet('citas',cs);return cs}
 
 /* ---------- API (local ahora, Cloudflare después) ---------- */
 const API={
@@ -459,10 +469,10 @@ async function boot(){
  addEventListener('storage',e=>{if(e.key==='brb_citas')reload(true)});
 }
 async function reload(notify){
- try{const d=await API.load();Object.assign(S,{cfg:mergeCfg(d.cfg),barberos:d.barberos||[],servicios:d.servicios||[],usuarios:d.usuarios||[],citas:d.citas||[]})}catch(e){toast('⚠️ '+e.message);return}
+ try{const d=await API.load();Object.assign(S,{cfg:mergeCfg(d.cfg),barberos:d.barberos||[],servicios:d.servicios||[],usuarios:d.usuarios||[],citas:(d.citas||[]).map(c=>c.estado==='pendiente_pago'?{...c,estado:'por_validar'}:c)})}catch(e){toast('⚠️ '+e.message);return}
  const pm=permsFor(S.ses);if(pm===null){toast('Tu usuario fue desactivado');localStorage.removeItem('brb_ses');return setTimeout(()=>location.reload(),900)}S.perm=pm;
  if(notify&&S.loaded){const nuevas=S.citas.filter(c=>!S.known.has(c.id)&&mine(c)&&c.origen==='web');if(nuevas.length){toast(`🔔 ${nuevas.length} reserva(s) nueva(s)`);navigator.vibrate?.([120,60,120]);beep()}}
- S.known=new Set(S.citas.map(c=>c.id));S.loaded=true;if(!S.dirty)applyTheme(S.cfg);renderHeader();
+ S.known=new Set(S.citas.map(c=>c.id));S.loaded=true;if(!S.dirty)applyTheme(S.cfg);renderHeader();renderProx();
  if(S.tab==='agenda'&&document.activeElement?.id==='q')renderLista();else if(S.tab==='agenda')renderTab();
 }
 function renderHeader(){
@@ -503,7 +513,7 @@ function renderAgenda(){
   ${filtros.length?`<div class="row" style="margin-top:10px;flex-wrap:wrap">${filtros.join('')}</div>`:''}
   <div class="days">${[['semana','Semana','🗓️'],['mes','Mes','📆']].map(([k,l,i])=>{const n=all.filter(c=>c.fecha>=hoy()&&activa(c)&&(k==='semana'?c.fecha<=addD(hoy(),6):c.fecha.slice(0,7)===hoy().slice(0,7))).length;return `<button class="day ${S.fecha===k?'on':''}" onclick="S.fecha='${k}';S.off=0;renderAgenda()">${n?`<i>${n}</i>`:''}<small>${l}</small><b>${i}</b><small>${k==='semana'?'lun–dom':'completo'}</small></button>`}).join('')}${dias.map(f=>{const d=pYmd(f),n=cuenta(f);return `<button class="day ${f===S.fecha?'on':''}" onclick="S.fecha='${f}';renderAgenda()">${n?`<i>${n}</i>`:''}<small>${f===hoy()?'Hoy':f===addD(hoy(),1)?'Mañ':DIAS[d.getDay()]}</small><b>${d.getDate()}</b><small>${MESC[d.getMonth()]}</small></button>`}).join('')}<label class="day cal">📅<input type="date" onchange="if(this.value){S.fecha=this.value;renderAgenda()}"></label></div>
   ${esRango()?`<div class="row" style="margin-top:10px;justify-content:space-between"><button class="btn sm" onclick="S.off=(+S.off||0)-1;renderAgenda()">‹</button><b style="text-transform:capitalize;text-align:center;flex:1">${S.fecha==='semana'?'Semana':'Mes'} · ${rangoAg().t}${(+S.off||0)?` <button class="btn sm" onclick="S.off=0;renderAgenda()">Hoy</button>`:''}</b><button class="btn sm" onclick="S.off=(+S.off||0)+1;renderAgenda()">›</button></div>`:''}
-  <div class="chiprow"><button class="chip ${S.filtro==='todos'?'on':''}" onclick="tapTodos()">Todos<i class="cc">${dia.filter(c=>c.estado!=='expirada').length}</i></button><div class="chips">${FILTROS.slice(1).map(k=>{const n=['por_validar','pendiente_pago'].includes(k)?all.filter(c=>c.estado===k).length:dia.filter(c=>k==='cancelada'?['cancelada','expirada'].includes(c.estado):c.estado===k).length;return `<button class="chip ${S.filtro===k?'on':''}" onclick="setFiltro('${k}')">${est(k).i} ${esc(est(k).t)}${n?`<i class="cc">${n}</i>`:''}</button>`}).join('')}</div></div>
+  <div class="chiprow"><button class="chip ${S.filtro==='todos'?'on':''}" onclick="tapTodos()">Todos<i class="cc">${dia.filter(c=>c.estado!=='expirada').length}</i></button><div class="chips">${FILTROS.slice(1).map(k=>{const n=['por_validar'].includes(k)?all.filter(c=>c.estado===k).length:dia.filter(c=>k==='cancelada'?['cancelada','expirada'].includes(c.estado):c.estado===k).length;return `<button class="chip ${S.filtro===k?'on':''}" onclick="setFiltro('${k}')">${est(k).i} ${esc(est(k).t)}${n?`<i class="cc">${n}</i>`:''}</button>`}).join('')}</div></div>
   <p class="hint" style="margin-top:4px;font-size:11px">Toca 2 veces "Todos" para ver todas las etiquetas</p>
   <div class="tools">${can('dash')?`<button class="tool" title="Clientes" onclick="abrirClientes()">👥</button>`:''}${can('verMontos')?`<button class="tool" title="Caja" onclick="abrirCaja()">📊</button>`:''}<button class="tool" title="Actualizar" onclick="reload().then(()=>toast('🔄 Actualizado'))">🔄</button><button class="tool" title="Ayuda" onclick="ayuda()">📖</button>${can('crear')?`<button class="tool p" title="Nueva cita" onclick="formCita()">➕</button>`:''}${S.cfg.modWalkin&&can('crear')?`<button class="tool pu" title="Cliente sin cita" onclick="walkIn()">⚡</button>`:''}</div>
  </div>
@@ -513,29 +523,44 @@ function renderAgenda(){
 /* ---- tiempo para la próxima cita ---- */
 const startTs=c=>{const[y,m,d]=c.fecha.split('-').map(Number),[H,M]=(c.hora||'00:00').split(':').map(Number);return new Date(y,m-1,d,H,M).getTime()};
 function falta(ts){const m=Math.round((ts-Date.now())/60000);if(m>=0){if(m<1)return'ahora';if(m<60)return`en ${m} min`;const h=Math.floor(m/60),r=m%60;if(h<24)return`en ${h} h${r?' '+r+' min':''}`;const d=Math.round(m/1440);return d===1?'mañana':`en ${d} días`}const a=-m;return a<60?`hace ${a} min`:`hace ${Math.floor(a/60)} h`}
-function cdLabel(ts){const m=Math.round((ts-Date.now())/60000);return m<-1?`⚠️ ${-m<60?-m+' min':Math.floor(-m/60)+' h'} tarde`:`⏳ ${falta(ts)}`}
-const ESPERA=['confirmada','por_validar','pendiente_pago'];
+function cdLabel(ts){return ts-Date.now()<=0?'🕘 Es su hora':`⏳ ${falta(ts)}`}
+const faltaHasta=ts=>ts-Date.now()<=0?'es su hora':falta(ts);
+const ESPERA=['confirmada','por_validar'];
 const hms=x=>{x=Math.max(0,Math.floor(x));const h=Math.floor(x/3600),m=Math.floor(x%3600/60),z=x%60;return(h?pad(h)+':':'')+pad(m)+':'+pad(z)};
-function chrono(c){const now=Date.now(),dur=CONFIG.DUR*60;
- if(c.estado==='en_silla'){const t0=c.enSillaTs||startTs(c);return `<span class="chr run" data-sw="${t0}" title="Tiempo en silla">${hms((now-t0)/1000)}</span>`}
- if(c.estado==='atendida'&&c.enSillaTs&&c.atendidaTs)return `<span class="chr done">⏱ ${hms((c.atendidaTs-c.enSillaTs)/1000)}</span>`;
- if(ESPERA.includes(c.estado)&&activa(c)){const ts=startTs(c),d=(ts-now)/1000;if(d>12*3600||d<-6*3600)return'';return `<span class="chr ${d<0?'late':d<900?'warn':''}" data-cdn="${ts}" ${can('crear')?`onclick="if(confirm('¿El cliente llegó? Iniciar cronómetro y pasarlo a silla'))setEstado('${c.id}','en_silla',{enSillaTs:Date.now()})"`:''}>${d<0?'⚠️ +'+hms(-d):'⏳ '+hms(d)}</span>`}return''}
-function tickSec(){const now=Date.now(),dur=CONFIG.DUR*60;
- $$('[data-sw]').forEach(e=>{const t=(now-e.dataset.sw)/1000;e.textContent=hms(t);e.classList.toggle('warn',t>=dur-600&&t<dur);e.classList.toggle('late',t>=dur);e.classList.toggle('run',t<dur-600)});
- $$('[data-cdn]').forEach(e=>{const d=(e.dataset.cdn-now)/1000;e.textContent=d<0?'⚠️ +'+hms(-d):'⏳ '+hms(d);e.classList.toggle('late',d<0);e.classList.toggle('warn',d>=0&&d<900)})}
-function cdTag(c){if(!ESPERA.includes(c.estado)||!activa(c))return c.estado==='en_silla'&&c.enSillaTs?`<span class="tag cd" data-silla="${c.enSillaTs}">💺 ${Math.max(1,Math.round((Date.now()-c.enSillaTs)/60000))} min en silla</span>`:'';const ts=startTs(c);if(ts-Date.now()>7*864e5||ts<Date.now()-12*36e5)return'';return `<span class="tag cd ${ts<Date.now()-60000?'late':''}" data-cd="${ts}">${cdLabel(ts)}</span>`}
+function fmtFalta(d){d=Math.max(0,Math.floor(d));if(d<3600)return `${Math.floor(d/60)} min ${pad(d%60)} s`;return `${Math.floor(d/3600)} h ${Math.floor(d%3600/60)} min`}
+/* Cuenta regresiva hasta la hora de la cita. Al llegar la hora se detiene ("Es su hora"); en silla, atendido o cancelado no se muestra. */
+function chrono(c){if(!ESPERA.includes(c.estado)||!activa(c))return'';
+ const ts=startTs(c),d=(ts-Date.now())/1000;if(d>12*3600)return'';
+ if(d<=0)return `<span class="chr late">🕘 Es su hora</span>`;
+ return `<span class="chr ${d<900?'warn':''}" data-cdn="${ts}" title="Tiempo que falta para su cita" ${can('crear')?`onclick="if(confirm('¿El cliente llegó? Pasarlo a silla'))setEstado('${c.id}','en_silla',{enSillaTs:Date.now()})"`:''}>⏳ Faltan ${fmtFalta(d)}</span>`}
+function tickSec(){const now=Date.now();
+ $$('[data-cdn]').forEach(e=>{const d=(e.dataset.cdn-now)/1000;if(d<=0){e.textContent='🕘 Es su hora';e.classList.remove('warn');e.classList.add('late');e.removeAttribute('data-cdn');return}e.textContent='⏳ Faltan '+fmtFalta(d);e.classList.toggle('warn',d<900)})}
+function cdTag(c){if(!ESPERA.includes(c.estado)||!activa(c))return'';const ts=startTs(c);if(ts-Date.now()>7*864e5||ts<Date.now()-12*36e5)return'';return `<span class="tag cd ${ts<Date.now()-60000?'late':''}" data-cd="${ts}">${cdLabel(ts)}</span>`}
 function gNext(bid){const now=Date.now(),cs=S.citas.filter(c=>c.barberoId===bid&&c.fecha===hoy()&&activa(c));const silla=cs.find(c=>c.estado==='en_silla');const nx=cs.filter(c=>ESPERA.includes(c.estado)&&startTs(c)>now-15*60000).sort((a,b)=>startTs(a)-startTs(b))[0];
  return `<span class="gnx">${silla?'💺 Atendiendo a '+esc(silla.cliente?.nombre?.split(' ')[0]||'')+' · ':'🟢 Libre · '}${nx?`próx. ${h12(nx.hora)} (<b data-cdt="${startTs(nx)}">${falta(startTs(nx))}</b>)`:'sin más citas hoy'}</span>`}
 function proxima(){const now=Date.now();return scope().filter(c=>ESPERA.includes(c.estado)&&activa(c)&&startTs(c)>now-90*60000).sort((a,b)=>startTs(a)-startTs(b))[0]}
 function renderNext(){const el=$('#nextBox');if(!el)return;const c=proxima();if(!c){el.innerHTML='';return}const ts=startTs(c),late=ts<Date.now()-60000,b=barb(c.barberoId),silla=scope().filter(x=>x.estado==='en_silla'&&x.fecha===hoy());
- el.innerHTML=`<div class="next ${late?'late':''}"><div class="row"><span class="lbl">${late?'⚠️ CLIENTE RETRASADO':'⏳ PRÓXIMA CITA'}</span><b class="big2" data-cdb="${ts}">${late?cdLabel(ts).replace('⚠️ ',''):falta(ts)}</b></div>
- <div class="row" style="margin-top:8px">${avatar(b)}<div style="flex:1;min-width:0"><b style="font-size:16px">${esc(c.cliente?.nombre||'')}</b> <span class="pill" style="color:${est(c.estado).c};border-color:${est(c.estado).c}">${est(c.estado).i} ${esc(est(c.estado).t)}</span><p class="hint" style="margin:0">${c.fecha===hoy()?'Hoy':fLarga(c.fecha)} ${h12(c.hora)} · ✂️ ${esc(c.servicioNombre)} · 💈 ${esc(b?.nombre||'')}</p></div>${c.cliente?.tel?`<button class="rb" onclick="abrirWA(cita('${c.id}').cliente.tel,tpl(S.cfg.waRecuerda,cita('${c.id}')))">⏰</button>`:''}</div>
+ el.innerHTML=`<div class="next ${late?'late':''}"><div class="row"><span class="lbl">${late?'🕘 YA ES SU HORA':'⏳ PRÓXIMA CITA'}</span><b class="big2" data-cdb="${ts}">${late?'Es su hora':falta(ts)}</b></div>
+ <div class="row" style="margin-top:8px">${avatar(b)}<div style="flex:1;min-width:0"><b style="font-size:16px">${esc(c.cliente?.nombre||'')}</b> <span class="pill" style="color:${est(c.estado).c};border-color:${est(c.estado).c}">${est(c.estado).i} ${esc(est(c.estado).t)}</span><p class="hint" style="margin:0">${c.fecha===hoy()?'Hoy':fLarga(c.fecha)} ${h12(c.hora)} · ✂️ ${esc(c.servicioNombre)} · 💈 ${esc(b?.nombre||'')}</p></div>${c.cliente?.tel?`<button class="rb al ${c.avisado?'ok':''}" title="${c.avisado?'Ya se le avisó':'Avisarle por WhatsApp'}" onclick="recordar('${c.id}')">⏰</button>`:''}</div>
  ${late&&can('cancelar')?`<div class="row" style="margin-top:10px"><button class="btn sm" style="flex:1" onclick="setEstado('${c.id}','en_silla',{enSillaTs:Date.now()})">💺 Ya llegó</button><button class="btn sm r" style="flex:1" onclick="noVino('${c.id}')">❌ No vino</button></div>`:''}
  ${silla.length?`<p class="hint" style="margin-top:8px">💺 En silla: ${silla.map(x=>`${esc(x.cliente?.nombre?.split(' ')[0]||'')} con ${esc(barb(x.barberoId)?.nombre||'')}${x.enSillaTs?` (${Math.round((Date.now()-x.enSillaTs)/60000)} min)`:''}`).join(' · ')}</p>`:''}</div>`;hydrate(el)}
-function tickCD(){$$('[data-cd]').forEach(e=>{const ts=+e.dataset.cd;e.textContent=cdLabel(ts);e.classList.toggle('late',ts<Date.now()-60000)});$$('[data-cdt]').forEach(e=>e.textContent=falta(+e.dataset.cdt));$$('[data-silla]').forEach(e=>e.textContent=`💺 ${Math.max(1,Math.round((Date.now()-e.dataset.silla)/60000))} min en silla`);if(S.tab==='agenda')renderNext()}
+/* Avisa al cliente por WhatsApp y deja marcado (en verde) que ya se le avisó. */
+function recordar(id){const c=cita(id);if(!c?.cliente?.tel)return toast('Esa cita no tiene teléfono');
+ abrirWA(c.cliente.tel,tpl(S.cfg.waRecuerda,c));
+ c.avisado=Date.now();renderNext();renderProx();renderLista?.();toast('⏰ Avisado · marcado en verde');
+ API.updateCita(id,{avisado:c.avisado}).catch(()=>{})}
+/* Barra deslizable con los cortes de las próximas 3 horas (visible en todas las pestañas). */
+function renderProx(){const el=$('#proxBar');if(!el)return;if(!S.loaded||!S.ses){el.innerHTML='';return}const now=Date.now();
+ const cs=scope().filter(c=>ESPERA.includes(c.estado)&&activa(c)).filter(c=>{const d=startTs(c)-now;return d<=3*36e5&&d>-36e5}).sort((a,b)=>startTs(a)-startTs(b));
+ if(!cs.length){el.innerHTML='';return}
+ el.innerHTML=`<div class="prox"><div class="pxh">⏳ Próximos 3 horas <b>${cs.length}</b></div><div class="pxl">${cs.map(c=>{const ts=startTs(c),b=barb(c.barberoId),late=ts<=now;
+  return `<div class="pc ${late?'late':''}" onclick="irACita('${c.id}')"><div class="pt"><b>${esc((c.cliente?.nombre||'').split(' ').slice(0,2).join(' '))}</b><span>${h12(c.hora)}</span></div><div class="ps"><span data-cdt="${ts}">${late?'es su hora':falta(ts)}</span> · 💈 <b>${esc(b?.nombre||'')}</b><br>${esc(c.servicioNombre||'')}</div>${c.cliente?.tel?`<button class="rb al ${c.avisado?'ok':''}" title="${c.avisado?'Ya se le avisó':'Avisarle por WhatsApp'}" onclick="event.stopPropagation();recordar('${c.id}')">⏰</button>`:''}</div>`}).join('')}</div></div>`}
+function irACita(id){const c=cita(id);if(!c)return;S.q='';S.filtro='todos';S.fecha=c.fecha;S.off=0;if(S.tab==='agenda')renderAgenda();else goTab('agenda');
+ setTimeout(()=>{const e=document.getElementById('c_'+id);e?.scrollIntoView({behavior:'smooth',block:'center'});e?.animate([{boxShadow:'0 0 0 3px var(--pur)'},{boxShadow:'0 0 0 0 transparent'}],{duration:1600})},120)}
+function tickCD(){$$('[data-cd]').forEach(e=>{const ts=+e.dataset.cd;e.textContent=cdLabel(ts);e.classList.toggle('late',ts<=Date.now())});$$('[data-cdt]').forEach(e=>e.textContent=faltaHasta(+e.dataset.cdt));if(S.tab==='agenda')renderNext();renderProx()}
 function tapTodos(){const n=Date.now();if(n-(S._tt||0)<380){S._tt=0;abrirEtiquetas();return}S._tt=n;if(S.filtro!=='todos')setFiltro('todos')}
 function abrirEtiquetas(){const all=scope(),dia=esRango()?all.filter(enRango):all.filter(c=>c.fecha===S.fecha);
- const rows=FILTROS.map(k=>{const src=k==='todos'?dia.filter(c=>c.estado!=='expirada'):['por_validar','pendiente_pago'].includes(k)?all.filter(c=>c.estado===k):dia.filter(c=>k==='cancelada'?['cancelada','expirada'].includes(c.estado):c.estado===k);
+ const rows=FILTROS.map(k=>{const src=k==='todos'?dia.filter(c=>c.estado!=='expirada'):['por_validar'].includes(k)?all.filter(c=>c.estado===k):dia.filter(c=>k==='cancelada'?['cancelada','expirada'].includes(c.estado):c.estado===k);
   const e=k==='todos'?{i:'📋',t:'Todos',c:'#8a3ffc'}:est(k),tot=src.reduce((a,c)=>a+(c.gratis?0:+c.precio||0),0);
   return `<button class="et" style="color:${e.c};border-color:${e.c};background:color-mix(in srgb,${e.c} 10%,var(--card))" onclick="closeModal();setFiltro('${k}')"><span>${e.i} ${esc(e.t)}</span><em>${can('verMontos')?'S/ '+tot.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2}):''}</em><b>${src.length}</b></button>`}).join('');
  openModal(`<div class="grab"></div>${mHead('🏷️ Todas las etiquetas')}<p class="hint" style="margin:0 0 14px">${esRango()?`Cuentan las citas de la <b style="color:var(--tx)">${S.fecha==='semana'?'semana':'mes'} · ${rangoAg().t}</b>. «Yape por validar» cuenta todos los días.`:`Cuentan las citas del <b style="color:var(--tx)">${fLarga(S.fecha)}</b>. «Yape por validar» cuenta todos los días.`} Toca una para filtrar.</p>${rows}`)}
@@ -543,8 +568,8 @@ function limpiar(){S.q='';S.barbF='';S.filtro='todos';renderAgenda()}
 function setFiltro(f){S.filtro=f;renderAgenda()}
 function verPorValidar(){if(S.tab!=='agenda')goTab('agenda');S.filtro='por_validar';S.q='';renderAgenda()}
 function renderLista(){
- let cs=scope();const q=S.q.trim().toLowerCase(),global=!!q||esRango()||['por_validar','pendiente_pago'].includes(S.filtro);
- if(q||['por_validar','pendiente_pago'].includes(S.filtro)){}else if(esRango())cs=cs.filter(enRango);else cs=cs.filter(c=>c.fecha===S.fecha);
+ let cs=scope();const q=S.q.trim().toLowerCase(),global=!!q||esRango()||['por_validar'].includes(S.filtro);
+ if(q||['por_validar'].includes(S.filtro)){}else if(esRango())cs=cs.filter(enRango);else cs=cs.filter(c=>c.fecha===S.fecha);
  if(S.barbF)cs=cs.filter(c=>c.barberoId===S.barbF);
  if(S.filtro==='cancelada')cs=cs.filter(c=>c.estado==='cancelada'||c.estado==='expirada');
  else if(S.filtro!=='todos')cs=cs.filter(c=>c.estado===S.filtro);
@@ -564,15 +589,15 @@ function cardCita(c,global,vis){
  const cl=c.cliente||{},n=S.cfg.modFidelidad?+S.cfg.fidelidad||0:0,v=vis[telKey(cl.tel)]||0,gratis=n>1&&c.estado!=='atendida'&&(v+1)%n===0;
  const e=est(c.estado),ac=accion(c);
  let pagoBox='';
- if(c.adelanto>0&&['pendiente_pago','por_validar'].includes(c.estado)){
-  pagoBox=`<div class="box"><h5>💸 <span>Adelanto Yape</span>${c.estado==='pendiente_pago'?`<b style="color:var(--yel)">⏳ ${Math.max(0,Math.ceil((c.expira-Date.now())/60000))} min</b>`:''}</h5>
-  <div class="row"><b class="syne" style="font-size:22px;flex:1">${soles(c.adelanto)}</b>${c.yapeCaptura?`<button class="btn sm" onclick="verYape('${c.id}')">🧾 Ver captura</button>`:'<span class="hint" style="margin:0">Sin captura</span>'}${c.estado==='pendiente_pago'&&cl.tel?`<button class="btn sm" onclick="abrirWA(cita('${c.id}').cliente.tel,tpl(S.cfg.waYape,cita('${c.id}')))">💬 Pedir</button>`:''}</div></div>`}
+ if(c.adelanto>0&&c.estado==='por_validar'){
+  pagoBox=`<div class="box"><h5>💸 <span>Adelanto Yape</span>${!c.yapeCaptura&&c.expira?`<b style="color:var(--yel)">⏳ ${Math.max(0,Math.ceil((c.expira-Date.now())/60000))} min para enviar el comprobante</b>`:''}</h5>
+  <div class="row"><b class="syne" style="font-size:22px;flex:1">${soles(c.adelanto)}</b>${c.yapeCaptura?`<button class="btn sm" onclick="verYape('${c.id}')">🧾 Ver captura</button>`:'<span class="hint" style="margin:0">Sin captura</span>'}${c.estado==='por_validar'&&!c.yapeCaptura&&cl.tel?`<button class="btn sm" onclick="abrirWA(cita('${c.id}').cliente.tel,tpl(S.cfg.waYape,cita('${c.id}')))">💬 Pedir</button>`:''}</div></div>`}
  const fotosBox=S.cfg.modFotos&&['confirmada','en_silla','atendida'].includes(c.estado)?`<div class="box"><h5>📷 <span>Antes y después</span>${c.adelantoOk?`<span class="pill" style="color:var(--grn);border-color:var(--grn)">✔ Adelanto ${soles(c.adelanto)}</span>`:''}</h5><div class="phs">${ph(c,'antes')}${ph(c,'despues')}</div></div>`:'';
- return `<div class="cita">
+ return `<div class="cita" id="c_${c.id}">
   <div class="row"><div class="cn">${esc(cl.nombre||'Cliente')}${chrono(c)?`<div style="margin-top:6px">${chrono(c)}</div>`:''}</div>${cl.tel?`<button class="rb" onclick="histCliente('${telKey(cl.tel)}')">📋</button><button class="rb" onclick="menuWA('${c.id}')">💬</button>`:''}</div>
   <div class="meta">
    ${cl.tel?can('verTel')?`<span class="lk" onclick="copiar(cita('${c.id}').cliente.tel)">📞 ${esc(cl.tel)} ⧉</span>`:`<span>📞 ${esc(telV(cl.tel))}</span>`:''}${cl.dni?`<span>🪪 ${esc(cl.dni)}</span>`:''}
-   <span class="lk">⏰ ${global?fLarga(c.fecha).split(' ').slice(0,2).join(' ')+' · ':''}${h12(c.hora)}</span>
+   <span class="lk">📅 ${DIAS[pYmd(c.fecha).getDay()]} ${pYmd(c.fecha).getDate()} ${MESC[pYmd(c.fecha).getMonth()]} · ${h12(c.hora)}</span>
    <span class="lk">💰 ${c.gratis?'GRATIS':monV(c.precio)}</span>
   </div>
   <div class="sub2">✂️ ${esc(c.servicioNombre||'')}${cl.ciudad?' · 📍 '+esc(cl.ciudad):''}</div>
@@ -584,13 +609,17 @@ function cardCita(c,global,vis){
 function ph(c,k){const key=k==='antes'?c.fotoAntes:k==='ref'?c.refFoto:c.fotoDespues,lbl=k==='antes'?'ANTES':k==='ref'?'REFERENCIA':'DESPUÉS',inp=`<input type="file" accept="image/*" ${k==='ref'?'':'capture="environment"'} onchange="subirFoto('${c.id}','${k}',this)">`;
  return key?`<div class="ph"><span class="tg">${lbl}</span><img data-foto="${key}" onclick="verFoto('${key}')"><label class="re">↻${inp}</label></div>`:`<label class="ph">📷<br>Foto ${lbl.toLowerCase()}${inp}</label>`}
 function accion(c){const id=c.id,E=k=>est(k);switch(c.estado){
- case 'por_validar':if(!can('yape'))return{t:'💸 Yape por validar 🔒',fn:"toast('🔒 Solo quien valida pagos puede confirmarlo')",c:E('por_validar').c};return{t:`💸 Validar Yape`,fn:`verYape('${id}')`,c:E('por_validar').c};
- case 'pendiente_pago':if(!can('yape'))return{t:'⏳ Esperando Yape',fn:"toast('🔒 Sin permiso para validar pagos')",c:E('pendiente_pago').c};return{t:`✔ Recibí el adelanto`,fn:`validar('${id}')`,c:E('pendiente_pago').c};
+ case 'por_validar':if(!can('yape'))return{t:'💸 Yape por validar 🔒',fn:"toast('🔒 Solo quien valida pagos puede confirmarlo')",c:E('por_validar').c};return{t:c.yapeCaptura?`💸 Validar Yape`:`💸 Validar Yape · sin comprobante`,fn:`verYape('${id}')`,c:E('por_validar').c};
  case 'confirmada':return{t:`${E('en_silla').i} Pasar a silla`,fn:`setEstado('${id}','en_silla',{enSillaTs:Date.now()})`,c:E('confirmada').c};
  case 'en_silla':return{t:`${E('atendida').i} Terminar corte`,fn:`terminar('${id}')`,c:E('en_silla').c};
  default:return null}}
 async function setEstado(id,k,extra={},msg){try{await API.updateCita(id,{estado:k,...extra});await reload();toast(msg||`${est(k).i} ${est(k).t}`)}catch(e){toast('❌ '+e.message)}}
-async function subirFoto(id,k,inp){const f=inp.files[0];if(!f)return;toast('⏳ Subiendo foto…');try{const key=await API.putFoto(await compressImg(f,1000,.72));await API.updateCita(id,{[k==='antes'?'fotoAntes':k==='ref'?'refFoto':'fotoDespues']:key});await reload();toast('📷 Foto guardada')}catch(e){toast('❌ '+e.message)}}
+/* Foto ANTES: pasa a "En silla". Foto DESPUÉS: termina el corte (queda "Atendido"). */
+async function subirFoto(id,k,inp){const f=inp.files[0];if(!f)return;toast('⏳ Subiendo foto…');
+ try{const key=await API.putFoto(await compressImg(f,1000,.72)),c=cita(id),p={[k==='antes'?'fotoAntes':k==='ref'?'refFoto':'fotoDespues']:key};let msg='📷 Foto guardada';
+  if(k==='antes'&&c?.estado==='confirmada'){p.estado='en_silla';p.enSillaTs=Date.now();msg='💺 Foto guardada · ahora está En silla'}
+  await API.updateCita(id,p);await reload();toast(msg);
+  if(k==='despues'&&['confirmada','en_silla'].includes(cita(id)?.estado))await terminar(id,true)}catch(e){toast('❌ '+e.message)}}
 async function verYape(id){const c=cita(id);if(!c)return;
  openModal(mHead('💸 Comprobante Yape')+`<p><b>${esc(c.cliente?.nombre)}</b> · ${fLarga(c.fecha)} ${h12(c.hora)}<br><span style="color:var(--mu)">Adelanto esperado: <b style="color:var(--tx)">${soles(c.adelanto)}</b> · #${esc(c.codigo)}</span></p>
  <div id="yimg" class="empty" style="padding:20px">${c.yapeCaptura?'Cargando…':'⚠️ El cliente no adjuntó captura. Revisa tu Yape antes de validar.'}</div>
@@ -600,17 +629,19 @@ async function validar(id){const c0=cita(id),enviar=!!c0?.cliente?.tel&&confirm(
  await setEstado(id,'confirmada',{adelantoOk:true},'✅ Cita confirmada');const c=cita(id);
  if(w){if(c?.estado==='confirmada')irA(w,`https://wa.me/${waNum(c.cliente.tel)}?text=${encodeURIComponent(tpl(S.cfg.waConfirma,c))}`);else w.close()}}
 async function rechazar(id){if(!confirm('¿Rechazar el pago y cancelar la cita? El horario se libera.'))return;closeModal();await setEstado(id,'cancelada',{motivo:'Yape no válido'})}
-async function terminar(id){const c=cita(id);if(!c)return;if(S.cfg.modFotos&&!c.fotoDespues&&!confirm('Aún no tiene foto DESPUÉS 📷 (tómala en el recuadro de la tarjeta).\n\n¿Terminar igual?'))return;
+async function terminar(id,auto){const c=cita(id);if(!c)return;if(!auto&&S.cfg.modFotos&&!c.fotoDespues&&!confirm('Aún no tiene foto DESPUÉS 📷 (tómala en el recuadro de la tarjeta).\n\n¿Terminar igual?'))return;
  const n=S.cfg.modFidelidad?+S.cfg.fidelidad||0:0,v=contarVisitas()[telKey(c.cliente?.tel)]||0,extra={atendidaTs:Date.now()};
+ if(!c.enSillaTs)extra.enSillaTs=c.enSillaTs||Date.now();
  if(n>1&&(v+1)%n===0&&confirm(`🎁 Este cliente cumple ${n} cortes. ¿Aplicar corte GRATIS?`))extra.gratis=true;
+ const enviar=!!c.cliente?.tel&&confirm('¿Enviar agradecimiento por WhatsApp?'),w=enviar?ventana():null;
  await setEstado(id,'atendida',extra,'✔️ Corte terminado');
- if(c.cliente?.tel&&confirm('¿Enviar agradecimiento por WhatsApp?'))abrirWA(c.cliente.tel,tpl(S.cfg.waGracias,cita(id)))}
+ if(w){if(cita(id)?.estado==='atendida')irA(w,`https://wa.me/${waNum(c.cliente.tel)}?text=${encodeURIComponent(tpl(S.cfg.waGracias,cita(id)))}`);else w.close()}}
 async function quitar(id){const c=cita(id);if(!c)return;
  if(['cancelada','expirada'].includes(c.estado)){if(can('cancelar')&&confirm('¿Eliminar la cita para siempre?')){await API.borrarCita(id);await reload();toast('🗑️ Eliminada')}return}
  if(!confirm('¿Cancelar esta cita? El horario queda libre.'))return;await setEstado(id,'cancelada')}
 function menuWA(id){const c=cita(id);if(!c)return;
  const o=[['waConfirma','✅ Confirmación de cita'],['waRecuerda','⏰ Recordatorio'],['waYape','💸 Pedir adelanto Yape'],['waGracias','🙏 Agradecimiento + link'],['','✉️ Mensaje libre']];
- openModal(mHead('💬 '+esc(c.cliente?.nombre||''))+o.map(([k,t])=>`<button class="btn w" style="margin-top:8px;justify-content:flex-start;padding:14px" onclick="closeModal();abrirWA(cita('${id}').cliente.tel,${k?`tpl(S.cfg.${k},cita('${id}'))`:`'Hola '+cita('${id}').cliente.nombre+' 👋'`})">${t}</button>`).join('')+`<p class="hint">Los textos se editan en ⚙️ Config → Mensajes.</p>`)}
+ openModal(mHead('💬 '+esc(c.cliente?.nombre||''))+o.map(([k,t])=>`<button class="btn w" style="margin-top:8px;justify-content:flex-start;padding:14px" onclick="closeModal();${k==='waRecuerda'?`recordar('${id}')`:`abrirWA(cita('${id}').cliente.tel,${k?`tpl(S.cfg.${k},cita('${id}'))`:`'Hola '+cita('${id}').cliente.nombre+' 👋'`})`}">${t}</button>`).join('')+`<p class="hint">Los textos se editan en ⚙️ Config → Mensajes.</p>`)}
 
 /* ---- crear / editar cita ---- */
 function formCita(id){const c=id?cita(id):null,cl=c?.cliente||{};
@@ -624,7 +655,7 @@ function formCita(id){const c=id?cita(id):null,cl=c?.cliente||{};
  <div class="g2"><div><label class="lb">Barbero</label><select class="in" id="fBarb" onchange="fillHoras()">${bOpts}</select></div><div><label class="lb">Servicio</label><select class="in" id="fServ" onchange="const s=S.servicios.find(x=>x.id===this.value);if(s&&$('#fPre'))$('#fPre').value=s.precio">${S.servicios.map(s=>`<option value="${s.id}" ${s.id===c?.servicioId?'selected':''}>${s.emoji} ${esc(s.nombre)}</option>`).join('')}</select></div></div>
  <div class="g2"><div><label class="lb">Fecha</label><input type="date" class="in" id="fFecha" value="${c?.fecha||(esRango()?hoy():S.fecha)}" onchange="fillHoras()"></div><div><label class="lb">Hora</label><select class="in" id="fHora"></select></div></div>
  <p class="hint" id="fWarn" style="color:var(--yel);margin-top:4px"></p>
- <div class="g2"><div><label class="lb">Estado</label><select class="in" id="fEst" style="text-transform:uppercase;font-weight:600">${['por_validar','pendiente_pago',...FILTROS.slice(2),'expirada'].filter(k=>c||['confirmada','en_silla','atendida','pendiente_pago','por_validar'].includes(k)).map(k=>`<option value="${k}" ${estSel===k?'selected':''}>${est(k).t.toUpperCase()}</option>`).join('')}</select></div>
+ <div class="g2"><div><label class="lb">Estado</label><select class="in" id="fEst" style="text-transform:uppercase;font-weight:600">${['por_validar',...FILTROS.slice(2),'expirada'].filter(k=>c||['confirmada','en_silla','atendida','por_validar'].includes(k)).map(k=>`<option value="${k}" ${estSel===k?'selected':''}>${est(k).t.toUpperCase()}</option>`).join('')}</select></div>
   <div><label class="lb">💰 Precio S/</label>${can('verMontos')?`<input class="in" id="fPre" type="number" min="0" step="0.5" value="${c?.precio??(S.servicios.find(s=>s.id===c?.servicioId)||S.servicios[0])?.precio??''}">`:`<input class="in" disabled value="S/ •••">`}</div></div>
  <label class="lb">Notas</label><textarea class="in" id="fNota" rows="2" placeholder="Ej: mid fade, sin tocar la barba">${esc(c?.nota||'')}</textarea>
  <details class="dsec2" open><summary>📎 Fotos y adjuntos de la cita <span>▴</span></summary><div class="dsb">
@@ -642,7 +673,10 @@ function edTiles(){if(!S.cfg.modFotos)return'<p class="hint" style="grid-column:
   :`<label class="dbox"><span class="di">${i}</span><b>${t}</b>${inp}</label><label class="dadd">+ Agregar${inp}</label>`}</div>`}).join('')}
 function edLinks(){return S._ed.links.map((l,i)=>`<div class="lkrow"><span>🔗</span><a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.url.replace(/^https?:\/\//,''))}</a><button class="ibtn bare" style="color:var(--blue)" onclick="window.open(S._ed.links[${i}].url,'_blank')">↗</button><button class="ibtn bare" style="color:var(--red)" onclick="S._ed.links.splice(${i},1);$('#edLinks').innerHTML=edLinks()">✕</button></div>`).join('')}
 function edRefresh(){$('#edTiles').innerHTML=edTiles();hydrate($('#edTiles'))}
-async function edFoto(k,inp){const f=inp.files[0];if(!f)return;toast('⏳ Subiendo foto…');try{S._ed[k]=await API.putFoto(await compressImg(f,1000,.72));edRefresh();toast('📷 Foto lista · toca Guardar')}catch(e){toast('❌ '+e.message)}}
+async function edFoto(k,inp){const f=inp.files[0];if(!f)return;toast('⏳ Subiendo foto…');try{S._ed[k]=await API.putFoto(await compressImg(f,1000,.72));edRefresh();const se=$('#fEst');let m='📷 Foto lista · toca Guardar';
+  if(se&&k==='fotoAntes'&&se.value==='confirmada'){se.value='en_silla';m='💺 Foto lista · pasa a En silla · toca Guardar'}
+  else if(se&&k==='fotoDespues'&&['confirmada','en_silla'].includes(se.value)){se.value='atendida';m='✅ Foto lista · pasa a Atendido · toca Guardar'}
+  toast(m)}catch(e){toast('❌ '+e.message)}}
 function edAddLink(){let u=$('#edLink').value.trim();if(!u)return;if(!/^https?:\/\//i.test(u))u='https://'+u;S._ed.links.push({url:u,t:Date.now()});$('#edLink').value='';$('#edLinks').innerHTML=edLinks()}
 function fillHoras(){const f=$('#fFecha').value,bid=$('#fBarb').value,b=barb(bid);const sl=slotsDia(S.cfg);if(S._eh&&!sl.includes(S._eh))sl.push(S._eh);sl.sort();
  let first=true;$('#fHora').innerHTML=sl.map(h=>{const oc=ocupado(S.citas,bid,f,h,S._eid);const sel=h===S._eh||(!S._eh&&!oc&&first);if(sel&&!oc)first=false;return `<option value="${h}" ${sel?'selected':''} ${oc?'disabled':''}>${h12(h)}${oc?' · ocupado':''}</option>`}).join('')||'<option value="">Sin horarios</option>';
@@ -651,8 +685,8 @@ async function guardarCita(id){const s=S.servicios.find(x=>x.id===$('#fServ').va
  const pre=$('#fPre')?Math.max(0,+$('#fPre').value||0):(c?.precio??+s?.precio??0);
  const d={fecha:$('#fFecha').value,hora:$('#fHora').value,barberoId:$('#fBarb').value,servicioId:s?.id,servicioNombre:s?.nombre||'',precio:pre,cliente:{nombre:$('#fNom').value.trim(),tel:$('#fTel').value.replace(/[^\d+ ]/g,'').trim(),ciudad:$('#fCiu').value.trim(),dni:$('#fDni').value.replace(/\D/g,'').slice(0,8)},nota:$('#fNota').value.trim(),fotoAntes:S._ed.fotoAntes,fotoDespues:S._ed.fotoDespues,refFoto:S._ed.refFoto,links:S._ed.links,estado:estN};
  if(!d.fecha||!d.hora)return toast('Elige fecha y una hora libre');if(!d.cliente.nombre)return toast('Falta el nombre del cliente');
- if(c&&estN!==c.estado){if(['por_validar','pendiente_pago'].includes(c.estado)&&['confirmada','en_silla','atendida'].includes(estN)&&!can('yape'))return toast('🔒 Solo quien valida pagos puede confirmar esta cita');if(['cancelada','no_vino'].includes(estN)&&!can('cancelar'))return toast('🔒 Sin permiso para cancelar');
-  if(estN==='en_silla'&&!c.enSillaTs)d.enSillaTs=Date.now();if(estN==='atendida'&&!c.atendidaTs)d.atendidaTs=Date.now();if(estN==='confirmada'&&c.adelanto>0&&['por_validar','pendiente_pago'].includes(c.estado))d.adelantoOk=true}
+ if(c&&estN!==c.estado){if(c.estado==='por_validar'&&['confirmada','en_silla','atendida'].includes(estN)&&!can('yape'))return toast('🔒 Solo quien valida pagos puede confirmar esta cita');if(['cancelada','no_vino'].includes(estN)&&!can('cancelar'))return toast('🔒 Sin permiso para cancelar');
+  if(estN==='en_silla'&&!c.enSillaTs)d.enSillaTs=Date.now();if(estN==='atendida'&&!c.atendidaTs)d.atendidaTs=Date.now();if(estN==='confirmada'&&c.adelanto>0&&c.estado==='por_validar')d.adelantoOk=true}
  try{const vaActiva=ACTIVOS.includes(estN);if(vaActiva&&ocupado(S.citas,d.barberoId,d.fecha,d.hora,id||undefined))throw new Error('Ese horario está ocupado');
   if(id)await API.updateCita(id,d);else await API.crearCita({...d,enSillaTs:estN==='en_silla'?Date.now():undefined,adelanto:0,adelantoOk:false,origen:'panel',creadoPor:S.ses.uid||S.ses.barberoId||'dueno'});
   closeModal();S.fecha=d.fecha;await reload();toast('✅ Cita guardada')}catch(e){toast('❌ '+e.message)}}

@@ -17,7 +17,7 @@
      TZ                 zona horaria del local (por defecto America/Lima)
    ===================================================================== */
 
-const ACTIVOS = ['pendiente_pago', 'por_validar', 'confirmada', 'en_silla', 'atendida'];
+const ACTIVOS = ['por_validar', 'confirmada', 'en_silla', 'atendida'];
 const DUR = 60;
 const PERMS = ['verTodas', 'verTel', 'verMontos', 'crear', 'cancelar', 'yape', 'links', 'dash', 'excel', 'config'];
 const ALLP = Object.fromEntries(PERMS.map(k => [k, true]));
@@ -91,6 +91,7 @@ let sembrado = false;
 async function sembrar(env) {
   if (sembrado) return;
   await env.DB.batch(Object.entries(SEED).map(([k, v]) => env.DB.prepare('INSERT OR IGNORE INTO kv(k, v) VALUES(?, ?)').bind(k, JSON.stringify(v))));
+  await env.DB.prepare("UPDATE citas SET estado = 'por_validar' WHERE estado = 'pendiente_pago'").run();
   if (!pinPermitido(env)) await quitarPines(env);
   sembrado = true;
 }
@@ -145,7 +146,7 @@ async function guardarCita(env, c) {
 async function citaPorId(env, id) { const r = await env.DB.prepare('SELECT * FROM citas WHERE id = ?').bind(id).first(); return r ? filaCita(r) : null }
 
 async function expirar(env) {
-  const r = await env.DB.prepare("UPDATE citas SET estado = 'expirada', upd = ?1 WHERE estado = 'pendiente_pago' AND expira IS NOT NULL AND expira < ?1").bind(Date.now()).run();
+  const r = await env.DB.prepare("UPDATE citas SET estado = 'expirada', upd = ?1 WHERE estado = 'por_validar' AND expira IS NOT NULL AND expira < ?1").bind(Date.now()).run();
   if (r.meta?.changes) await bump(env);
 }
 
@@ -322,8 +323,9 @@ async function api(req, env, path) {
   if ((x = path.match(/^\/publico\/reservas\/([\w-]+)\/captura$/)) && m === 'POST') {
     const b = await body(); const c = await citaPorId(env, x[1]);
     if (!c || c.codigo !== b.codigo) fail(404, 'Reserva no encontrada');
-    if (c.estado === 'pendiente_pago' && c.expira && c.expira < Date.now()) fail(410, 'Se venció el tiempo de pago');
-    if (c.estado !== 'pendiente_pago') fail(409, c.estado === 'expirada' ? 'Se venció el tiempo de pago' : 'Esta reserva ya fue procesada');
+    if (c.estado === 'expirada') fail(410, 'Se venció el tiempo de pago');
+    if (c.estado !== 'por_validar' || !c.expira) fail(409, 'Esta reserva ya fue procesada');
+    if (c.expira < Date.now()) fail(410, 'Se venció el tiempo de pago');
     Object.assign(c, { yapeCaptura: await guardarFoto(env, b.data), estado: 'por_validar', expira: null, upd: Date.now() });
     await guardarCita(env, c);
     return json({ ok: true });
@@ -435,6 +437,7 @@ async function api(req, env, path) {
     else exigir('crear');
     if (!s.perm.verTodas && patch.barberoId && patch.barberoId !== s.barberoId) fail(403, 'No puedes pasar la cita a otro barbero');
     Object.assign(c, patch, { upd: Date.now() });
+    if (patch.estado && patch.estado !== 'por_validar') c.expira = null;
     await guardarCita(env, c);
     return json(c);
   }
@@ -546,7 +549,7 @@ async function reservar(req, env, b) {
   const base = {
     fecha, hora, servicioId: s.id, servicioNombre: s.nombre, precio: +s.precio || 0, cliente, nota, refFoto,
     adelanto: sinPago ? 0 : ad, linkId: link?.id || '', adelantoOk: false,
-    estado: sinPago ? 'por_validar' : 'pendiente_pago', expira: sinPago ? null : Date.now() + (+cfg.holdMin || 20) * 60e3, origen: link ? 'link' : 'web',
+    estado: 'por_validar', expira: sinPago ? null : Date.now() + (+cfg.holdMin || 20) * 60e3, origen: link ? 'link' : 'web',
   };
   for (const barb of candidatos) {
     const c = { id: uid(), codigo: codigo(), creada: Date.now(), ...base, barberoId: barb.id };

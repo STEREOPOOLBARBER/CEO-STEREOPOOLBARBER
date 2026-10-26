@@ -24,7 +24,7 @@ check('publico oculta PINs y correos', !JSON.stringify(pub.j).match(/4826|5821|e
 
 const reserva = { servicioId: 's1', barberoId: 'b1', fecha: d, hora: '10:00', cliente: { nombre: 'Cliente Prueba', tel: '987654321', ciudad: 'Lima' }, nota: 'hola', refFoto: PNG };
 r = await call('POST', '/publico/reservas', reserva);
-check('reserva creada pendiente de pago', r.s === 200 && r.j.estado === 'pendiente_pago' && r.j.expira, JSON.stringify(r.j));
+check('reserva nueva entra como Yape por validar, con plazo para el comprobante', r.s === 200 && r.j.estado === 'por_validar' && r.j.expira, JSON.stringify(r.j));
 const cita = r.j;
 r = await call('POST', '/publico/reservas', reserva);
 check('doble reserva mismo turno → 409', r.s === 409, JSON.stringify(r.j));
@@ -88,6 +88,23 @@ check('link de un solo uso', r.s === 400);
 
 r = await fetch(BASE + '/api/citas/' + cita.id, { method: 'DELETE', headers: { Cookie: adm.cookie, Origin: 'https://malicioso.example' } });
 check('otro origen bloqueado', r.status === 403);
+// Sin comprobante a tiempo la reserva se libera (plazo corto solo para la prueba)
+const pn = (await call('GET', '/panel', null, adm.cookie)).j;
+await call('PUT', '/config', { cfg: { ...pn.cfg, holdMin: 0.02 }, barberos: pn.barberos, servicios: pn.servicios, usuarios: pn.usuarios }, adm.cookie);
+const corta = await call('POST', '/publico/reservas', { ...reserva, hora: '17:00' });
+check('reserva con plazo corto creada', corta.s === 200 && corta.j.estado === 'por_validar', JSON.stringify(corta.j));
+await new Promise(x => setTimeout(x, 2200));
+const tarde = await call('POST', `/publico/reservas/${corta.j.id}/captura`, { codigo: corta.j.codigo, data: PNG });
+check('comprobante fuera de plazo → 410', tarde.s === 410, JSON.stringify(tarde));
+r = await call('GET', '/panel', null, adm.cookie);
+check('la reserva sin comprobante pasó a expirada y libera el horario', r.j.citas.find(c => c.id === corta.j.id)?.estado === 'expirada');
+const otra2 = await call('POST', '/publico/reservas', { ...reserva, hora: '17:00', cliente: { ...reserva.cliente, nombre: 'Otro Cliente' } });
+check('el horario liberado se puede volver a reservar', otra2.s === 200, JSON.stringify(otra2.j));
+await call('PUT', '/config', { cfg: pn.cfg, barberos: pn.barberos, servicios: pn.servicios, usuarios: pn.usuarios }, adm.cookie);
+// Validar a mano limpia el plazo; avisado se guarda
+const manual = await call('POST', '/publico/reservas', { ...reserva, hora: '18:00' });
+r = await call('PATCH', '/citas/' + manual.j.id, { estado: 'confirmada', adelantoOk: true, avisado: 123 }, adm.cookie);
+check('validar a mano confirma, quita el plazo y guarda el aviso', r.s === 200 && r.j.estado === 'confirmada' && r.j.expira === null && r.j.avisado === 123, JSON.stringify(r.j));
 r = await call('POST', '/auth/logout', {}, adm.cookie);
 r = await call('GET', '/panel', null, adm.cookie);
 check('sesión cerrada → 401', r.s === 401);
