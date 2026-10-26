@@ -704,11 +704,19 @@ const linkEstado=l=>l.estado==='usado'?'usado':(l.vence&&l.vence<Date.now()?'ven
 const LST={disponible:['● Disponible','var(--blue)'],usado:['✔ Usado','var(--grn)'],vencido:['⌛ Vencido','var(--mu)']};
 function hace(ts){const m=Math.round((Date.now()-ts)/60000);if(m<1)return'recién';if(m<60)return`hace ${m} min`;const h=Math.round(m/60);if(h<48)return`hace ${h}h`;return`hace ${Math.round(h/24)} días`}
 const fCorta=ts=>{const d=new Date(ts);return`${d.getDate()}-${MESC[d.getMonth()]}.`};
+const textoGeneral=()=>`💈 *${S.cfg.nombre}*\n${S.cfg.eslogan?S.cfg.eslogan+'\n':''}Reserva tu corte en 1 minuto, sobrino 👇\n${formUrl()}${S.cfg.direccion?`\n📍 ${S.cfg.direccion}`:''}`;
 async function renderCompartir(){
  S.links=await API.links().catch(()=>[]);
  const sv=S.servicios.filter(x=>x.activo!==false),bs=S.barberos.filter(b=>b.activo!==false&&mine({barberoId:b.id}));
  $('#t-compartir').innerHTML=`
  <div class="empty" style="padding:22px 10px 12px;color:var(--tx)"><b style="font-size:64px">🔑</b><h2 style="font:800 26px 'Syne'">Links para clientes</h2><p style="color:var(--mu);margin-top:6px">Generá un link único por cliente.<br>Una vez que lo usa queda bloqueado automáticamente.</p></div>
+ <div class="card" style="border-color:var(--pur)">
+  <h5 style="font:700 13px 'DM Sans';letter-spacing:.1em;color:var(--blue)">🌐 LINK GENERAL · NO EXPIRA</h5>
+  <p class="hint" style="margin-top:6px">Un solo link para todos tus clientes. <b style="color:var(--tx)">Nunca vence</b> y se puede usar todas las veces que quieras: ponlo en tu Instagram, TikTok o estado de WhatsApp.</p>
+  <div class="url">${esc(formUrl())}</div>
+  <button class="btn p w" style="margin-top:10px;padding:15px;font-size:17px" onclick="copiar(formUrl())">📋 Copiar link general</button>
+  <div class="g2" style="margin-top:10px"><button class="btn" style="padding:14px" onclick="window.open(formUrl(),'_blank')">↗ Abrir</button><button class="btn g" style="padding:14px" onclick="window.open('https://wa.me/?text='+encodeURIComponent(textoGeneral()),'_blank')">💬 WhatsApp</button></div>
+ </div>
  <div class="card">
   <div class="row" style="margin-bottom:6px"><h5 style="font:700 13px 'DM Sans';letter-spacing:.1em;color:var(--blue);flex:1">✨ LINK PERSONALIZADO</h5><button class="btn sm" onclick="ayudaLinks()">📖 Ayuda</button></div>
   <p class="hint" style="margin-top:0">Genera un link único con datos del cliente. Se bloquea tras un uso.</p>
@@ -730,12 +738,10 @@ async function renderCompartir(){
   <div class="chips" style="padding-top:8px">${['todos','disponible','usado','vencido'].map(k=>`<button class="chip ${(S.lkF||'todos')===k?'on':''}" onclick="S.lkF='${k}';renderCompartir()">${k==='todos'?'Todos':LST[k][0]}</button>`).join('')}</div>
   <div id="lkList">${listaLinks()}</div>
  </div>
- <details class="card"><summary style="font:700 13px 'DM Sans';letter-spacing:.1em;color:var(--blue);cursor:pointer;list-style:none">🌐 LINK PÚBLICO Y QR ›</summary>
-  <p class="hint">Link reutilizable para Instagram, TikTok o la vitrina. No se bloquea.</p>
-  <div class="url">${esc(formUrl())}</div>
-  <div class="g2"><button class="btn" onclick="copiar(formUrl())">📋 Copiar</button><button class="btn" onclick="window.open(formUrl(),'_blank')">↗ Abrir</button></div>
+ <details class="card"><summary style="font:700 13px 'DM Sans';letter-spacing:.1em;color:var(--blue);cursor:pointer;list-style:none">📱 QR Y TEXTO PARA REDES ›</summary>
+  <p class="hint">El QR y el mensaje usan el link general (no expira).</p>
   <div class="qr" id="qr"></div><button class="btn w" onclick="bajarQR()">⬇️ Descargar QR</button>
-  <textarea class="in" rows="4" style="margin-top:12px" id="shTxt">${esc(`💈 *${S.cfg.nombre}*\n${S.cfg.eslogan?S.cfg.eslogan+'\n':''}Reserva tu corte en 1 minuto, sobrino 👇\n${formUrl()}${S.cfg.direccion?`\n📍 ${S.cfg.direccion}`:''}`)}</textarea>
+  <textarea class="in" rows="4" style="margin-top:12px" id="shTxt">${esc(textoGeneral())}</textarea>
   <div class="g2" style="margin-top:8px"><button class="btn" onclick="copiar($('#shTxt').value)">📋 Copiar texto</button><button class="btn g" onclick="window.open('https://wa.me/?text='+encodeURIComponent($('#shTxt').value),'_blank')">💬 Compartir</button></div>
  </details>`;
  try{if(window.QRCode)new QRCode($('#qr'),{text:formUrl(),width:200,height:200,colorDark:'#0b0812',colorLight:'#ffffff'});else $('#qr').remove()}catch(e){$('#qr')?.remove()}}
