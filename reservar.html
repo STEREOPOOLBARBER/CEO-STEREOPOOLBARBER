@@ -264,7 +264,7 @@ function render(){clearInterval(timerInt);[s0,s1,s2,s3,s4,s5,s6][F.step]()}
 
 /* paso 0: servicio */
 function s0(){if(!P.servicios.length)return shell('<div class="empty">✂️<br>La barbería aún no publicó sus servicios.</div>');
- const u=lsGet('ultima',null),prev=u&&u.codigo&&u.fecha>=hoy()?`<button class="warn" style="width:100%;text-align:left;border-color:var(--pur);color:var(--tx);background:rgba(138,63,252,.12)" onclick="verEstado('${esc(u.codigo)}')">📋 Tienes una cita el <b>${fLarga(u.fecha)}</b> · ${h12(u.hora)}<br><small style="color:var(--mu)">Toca para ver su estado</small></button>`:'';
+ const u=lsGet('ultima',null),prev=u&&u.codigo&&u.fecha>=hoy()?`<button class="warn" style="width:100%;text-align:left;border-color:var(--pur);color:var(--tx);background:rgba(138,63,252,.12)" onclick="verEstado('${esc(u.codigo)}',true)">📋 Tienes una cita el <b>${fLarga(u.fecha)}</b> · ${h12(u.hora)}<br><small style="color:var(--mu)">Toca para ver su estado</small></button>`:'';
  shell(`${prev}<h2>${esc(P.cfg.txtBienvenida||'¿Qué te hacemos hoy?')}</h2>${P.servicios.map(s=>`<button class="opt ${F.serv===s.id?'on':''}" onclick="pickServ('${s.id}')"><span class="em">${s.foto?`<img data-foto="${s.foto}" alt="">`:s.emoji}</span><span class="t"><b>${esc(s.nombre)}</b><small>${esc(s.desc||'')} · ⏱️ 1 h</small></span><span class="pr">${soles(s.precio)}</span></button>`).join('')}`)}
 /* paso 1: barbero */
 function s1(){shell(`<h2>Elige tu barbero</h2>
@@ -365,10 +365,10 @@ function s6(){const c=P.cfg,i=F.info;if(!i)return s0();
  shell(`<div class="est"><b class="i">${e.i}</b><h2 style="color:${e.c}">${esc(e.t)}</h2><div class="fl" id="fl" style="color:var(--tx)">${fl()}</div></div>
  <div class="card"><div class="res"><span>🔖</span><span>Código <b>${esc(i.codigo)}</b></span><span>👤</span><span>${esc(i.cliente?.nombre||'')}</span><span>✂️</span><span><b>${esc(i.servicio||'')}</b> · ${soles(i.precio)}</span><span>💈</span><span>${esc(i.barbero||'')}</span><span>📅</span><span>${fLarga(i.fecha)} · ${h12(i.hora)}</span><span>💸</span><span>${pago}</span></div></div>
  ${mapaHTML(c)}`,
- `${c.whatsapp?`<button class="btn g" onclick="escribirBarberia()">💬 Escribir a la barbería</button>`:''}<button class="btn" onclick="verEstado(F.codigo)">🔄 Actualizar</button><button class="btn" onclick="reiniciar()">＋ Reservar</button>`);
+ `${c.whatsapp?`<button class="btn g" onclick="escribirBarberia()">💬 Escribir a la barbería</button>`:''}<button class="btn" onclick="verEstado(F.codigo,F.volver)">🔄 Actualizar</button>${F.volver?'<button class="btn" onclick="F.info=null;F.volver=false;go(0)">← Volver</button>':''}`);
  let n=0;timerInt=setInterval(async()=>{const x=$('#fl');if(x)x.textContent=fl();if(++n%30)return;try{const nuevo=await API.estado(F.codigo);if(nuevo.estado!==F.info.estado){F.info=nuevo;s6();say('estado_'+nuevo.estado,nvEst(nuevo))}else F.info=nuevo}catch(_){}},1000)}
 function escribirBarberia(){const i=F.info;if(!i)return;window.open(waUrl(waNum(P.cfg.whatsapp),`Hola 👋 Soy ${(i.cliente?.nombre||'').split(' ')[0]}. Mi código de cita es ${i.codigo}.`),'_blank')}
-async function verEstado(cod){try{const codigo=(cod||F.cita?.codigo||'').toUpperCase();F.codigo=codigo;F.info=await API.estado(codigo);go(6);say('estado_'+F.info.estado,nvEst(F.info))}catch(e){toast('❌ '+e.message)}}
+async function verEstado(cod,desdeForm){try{const codigo=(cod||F.cita?.codigo||'').toUpperCase();F.codigo=codigo;F.info=await API.estado(codigo);F.volver=!!desdeForm;go(6);say('estado_'+F.info.estado,nvEst(F.info))}catch(e){toast('❌ '+e.message)}}
 function reiniciar(){Object.assign(F,{link:null,info:null,codigo:'',step:0,serv:null,barb:null,fecha:null,hora:null,nota:'',ref:'',cap:'',cita:null});render();scrollTo(0,0)}
 
 /* imágenes incluidas (WebP en Base64) */
@@ -472,7 +472,7 @@ async function cargarLink(){const t=new URLSearchParams(location.search).get('l'
  if(l.servicioId&&P.servicios.find(x=>x.id===l.servicioId))F.serv=l.servicioId;if(l.barberoId&&P.barberos.find(x=>x.id===l.barberoId))F.barb=l.barberoId;
  F.step=F.serv&&F.barb?2:F.serv?1:0;return true}
 (async function(){try{P=await API.publico();if(P.ts)CONFIG.TURNSTILE_SITEKEY=P.ts;hero();const cc=(new URLSearchParams(location.search).get('c')||'').toUpperCase();let ok,est=null;
-  if(/^[A-Z0-9]{6}$/.test(cc)){try{F.codigo=cc;F.info=est=await API.estado(cc);F.step=6;render();ok=false}catch(e){$('#app').innerHTML=`<div class="ok"><b>🔎</b><h2>No encontramos esa cita</h2><p style="color:var(--mu)">${esc(e.message)}. Revisa tu código o reserva de nuevo.</p></div><div class="foot"><button class="btn p" onclick="history.replaceState(null,'',location.pathname);reiniciar()">＋ Reservar</button></div>`;ok=false}}else{ok=await cargarLink();if(ok)render()}
+  if(/^[A-Z0-9]{6}$/.test(cc)){try{F.codigo=cc;F.info=est=await API.estado(cc);F.step=6;render();ok=false}catch(e){$('#app').innerHTML=`<div class="ok"><b>🔎</b><h2>No encontramos esa cita</h2><p style="color:var(--mu)">${esc(e.message)}. Revisa tu código o reserva de nuevo.</p></div>${P.cfg.whatsapp?`<div class="foot"><button class="btn g" onclick="window.open('https://wa.me/${waNum(P.cfg.whatsapp)}','_blank')">💬 Escribir a la barbería</button></div>`:''}`;ok=false}}else{ok=await cargarLink();if(ok)render()}
   narrInit();splashListo();if(est)setTimeout(()=>say('estado_'+est.estado,nvEst(est)),SPL.cfg?.splashOn===false?300:1800);else if(ok)setTimeout(()=>say(F.link?.cliente?.nombre?'holaLink':'hola'),SPL.cfg?.splashOn===false?300:1800)}catch(e){splashListo();$('#app').innerHTML=`<div class="empty">⚠️ No pudimos cargar la agenda.<br>${esc(e.message)}<br><br><button class="btn" style="margin:auto" onclick="location.reload()">Reintentar</button></div>`}})();
 </script>
 </body>

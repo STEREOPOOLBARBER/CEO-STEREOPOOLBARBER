@@ -489,7 +489,8 @@ function renderTab(){({agenda:renderAgenda,compartir:renderCompartir,config:rend
 function hydrate(root=document){root.querySelectorAll('img[data-foto]').forEach(async im=>{if(im.dataset.ok)return;im.dataset.ok=1;const src=await API.foto(im.dataset.foto);if(src)im.src=src})}
 const avatar=(b,lg)=>b?.foto?`<img class="av ${lg?'lg':''}" data-foto="${b.foto}">`:`<span class="av ${lg?'lg':''}" style="background:${b?.color||'var(--card2)'}33">💈</span>`;
 function openModal(html){$('#mbody').innerHTML=html;$('#modal').classList.add('on');hydrate($('#mbody'))}
-function closeModal(){$('#modal').classList.remove('on')}
+function closeModal(){if(G){G=null;try{REC?.mr.stop()}catch(_){}}$('#modal').classList.remove('on')}
+let G=null;
 const mHead=t=>`<h3>${t}<button class="x" onclick="closeModal()">✕</button></h3>`;
 async function verFoto(k){const v=$('#viewer');v.innerHTML='<img alt=""><button class="x">✕</button>';v.classList.add('on');v.querySelector('img').src=await API.foto(k)}
 
@@ -933,6 +934,19 @@ function acc(id,title,sub,body){return `<div class="acc ${S.open===id?'open':''}
 function accTog(id){const el=$('#acc_'+id);if(!el)return;const abrir=!el.classList.contains('open');$$('.acc.open').forEach(x=>x.classList.remove('open'));S.open=abrir?id:'';if(abrir){el.classList.add('open');setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'start'}),320)}}
 const sw=(on,fn)=>`<button class="sw ${on?'on':''}" onclick="${fn}"></button>`;
 /* ---------- voz propia del narrador ---------- */
+/* Guion: las 18 frases SIN datos (nombre, precio, hora…) para leerlas con tu voz, una por una. */
+const GUION=[['hola','¡Qué tal, sobrino! Soy el Tío Stereo. Elige tu corte y yo te guío.'],['holaLink','¡Qué tal, sobrino! Este link es solo para ti. Elige tu corte.'],['servicio','¡Buena elección, sobrino! Ahora elige a tu barbero.'],['barbero','Ese barbero te va a dejar fino, sobrino.'],['cualquiera','Tranqui, sobrino, te asigno al primero que esté libre. Elige día y hora.'],['dia','¿A qué hora te acomoda, sobrino?'],['hora','Ese turno ya es casi tuyo, sobrino.'],['datos','Listo, sobrino. Yapea el adelanto y sube la captura.'],['listo','¡Reserva hecha, sobrino! Nos vemos pronto.'],['ocupado','Uy, sobrino, te ganaron ese turno. Elige otro.'],['vencido','Se acabó el tiempo, sobrino, pero tranqui: reserva de nuevo.'],
+ ['estado_por_validar','Tranqui, sobrino, estamos validando tu Yape. En un ratito te confirmo.'],['estado_confirmada','¡Listo, sobrino! Tu cita está confirmada. Sé puntual, que te estaré esperando.'],['estado_en_silla','Ya estás en la silla, sobrino. Relájate que te dejamos fino.'],['estado_atendida','¡Corte terminado, sobrino! Gracias por venir. Cuando quieras repetir, aquí estoy.'],['estado_no_vino','Sobrino, no llegaste a tu cita. Si quieres, reserva otra vez.'],['estado_cancelada','Tu cita fue cancelada, sobrino. Si fue un error, escríbenos por WhatsApp.'],['estado_expirada','Se acabó el tiempo para enviar el comprobante, sobrino. Reserva de nuevo.']];
+function abrirGuion(i){G={i:i||0};openModal('');guionPinta()}
+function guionPinta(){if(!G)return;const[k,txt]=GUION[G.i],au=D().cfg.narrAudio||{},ya=!!au[k],hechas=GUION.filter(([x])=>au[x]).length,et=(NKEYS.find(x=>x[0]===k)||[k,k])[1];
+ $('#mbody').innerHTML=mHead(`🎬 Guion · ${G.i+1} de ${GUION.length}`)+`<div style="height:6px;background:var(--line);border-radius:6px;overflow:hidden"><div style="height:100%;width:${Math.round(hechas/GUION.length*100)}%;background:var(--grn)"></div></div>
+ <p class="hint" style="margin:8px 0 0">${et} · ${hechas} de ${GUION.length} con tu voz</p>
+ <div class="card" style="margin:12px 0;text-align:center;padding:26px 16px"><div style="font:800 24px/1.35 'Syne'">${esc(txt)}</div></div>
+ <p class="hint" style="text-align:center;margin:0 0 12px">Toca <b>Grabar</b>, léela con voz grave y firme (celular a 20 cm, sin ruido) y toca <b>Detener</b>.</p>
+ <div class="row" style="gap:8px"><button class="btn p" id="g_rec" data-rec="${k}" data-label="🎙️ Grabar" style="flex:2;padding:16px;font-size:17px" onclick="grabarNarr('${k}')">🎙️ Grabar</button>${ya?`<button class="btn" style="flex:1" onclick="oirNarr('${k}')">▶️ Oír</button>`:''}</div>
+ ${ya?'<p style="text-align:center;color:var(--grn);font-weight:700;margin:10px 0 0">✅ Esta frase ya tiene tu voz</p>':''}
+ <div class="row" style="gap:8px;margin-top:14px"><button class="btn" style="flex:1" onclick="guionIr(-1)" ${G.i?'':'disabled'}>← Anterior</button><button class="btn g" style="flex:1" onclick="guionIr(1)">${G.i<GUION.length-1?'Siguiente →':'Terminar ✔'}</button></div>`}
+function guionIr(d){if(!G)return;try{REC?.mr.stop()}catch(_){}const n=G.i+d;if(n>=GUION.length){closeModal();return toast('🎉 Guion terminado · toca «Guardar configuración»')}if(n<0)return;G.i=n;setTimeout(guionPinta,REC?500:0)}
 const NAUDIO_MAX=25;let REC=null;
 /* Cualquier audio (grabación o archivo) se convierte a WAV mono 16 kHz: suena igual en iPhone, Android y computadora. */
 async function aWav(blob){const ab=await blob.arrayBuffer(),AC=window.AudioContext||window.webkitAudioContext,OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext,ctx=new AC();
@@ -945,7 +959,7 @@ async function aWav(blob){const ab=await blob.arrayBuffer(),AC=window.AudioConte
  w(0,'RIFF');v.setUint32(4,36+x.length*2,true);w(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,x.length*2,true);
  for(let i=0;i<x.length;i++)v.setInt16(44+i*2,Math.max(-1,Math.min(1,x[i]*g))*32767,true);
  return new Blob([v],{type:'audio/wav'})}
-function marcarRec(k,on){const b=$('#rec_'+k);if(b){b.textContent=on?'⏹️ Detener':'🎙️ Grabar mi voz';b.classList.toggle('r',on)}}
+function marcarRec(k,on){document.querySelectorAll(`[data-rec="${k}"]`).forEach(b=>{b.textContent=on?'⏹️ Detener':(b.dataset.label||'🎙️ Grabar mi voz');b.classList.toggle('r',on)})}
 async function grabarNarr(k){
  if(REC){const mismo=REC.k===k;REC.mr.stop();if(mismo)return;await new Promise(r=>setTimeout(r,400))}
  if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)return toast('Este navegador no puede grabar: usa «Subir audio»');
@@ -953,12 +967,12 @@ async function grabarNarr(k){
   const mt=['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg'].find(x=>MediaRecorder.isTypeSupported?.(x))||'',mr=new MediaRecorder(st,mt?{mimeType:mt}:{}),ch=[],t0=Date.now();
   mr.ondataavailable=e=>{if(e.data&&e.data.size)ch.push(e.data)};
   mr.onstop=async()=>{clearInterval(REC?.t);st.getTracks().forEach(x=>x.stop());REC=null;marcarRec(k,false);await subirAudioNarr(k,new Blob(ch,{type:mr.mimeType||mt||'audio/webm'}))};
-  REC={k,mr,t:setInterval(()=>{const s=(Date.now()-t0)/1000,b=$('#rec_'+k);if(b)b.textContent=`⏹️ Detener · ${Math.floor(s)} s`;if(s>=NAUDIO_MAX)mr.stop()},250)};
+  REC={k,mr,t:setInterval(()=>{const s=(Date.now()-t0)/1000;document.querySelectorAll(`[data-rec="${k}"]`).forEach(b=>b.textContent=`⏹️ Detener · ${Math.floor(s)} s`);if(s>=NAUDIO_MAX)mr.stop()},250)};
   mr.start();marcarRec(k,true);toast('🎙️ Grabando… di la frase y toca Detener')}
  catch(e){toast(e.name==='NotAllowedError'?'❌ Permite el micrófono en tu navegador':'❌ No se pudo grabar: '+e.message)}}
 async function subirAudioNarr(k,blob){toast('⏳ Procesando audio…');
  try{const w=await aWav(blob),data=await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=no;r.readAsDataURL(w)});
-  const key=await API.putAudio(data);(D().cfg.narrAudio=D().cfg.narrAudio||{})[k]=key;dirty();renderConfig();toast('✅ Audio listo · toca Guardar configuración')}
+  const key=await API.putAudio(data);(D().cfg.narrAudio=D().cfg.narrAudio||{})[k]=key;dirty();renderConfig();if(G&&$('#g_rec'))guionPinta();toast('✅ Audio listo · toca Guardar configuración')}
  catch(e){toast('❌ '+(e.message||'No se pudo procesar el audio'))}}
 function subirArchivoNarr(k,inp){const f=inp.files[0];if(f)subirAudioNarr(k,f);inp.value=''}
 async function oirNarr(k){const key=D().cfg.narrAudio?.[k];if(!key)return;try{await new Audio(await API.audioUrl(key)).play()}catch(e){toast('❌ '+e.message)}}
@@ -1044,9 +1058,10 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barbero
   <label class="lb">Velocidad de la voz</label><select class="in" onchange="setC('narrRate',+this.value)">${[[.85,'Lenta'],[1,'Normal'],[1.15,'Rápida']].map(([v,t])=>`<option value="${v}" ${+c.narrRate===v?'selected':''}>${t}</option>`).join('')}</select>
   <label class="lb">Tono de la voz</label><select class="in" onchange="setC('narrTono',+this.value)">${[[.35,'Muy grave · hombre rudo'],[.5,'Grave'],[.75,'Medio'],[1,'Normal']].map(([v,tx])=>`<option value="${v}" ${+c.narrTono===v?'selected':''}>${tx}</option>`).join('')}</select><p class="hint">La voz es la que trae el celular de cada cliente: se elige una masculina en español y se le baja el tono.</p>
   <div class="banner pu" style="margin-top:14px">🎙️ <b>Pon tu propia voz.</b> Debajo de cada frase toca <b>Grabar mi voz</b> (o sube un audio de WhatsApp) y léela con tu voz de hombre rudo. Donde no grabes nada, habla la voz del celular del cliente. Graba la frase <b>sin los datos entre llaves</b> (nombre, precio, hora…): en pantalla sí salen completos.</div>
+  <button class="btn p w" style="margin-top:12px;padding:14px" onclick="abrirGuion(0)">🎬 Grabar todas las frases con el guion</button>
   <label class="lb" style="margin-top:18px">Frases (lo que dice en cada paso y según el estado de la cita)</label>
   ${NKEYS.map(([k,t])=>`<label class="lb">${t}</label><textarea class="in" id="tn_${k}" rows="2" onchange="D().cfg.narr['${k}']=this.value;dirty()">${esc(c.narr[k])}</textarea><div class="vars">${NVARS.map(v=>`<button onclick="insVarN('${k}','${v}')">{${v}}</button>`).join('')}<button style="color:var(--mu)" onclick="D().cfg.narr['${k}']=DEF_CFG.narr['${k}'];dirty();renderConfig()">↺</button></div>
-   <div class="row" style="gap:6px;margin:8px 0 14px;flex-wrap:wrap"><button class="btn sm" id="rec_${k}" onclick="grabarNarr('${k}')">🎙️ Grabar mi voz</button><label class="btn sm">⬆️ Subir audio<input type="file" accept="audio/*" style="display:none" onchange="subirArchivoNarr('${k}',this)"></label>${(c.narrAudio||{})[k]?`<button class="btn sm" onclick="oirNarr('${k}')">▶️ Oír</button><button class="btn sm r" onclick="quitarAudioNarr('${k}')">🗑️</button><span class="pill" style="color:var(--grn);border-color:var(--grn)">🎙️ con tu voz</span>`:'<span class="hint" style="margin:0">Voz del celular</span>'}</div>`).join('')}`:''}
+   <div class="row" style="gap:6px;margin:8px 0 14px;flex-wrap:wrap"><button class="btn sm" id="rec_${k}" data-rec="${k}" onclick="grabarNarr('${k}')">🎙️ Grabar mi voz</button><label class="btn sm">⬆️ Subir audio<input type="file" accept="audio/*" style="display:none" onchange="subirArchivoNarr('${k}',this)"></label>${(c.narrAudio||{})[k]?`<button class="btn sm" onclick="oirNarr('${k}')">▶️ Oír</button><button class="btn sm r" onclick="quitarAudioNarr('${k}')">🗑️</button><span class="pill" style="color:var(--grn);border-color:var(--grn)">🎙️ con tu voz</span>`:'<span class="hint" style="margin:0">Voz del celular</span>'}</div>`).join('')}`:''}
   <button class="btn w" style="margin-top:14px" onclick="window.open(formUrl(),'_blank')">↗ Probar en el formulario</button>`)}
  ${acc('estados','🏷️ Estados de la cita','Nombre y emoji de cada estado',()=>`
   ${Object.keys(DEF_EST).map(k=>{const e={...DEF_EST[k],...(c.est[k]||{})};return `<div class="row" style="margin-top:8px"><input class="in" style="width:62px;text-align:center" maxlength="3" value="${esc(e.i)}" onchange="setEst('${k}','i',this.value)"><input class="in" value="${esc(e.t)}" onchange="setEst('${k}','t',this.value)"><span style="width:14px;height:14px;border-radius:50%;background:${e.c};flex:none"></span></div>`}).join('')}
