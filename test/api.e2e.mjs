@@ -39,6 +39,12 @@ check('captura con código falso → 404', r.s === 404);
 r = await call('POST', `/publico/reservas/${cita.id}/captura`, { codigo: cita.codigo, data: PNG });
 check('captura de Yape subida', r.s === 200, JSON.stringify(r.j));
 
+// El cliente consulta su cita con el código
+r = await call('GET', `/publico/cita/${cita.codigo.toLowerCase()}`);
+check('el cliente ve el estado de su cita con su código (sin importar mayúsculas)', r.s === 200 && r.j.estado === 'por_validar' && r.j.codigo === cita.codigo && r.j.barbero === 'Jhon' && r.j.servicio === 'Fade' && r.j.precio === 30, JSON.stringify(r));
+check('la consulta no expone el teléfono completo ni el DNI', !JSON.stringify(r.j).includes('987654321') && r.j.cliente.tel.endsWith('321'), JSON.stringify(r.j.cliente));
+r = await call('GET', '/publico/cita/ZZZZZZ');
+check('código que no existe → 404', r.s === 404, JSON.stringify(r));
 const adm = await call('POST', '/auth/login', { pin: '5821' });
 check('login dueño con PIN', adm.s === 200 && adm.j.rol === 'dueno' && /brb_s=/.test(adm.cookie), JSON.stringify(adm));
 r = await call('GET', '/panel', null, adm.cookie);
@@ -56,6 +62,8 @@ check('captura visible con sesión', f.status === 200 && f.headers.get('content-
 
 r = await call('PATCH', '/citas/' + cita.id, { estado: 'confirmada', adelantoOk: true }, adm.cookie);
 check('dueño confirma la cita', r.s === 200 && r.j.estado === 'confirmada');
+r = await call('GET', `/publico/cita/${cita.codigo}`);
+check('el cliente ve que ya está confirmada y el adelanto validado', r.j.estado === 'confirmada' && r.j.adelantoOk === true, JSON.stringify(r.j));
 r = await call('POST', '/fotos', { data: PNG }, adm.cookie);
 check('subir foto desde el panel', r.s === 200 && /^f_/.test(r.j.key));
 

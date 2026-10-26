@@ -319,6 +319,15 @@ async function api(req, env, path) {
     const l = JSON.parse(r.data);
     return json({ token: l.token, estado: l.estado, vence: l.vence, cliente: { nombre: l.cliente?.nombre || '', tel: l.cliente?.tel || '' }, servicioId: l.servicioId, barberoId: l.barberoId, adelanto: l.adelanto, nota: l.nota });
   }
+  if ((x = path.match(/^\/publico\/cita\/([A-Za-z0-9]{6})$/)) && m === 'GET') {
+    // El cliente consulta su cita con el código que recibió. Solo se devuelve lo suyo y el teléfono va oculto.
+    await limitar(env, 'c:' + ipDe(req), 120, 15 * 60e3);
+    await expirar(env);
+    const r = await env.DB.prepare('SELECT * FROM citas WHERE codigo = ?').bind(x[1].toUpperCase()).first();
+    if (!r) fail(404, 'No encontramos una cita con ese código');
+    const c = filaCita(r), d = await datos(env), b = d.barberos.find(y => y.id === c.barberoId);
+    return json({ codigo: c.codigo, estado: c.estado, fecha: c.fecha, hora: c.hora, servicio: c.servicioNombre || '', precio: +c.precio || 0, adelanto: +c.adelanto || 0, adelantoOk: !!c.adelantoOk, barbero: b?.nombre || '', cliente: { nombre: c.cliente?.nombre || '', tel: '••• ••• ' + String(c.cliente?.tel || '').slice(-3) }, sinComprobante: c.estado === 'por_validar' && !c.yapeCaptura && !!c.expira, expira: c.expira ?? null });
+  }
   if (path === '/publico/reservas' && m === 'POST') return reservar(req, env, await body());
   if ((x = path.match(/^\/publico\/reservas\/([\w-]+)\/captura$/)) && m === 'POST') {
     const b = await body(); const c = await citaPorId(env, x[1]);

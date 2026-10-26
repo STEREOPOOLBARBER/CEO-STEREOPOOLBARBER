@@ -321,7 +321,9 @@ const codigo=()=>Array.from({length:6},()=>'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Ma
 const soles=n=>{n=Number(n)||0;return 'S/ '+(n%1?n.toFixed(2):n)};
 const telKey=t=>String(t||'').replace(/\D/g,'').slice(-9);
 const waNum=t=>{let d=String(t||'').replace(/\D/g,'');if(d.length===9)d='51'+d;return d};
-const abrirWA=(t,msg)=>window.open(`https://wa.me/${waNum(t)}?text=${encodeURIComponent(msg)}`,'_blank');
+/* En computadora se abre WhatsApp Web directo (evita que los emojis salgan como signos de pregunta). */
+const waUrl=(n,t)=>(!n||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent))?`https://wa.me/${n||''}?text=${encodeURIComponent(t)}`:`https://web.whatsapp.com/send?phone=${n}&text=${encodeURIComponent(t)}`;
+const abrirWA=(t,msg)=>window.open(waUrl(waNum(t),msg),'_blank');
 const lsGet=(k,d)=>{try{const v=localStorage.getItem('brb_'+k);return v==null?d:JSON.parse(v)}catch(e){return d}};
 const lsSet=(k,v)=>{try{localStorage.setItem('brb_'+k,JSON.stringify(v));return true}catch(e){toast('⚠️ Memoria llena: exporta un respaldo');return false}};
 const clone=o=>JSON.parse(JSON.stringify(o));
@@ -346,20 +348,20 @@ const PALETA=['#ff3fd2','#8a3ffc','#5b2bd6','#c48cff','#4d6bff','#ffb057'];
 const COLORES=['#ff3fd2','#8a3ffc','#4d6bff','#ffb057','#3fb950','#f0883e','#d29922','#f85149','#39c5cf','#db61a2'];
 const DEF_EST={por_validar:{t:'Yape por validar',i:'💸',c:'#f0883e'},confirmada:{t:'Confirmada',i:'✅',c:'#8a3ffc'},en_silla:{t:'En silla',i:'💺',c:'#ff3fd2'},atendida:{t:'Atendido',i:'✔️',c:'#3fb950'},no_vino:{t:'No vino',i:'❌',c:'#f85149'},cancelada:{t:'Cancelada',i:'🚫',c:'#a397b8'},expirada:{t:'Expirada',i:'⌛',c:'#a397b8'}};
 const DEF_CFG={nombre:'Stereo Barber Pool',eslogan:'Barber · Pool · Lima',logo:'🎱',logoImg:'',acento:'#8a3ffc',acento2:'#ff3fd2',
- whatsapp:'',ciudad:'Lima, Perú',direccion:'Av. Principal 123, Puente Piedra',maps:'',
+ whatsapp:'',ciudad:'Lima, Perú',direccion:'Av. Principal 123, Puente Piedra',maps:'',lat:'',lng:'',
  modAdelanto:true,yapeNum:'',yapeTitular:'',yapeQR:'',adelanto:10,holdMin:20,
  dias:[1,2,3,4,5,6],apertura:'09:00',cierre:'20:00',refIni:'13:00',refFin:'14:00',anticipacion:0,ventana:14,
  modFotos:true,modFidelidad:true,fidelidad:6,modComision:true,modWalkin:true,
  txtBienvenida:'¿Qué te hacemos hoy?',txtFinal:'¡Reserva recibida!',
- waConfirma:'Hola {cliente} 👋\nTu cita en *{negocio}* está *CONFIRMADA* ✅\n\n📅 {fecha} a las {hora}\n💈 Barbero: {barbero}\n✂️ {servicio}\n🔖 Código: {codigo}\n📍 {direccion}\n🗺️ {maps}\n\nTe esperamos 💪',
+ waConfirma:'Hola {cliente} 👋\nTu cita en *{negocio}* está *CONFIRMADA* ✅\n\n📅 {fecha} a las {hora}\n💈 Barbero: {barbero}\n✂️ {servicio}\n🔖 Código: {codigo}\n📍 {direccion}\n🗺️ {maps}\n\n🔎 Mira el estado de tu cita: {seguimiento}\n\nTe esperamos 💪',
  waRecuerda:'Hola {cliente} 👋 Te recordamos tu cita en *{negocio}*:\n\n📅 {fecha} a las {hora}\n💈 {barbero} · ✂️ {servicio}\n📍 {direccion}\n\nSi no puedes venir, avísanos por aquí 🙏',
  waGracias:'¡Gracias por venir a *{negocio}*, {cliente}! 💈🔥\nCuando quieras repetir, reserva aquí:\n{link}',
  waYape:'Hola {cliente} 👋 Para confirmar tu cita del {fecha} a las {hora} falta el adelanto de *{adelanto}* por Yape al *{yape}*. Envíanos la captura por aquí 🙏',
  waVuelve:'Hola {cliente} 👋 ¡Te extrañamos en *{negocio}*, sobrino! Ya toca corte 💈\nReserva aquí: {link}',
  linkBase:'',
  waReserva:'💈 *NUEVA RESERVA* — #{codigo}\n\n👤 {cliente}\n📱 {telefono}\n📍 {ciudad}\n✂️ {servicio} — {precio}\n💈 {barbero}\n📅 {fecha} · {hora}\n💸 {pago}\n📝 {nota}',
- narrOn:true,narrNombre:'Tío Stereo',narrImg:'',narrVoz:false,narrRate:1,splashOn:true,splashImg:'',splashMelt:true,
- narr:{holaLink:'¡Qué tal, sobrino {cliente}! Este link es solo para ti 💪 Elige tu corte.',hola:'¡Qué tal, sobrino! Soy el {narrador} 💪 Elige tu corte y yo te guío.',servicio:'¡Buena elección, sobrino! {servicio}, {precio}. Ahora elige a tu barbero.',barbero:'{barbero} te va a dejar fino, sobrino. {especialidad} 💪',cualquiera:'Tranqui sobrino, te asigno al primero que esté libre. Elige día y hora.',dia:'{fecha}. ¿A qué hora te acomoda, sobrino?',hora:'{fecha} a las {hora} ✅ Ese turno ya es casi tuyo, sobrino.',datos:'Listo {cliente}, yapea {adelanto} al {yape} y sube la captura, sobrino.',listo:'¡Reserva hecha, sobrino {cliente}! Nos vemos el {fecha} a las {hora} 🔥',ocupado:'Uy sobrino, te ganaron ese turno. Elige otro.',vencido:'Se acabó el tiempo, sobrino, pero tranqui: reserva de nuevo.'},
+ narrOn:true,narrNombre:'Tío Stereo',narrImg:'',narrVoz:false,narrRate:1,narrTono:.5,splashOn:true,splashImg:'',splashMelt:true,
+ narr:{holaLink:'¡Qué tal, sobrino {cliente}! Este link es solo para ti 💪 Elige tu corte.',hola:'¡Qué tal, sobrino! Soy el {narrador} 💪 Elige tu corte y yo te guío.',servicio:'¡Buena elección, sobrino! {servicio}, {precio}. Ahora elige a tu barbero.',barbero:'{barbero} te va a dejar fino, sobrino. {especialidad} 💪',cualquiera:'Tranqui sobrino, te asigno al primero que esté libre. Elige día y hora.',dia:'{fecha}. ¿A qué hora te acomoda, sobrino?',hora:'{fecha} a las {hora} ✅ Ese turno ya es casi tuyo, sobrino.',datos:'Listo {cliente}, yapea {adelanto} al {yape} y sube la captura, sobrino.',listo:'¡Reserva hecha, sobrino {cliente}! Nos vemos el {fecha} a las {hora} 🔥',ocupado:'Uy sobrino, te ganaron ese turno. Elige otro.',vencido:'Se acabó el tiempo, sobrino, pero tranqui: reserva de nuevo.',estado_por_validar:'Tranqui {cliente}, estamos validando tu Yape. En un ratito te confirmo, sobrino.',estado_confirmada:'¡Listo {cliente}! Tu cita está CONFIRMADA: {fecha} a las {hora} con {barbero}. Puntual, sobrino 💪',estado_en_silla:'{cliente}, ya estás en la silla. Relájate que te dejamos fino.',estado_atendida:'¡Corte terminado, {cliente}! Gracias por venir. Cuando quieras repetir, aquí estoy, sobrino.',estado_no_vino:'{cliente}, no llegaste a tu cita. Si quieres, reserva otra vez, sobrino.',estado_cancelada:'Tu cita fue cancelada. Si fue un error, escríbenos por WhatsApp.',estado_expirada:'Se acabó el tiempo para enviar el comprobante, {cliente}. Reserva de nuevo, sobrino.'},
  est:{},adminPin:'1234',bloqueos:[]};
 const DEF_BARB=()=>[['Jhon','Fades y degradados'],['Brayan','Diseños y freestyle'],['Piero','Cortes clásicos'],['Alexis','Barba y perfilado'],['Renzo','Taper y mullet']].map(([n,e],i)=>({id:'b'+(i+1),nombre:n,esp:e,foto:'',color:COLORES[i],pin:String(i+1).repeat(4),comision:50,dias:[1,2,3,4,5,6],activo:true}));
 const DEF_SERV=()=>[
@@ -438,7 +440,7 @@ const mine=c=>isAdmin()||c.barberoId===S.ses?.barberoId;
 const scope=()=>S.citas.filter(mine);
 function formUrl(q=''){let base=(S.cfg.linkBase||'').trim();if(!base){try{if(/^https?:/.test(location.href))base=new URL(CONFIG.FORM_URL,location.href).href}catch(e){}}if(!base)base=CONFIG.FORM_URL;return base+q}
 const pagoOn=()=>S.cfg.modAdelanto&&+S.cfg.adelanto>0;
-function tpl(s,c,cfg=S.cfg){const b=barb(c?.barberoId);const v={cliente:c?.cliente?.nombre||'',telefono:c?.cliente?.tel||'',ciudad:c?.cliente?.ciudad||'',negocio:cfg.nombre,fecha:c?.fecha?fLarga(c.fecha):'',hora:c?.hora?h12(c.hora):'',barbero:b?.nombre||'',servicio:c?.servicioNombre||'',precio:c?soles(c.precio):'',codigo:c?.codigo||'',direccion:cfg.direccion||cfg.ciudad,maps:cfg.maps||'',link:formUrl(),adelanto:soles(c?.adelanto||cfg.adelanto),yape:cfg.yapeNum||'',nota:c?.nota||'',pago:''};
+function tpl(s,c,cfg=S.cfg){const b=barb(c?.barberoId);const v={cliente:c?.cliente?.nombre||'',telefono:c?.cliente?.tel||'',ciudad:c?.cliente?.ciudad||'',negocio:cfg.nombre,fecha:c?.fecha?fLarga(c.fecha):'',hora:c?.hora?h12(c.hora):'',barbero:b?.nombre||'',servicio:c?.servicioNombre||'',precio:c?soles(c.precio):'',codigo:c?.codigo||'',direccion:cfg.direccion||cfg.ciudad,maps:cfg.maps||'',link:formUrl(),seguimiento:c?.codigo?formUrl('?c='+c.codigo):'',adelanto:soles(c?.adelanto||cfg.adelanto),yape:cfg.yapeNum||'',nota:c?.nota||'',pago:''};
  return String(s||'').split('\n').map(l=>{let had=false,full=false;const r=l.replace(/\{(\w+)\}/g,(m,k)=>{if(!(k in v))return m;had=true;if(v[k])full=true;return v[k]});return had&&!full?null:r}).filter(x=>x!==null).join('\n')}
 function applyTheme(c){const r=document.documentElement.style;const a1=!c.acento||c.acento==='#388bfd'?'#8a3ffc':c.acento,a2=!c.acento2||c.acento2==='#a371f7'?'#ff3fd2':c.acento2;r.setProperty('--blue',a1);r.setProperty('--pur',a2)}
 async function logoHTML(el,c){el.innerHTML=c.logoImg?`<img data-foto="${c.logoImg}">`:esc(c.logo||'💈');hydrate(el)}
@@ -627,7 +629,7 @@ async function verYape(id){const c=cita(id);if(!c)return;
  if(c.yapeCaptura){const src=await API.foto(c.yapeCaptura);$('#yimg').innerHTML=src?`<img src="${src}" style="width:100%;border-radius:14px">`:'No se encontró la imagen'}}
 async function validar(id){const c0=cita(id),enviar=!!c0?.cliente?.tel&&confirm('¿Enviar la confirmación al cliente por WhatsApp?\n\nAceptar: valida el pago y abre WhatsApp\nCancelar: solo valida el pago'),w=enviar?ventana():null;
  await setEstado(id,'confirmada',{adelantoOk:true},'✅ Cita confirmada');const c=cita(id);
- if(w){if(c?.estado==='confirmada')irA(w,`https://wa.me/${waNum(c.cliente.tel)}?text=${encodeURIComponent(tpl(S.cfg.waConfirma,c))}`);else w.close()}}
+ if(w){if(c?.estado==='confirmada')irA(w,waUrl(waNum(c.cliente.tel),tpl(S.cfg.waConfirma,c)));else w.close()}}
 async function rechazar(id){if(!confirm('¿Rechazar el pago y cancelar la cita? El horario se libera.'))return;closeModal();await setEstado(id,'cancelada',{motivo:'Yape no válido'})}
 async function terminar(id,auto){const c=cita(id);if(!c)return;if(!auto&&S.cfg.modFotos&&!c.fotoDespues&&!confirm('Aún no tiene foto DESPUÉS 📷 (tómala en el recuadro de la tarjeta).\n\n¿Terminar igual?'))return;
  const n=S.cfg.modFidelidad?+S.cfg.fidelidad||0:0,v=contarVisitas()[telKey(c.cliente?.tel)]||0,extra={atendidaTs:Date.now()};
@@ -635,7 +637,7 @@ async function terminar(id,auto){const c=cita(id);if(!c)return;if(!auto&&S.cfg.m
  if(n>1&&(v+1)%n===0&&confirm(`🎁 Este cliente cumple ${n} cortes. ¿Aplicar corte GRATIS?`))extra.gratis=true;
  const enviar=!!c.cliente?.tel&&confirm('¿Enviar agradecimiento por WhatsApp?'),w=enviar?ventana():null;
  await setEstado(id,'atendida',extra,'✔️ Corte terminado');
- if(w){if(cita(id)?.estado==='atendida')irA(w,`https://wa.me/${waNum(c.cliente.tel)}?text=${encodeURIComponent(tpl(S.cfg.waGracias,cita(id)))}`);else w.close()}}
+ if(w){if(cita(id)?.estado==='atendida')irA(w,waUrl(waNum(c.cliente.tel),tpl(S.cfg.waGracias,cita(id))));else w.close()}}
 async function quitar(id){const c=cita(id);if(!c)return;
  if(['cancelada','expirada'].includes(c.estado)){if(can('cancelar')&&confirm('¿Eliminar la cita para siempre?')){await API.borrarCita(id);await reload();toast('🗑️ Eliminada')}return}
  if(!confirm('¿Cancelar esta cita? El horario queda libre.'))return;await setEstado(id,'cancelada')}
@@ -802,7 +804,7 @@ async function genLink(modo){const nom=$('#lkNom').value.trim(),tel=$('#lkTel').
  const l={id:uid(),token:tokenL(),tipo:'personal',creado:Date.now(),creadoPor:S.ses.barberoId||'admin',estado:'disponible',cliente:{nombre:nom,tel},servicioId:sid||'',servicioNombre:s?.nombre||'',barberoId:bid||'',adelanto:ade===''?null:Math.max(0,+ade),nota:$('#lkNota').value.trim(),vence:dias?Date.now()+dias*864e5:null};
  const w=modo==='copiar'?null:ventana();
  try{const g=API.saveLink(l).then(()=>linkUrl(l));
-  if(modo==='copiar'){await copiarP(g)}else{const url=await g,msg=`Hola ${nom} 👋 Te dejo tu link personal para reservar en *${S.cfg.nombre}*, sobrino 💈${l.nota?`\n🎁 ${l.nota}`:''}\n${url}${l.vence?`\n⏱ Válido hasta el ${fCorta(l.vence)}`:''}`;irA(w,`https://wa.me/${tel?waNum(tel):''}?text=${encodeURIComponent(msg)}`)}
+  if(modo==='copiar'){await copiarP(g)}else{const url=await g,msg=`Hola ${nom} 👋 Te dejo tu link personal para reservar en *${S.cfg.nombre}*, sobrino 💈${l.nota?`\n🎁 ${l.nota}`:''}\n${url}${l.vence?`\n⏱ Válido hasta el ${fCorta(l.vence)}`:''}`;irA(w,waUrl(tel?waNum(tel):'',msg))}
   toast('🔑 Link generado');renderCompartir()}catch(e){w?.close();toast('❌ '+e.message)}}
 async function linkRapido(modo){const l={id:uid(),token:tokenL(),tipo:'rapido',creado:Date.now(),creadoPor:S.ses.barberoId||'admin',estado:'disponible',cliente:null,barberoId:isAdmin()?'':S.ses.barberoId,adelanto:null,vence:Date.now()+7*864e5};
  const w=modo==='copiar'?null:ventana();
@@ -928,7 +930,11 @@ function setB(k){D().cfg[k]=!D().cfg[k];dirty();renderConfig()}
 function acc(id,title,sub,body){return `<div class="acc ${S.open===id?'open':''}" id="acc_${id}"><button onclick="accTog('${id}')"><b>${title}<small>${sub}</small></b><i>›</i></button><div><div class="accb">${body()}</div></div></div>`}
 function accTog(id){const el=$('#acc_'+id);if(!el)return;const abrir=!el.classList.contains('open');$$('.acc.open').forEach(x=>x.classList.remove('open'));S.open=abrir?id:'';if(abrir){el.classList.add('open');setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'start'}),320)}}
 const sw=(on,fn)=>`<button class="sw ${on?'on':''}" onclick="${fn}"></button>`;
-const VARS=['cliente','fecha','hora','barbero','servicio','precio','codigo','negocio','direccion','maps','link','adelanto','yape','telefono','ciudad','nota','pago'];
+function setLL(la,lo){D().cfg.lat=String(+(+la).toFixed(6));D().cfg.lng=String(+(+lo).toFixed(6));dirty();renderConfig()}
+function ubicAqui(){if(!navigator.geolocation)return toast('Tu navegador no permite la ubicación');toast('📍 Buscando tu ubicación…');navigator.geolocation.getCurrentPosition(p=>{setLL(p.coords.latitude,p.coords.longitude);toast('✅ Ubicación lista · toca Guardar')},e=>toast(e.code===1?'❌ Permite la ubicación en tu navegador (candado junto a la dirección)':e.code===3?'❌ Tardó demasiado: prueba de nuevo o usa «Buscar mi dirección»':'❌ No se pudo obtener tu ubicación: usa «Buscar mi dirección»'),{enableHighAccuracy:true,timeout:15000})}
+async function ubicBuscar(){const c=D().cfg,q=[c.direccion,c.ciudad].filter(Boolean).join(', ');if(!q)return toast('Primero escribe la dirección');toast('🔎 Buscando…');try{const r=await(await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=pe&q='+encodeURIComponent(q))).json();if(!r[0])return toast('No la encontré: usa «Usar donde estoy»');setLL(r[0].lat,r[0].lon);toast('✅ Encontrada · revisa el mapa y toca Guardar')}catch(e){toast('❌ No se pudo buscar')}}
+function mapsCoords(u){const m=String(u).match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)||String(u).match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/)||String(u).match(/[?&](?:q|ll|query)=(-?\d+\.\d+),(-?\d+\.\d+)/);if(m&&!D().cfg.lat&&!D().cfg.lng)setLL(m[1],m[2])}
+const VARS=['cliente','fecha','hora','barbero','servicio','precio','codigo','negocio','direccion','maps','link','adelanto','yape','telefono','ciudad','nota','pago','seguimiento'];
 function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barberos,servicios:S.servicios,usuarios:S.usuarios||[]});S.dirty=false}
  const d=D(),c=d.cfg;applyTheme(c);
  $('#t-config').innerHTML=`
@@ -948,7 +954,11 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barbero
   <label class="lb">Ciudad</label><input class="in" value="${esc(c.ciudad)}" onchange="setC('ciudad',this.value.trim())">
   <label class="lb">Dirección</label><input class="in" value="${esc(c.direccion)}" placeholder="Av. ..., distrito" onchange="setC('direccion',this.value.trim())">
   <label class="lb">Dirección pública del formulario (opcional)</label><input class="in" value="${esc(c.linkBase||'')}" placeholder="https://tuusuario.github.io/barberia/reservar.html" onchange="setC('linkBase',this.value.trim())"><p class="hint" style="margin-top:4px">Déjalo vacío si el panel y el formulario están en la misma carpeta.</p>
-  <label class="lb">Link de Google Maps</label><input class="in" value="${esc(c.maps)}" placeholder="https://maps.app.goo.gl/..." onchange="setC('maps',this.value.trim())">`)}
+  <label class="lb">Link de Google Maps</label><input class="in" value="${esc(c.maps)}" placeholder="https://maps.app.goo.gl/..." onchange="setC('maps',this.value.trim());mapsCoords(this.value)">
+  <label class="lb">📍 Ubicación en el mapa <small style="color:var(--mu)">(el cliente la ve en «Estado de su cita»)</small></label>
+  <div class="g2"><input class="in" inputmode="decimal" placeholder="Latitud" value="${esc(c.lat)}" onchange="setC('lat',this.value.trim())"><input class="in" inputmode="decimal" placeholder="Longitud" value="${esc(c.lng)}" onchange="setC('lng',this.value.trim())"></div>
+  <div class="g2" style="margin-top:8px"><button class="btn" onclick="ubicAqui()">📍 Usar donde estoy</button><button class="btn" onclick="ubicBuscar()">🔎 Buscar mi dirección</button></div>
+  ${parseFloat(c.lat)&&parseFloat(c.lng)?`<iframe title="Vista previa del mapa" loading="lazy" style="width:100%;height:190px;border:0;border-radius:12px;margin-top:10px" src="https://www.openstreetmap.org/export/embed.html?bbox=${[+c.lng-.004,+c.lat-.0022,+c.lng+.004,+c.lat+.0022].map(n=>n.toFixed(5)).join(',')}&layer=mapnik&marker=${+c.lat},${+c.lng}"></iframe>`:'<p class="hint">Tip: estando en la barbería toca «Usar donde estoy». Si pegas un link de Google Maps con coordenadas, se llena solo.</p>'}`)}
  ${acc('horario','📅 Días y horario','Días de atención, apertura, refrigerio',()=>{const sl=slotsDia(c);return `
   <label class="lb">Días de atención</label><div class="dchips">${ORDEN.map(x=>`<button class="dchip ${c.dias.includes(x)?'on':''}" onclick="togDia(${x})">${DIAS[x]}</button>`).join('')}</div>
   <div class="g2"><div><label class="lb">Abre</label><input class="in" type="time" value="${c.apertura}" onchange="setC('apertura',this.value);renderConfig()"></div><div><label class="lb">Cierra</label><input class="in" type="time" value="${c.cierre}" onchange="setC('cierre',this.value);renderConfig()"></div></div>
@@ -999,7 +1009,8 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barbero
   <p class="hint">Sin imagen subida usa al Tío Stereo incluido.</p>
   <div class="li"><div class="t"><b>Voz encendida desde el inicio</b><small>Si está apagada, el cliente la activa tocando al narrador</small></div>${sw(c.narrVoz,"setB('narrVoz')")}</div>
   <label class="lb">Velocidad de la voz</label><select class="in" onchange="setC('narrRate',+this.value)">${[[.85,'Lenta'],[1,'Normal'],[1.15,'Rápida']].map(([v,t])=>`<option value="${v}" ${+c.narrRate===v?'selected':''}>${t}</option>`).join('')}</select>
-  <label class="lb" style="margin-top:18px">Frases (lo que dice en cada paso)</label>
+  <label class="lb">Tono de la voz</label><select class="in" onchange="setC('narrTono',+this.value)">${[[.35,'Muy grave · hombre rudo'],[.5,'Grave'],[.75,'Medio'],[1,'Normal']].map(([v,tx])=>`<option value="${v}" ${+c.narrTono===v?'selected':''}>${tx}</option>`).join('')}</select><p class="hint">La voz es la que trae el celular de cada cliente: se elige una masculina en español y se le baja el tono.</p>
+  <label class="lb" style="margin-top:18px">Frases (lo que dice en cada paso y según el estado de la cita)</label>
   ${NKEYS.map(([k,t])=>`<label class="lb">${t}</label><textarea class="in" id="tn_${k}" rows="2" onchange="D().cfg.narr['${k}']=this.value;dirty()">${esc(c.narr[k])}</textarea><div class="vars">${NVARS.map(v=>`<button onclick="insVarN('${k}','${v}')">{${v}}</button>`).join('')}<button style="color:var(--mu)" onclick="D().cfg.narr['${k}']=DEF_CFG.narr['${k}'];dirty();renderConfig()">↺</button></div>`).join('')}`:''}
   <button class="btn w" style="margin-top:14px" onclick="window.open(formUrl(),'_blank')">↗ Probar en el formulario</button>`)}
  ${acc('estados','🏷️ Estados de la cita','Nombre y emoji de cada estado',()=>`
@@ -1043,7 +1054,7 @@ function saveUser(){const u=S._u;u.nombre=$('#uNom').value.trim();u.pin=API.remo
  if(u.id){const i=D().usuarios.findIndex(x=>x.id===u.id);D().usuarios[i]=u}else{u.id='u'+uid();D().usuarios.push(u)}closeModal();dirty();renderConfig()}
 function delUser(id){if(!confirm('¿Eliminar este usuario? Ya no podrá entrar.'))return;D().usuarios=D().usuarios.filter(x=>x.id!==id);closeModal();dirty();renderConfig()}
 function tplPreview(s){return tpl(s,{fecha:hoy(),hora:'10:00',barberoId:D().barberos[0]?.id,servicioNombre:'Fade / Degradado',precio:30,codigo:'AB12CD',adelanto:D().cfg.adelanto,cliente:{nombre:'Carlos',tel:'987654321',ciudad:'Puente Piedra'}},D().cfg)}
-const NKEYS=[['hola','👋 Al abrir'],['holaLink','🔗 Al abrir un link personalizado'],['servicio','✂️ Al elegir servicio'],['barbero','💈 Al elegir barbero'],['cualquiera','🎲 Si elige cualquier barbero'],['dia','📅 Al elegir día'],['hora','⏰ Al elegir hora'],['datos','💸 Antes de pagar'],['listo','✅ Reserva lista'],['ocupado','😕 Turno ocupado'],['vencido','⌛ Tiempo de pago vencido']];
+const NKEYS=[['hola','👋 Al abrir'],['holaLink','🔗 Al abrir un link personalizado'],['servicio','✂️ Al elegir servicio'],['barbero','💈 Al elegir barbero'],['cualquiera','🎲 Si elige cualquier barbero'],['dia','📅 Al elegir día'],['hora','⏰ Al elegir hora'],['datos','💸 Antes de pagar'],['listo','✅ Reserva lista'],['ocupado','😕 Turno ocupado'],['vencido','⌛ Tiempo de pago vencido'],['estado_por_validar','🔎 Estado: Yape por validar'],['estado_confirmada','✅ Estado: Confirmada'],['estado_en_silla','💺 Estado: En silla'],['estado_atendida','✔️ Estado: Atendido'],['estado_no_vino','❌ Estado: No vino'],['estado_cancelada','🚫 Estado: Cancelada'],['estado_expirada','⌛ Estado: Expirada']];
 const NVARS=['narrador','cliente','servicio','precio','barbero','especialidad','fecha','hora','adelanto','yape','negocio'];
 function insVarN(k,v){const ta=$('#tn_'+k);const p=ta.selectionStart??ta.value.length;ta.value=ta.value.slice(0,p)+'{'+v+'}'+ta.value.slice(ta.selectionEnd??p);D().cfg.narr[k]=ta.value;dirty();ta.focus()}
 async function subirImg(inp,key,max,type){const f=inp.files[0];if(!f)return;try{D().cfg[key]=await API.putFoto(await compressImg(f,max,.85,type));dirty();renderConfig()}catch(e){toast('❌ '+e.message)}}
