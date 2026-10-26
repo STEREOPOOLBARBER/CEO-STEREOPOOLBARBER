@@ -25,6 +25,7 @@ const grupo = [0, 0, 0, 1, 1, 1, 2, 2, 2].slice(0, 7); const g = [0, 0, 0, 1, 1,
 for (let i = 0; i < 8; i++) await bsel[i].selectOption(ids[g[i]]);
 await P.waitForTimeout(200);
 check('el botón dice Crear 8 citas', /Crear 8/.test(await P.locator('#agBtn').innerText()), await P.locator('#agBtn').innerText());
+await P.fill('#agFecha','2026-10-25'); check('día cambia a 25 oct y estado atendida', await P.inputValue('#agEst') === 'atendida' && /25 de octubre/.test(await P.locator('#agt0').innerText()), await P.locator('#agt0').innerText());
 await P.click('#agBtn'); await P.waitForSelector('#agL', { state: 'hidden' });
 await P.waitForTimeout(800);
 const n = await P.evaluate(() => S.citas.filter(c => c.cliente.nombre === 'Franco Vásquez' || c.cliente.nombre === 'Yamil Díaz (Hijo)' || c.cliente.nombre === 'André Francia').length);
