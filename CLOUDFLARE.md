@@ -46,3 +46,13 @@ npx wrangler dev          # http://localhost:8787
 npm test                  # API (permisos, reservas, fotos); arrancar wrangler dev con --var ALLOW_PIN:true y datos sembrados
 npm run test:google       # login con Google; ver instrucciones al inicio de test/google.e2e.mjs
 ```
+
+## Multiusuario: clave y huella por barbero
+
+Solo el administrador (permiso `config`) configura el acceso de cada persona, en **⚙️ Config → Barberos / Usuarios → ✏️ → 🔐 Acceso propio**
+(la persona debe estar guardada antes: toca «Guardar configuración»).
+
+- **Clave**: el admin la escribe o la genera (🎲) y se la pasa al barbero. Se guarda con PBKDF2-SHA256; cambiarla o quitarla cierra sus sesiones. 6 intentos fallidos por persona → bloqueo de 15 min.
+- **Huella / Face ID** (passkeys): el admin toca «👆 Invitar a activar huella» y envía el link (un solo uso, 24 h). El barbero lo abre en **Safari/Chrome** (no dentro de WhatsApp) y toca «Activar huella». Hasta 5 dispositivos por persona; el admin puede quitarlos. La huella nunca sale del celular: el servidor solo guarda la llave pública.
+- Las llaves quedan atadas al dominio (hostname). Si cambias de dominio, hay que volver a invitar.
+- Google sigue siendo el acceso del dueño. Pruebas: `npm run test:acceso` (API) y `test/acceso.ui.mjs` (pantalla, con Playwright).

@@ -6,7 +6,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "node test/api.e2e.mjs",
-    "test:google": "node test/google.e2e.mjs"
+    "test:google": "node test/google.e2e.mjs",
+    "test:acceso": "node test/acceso.e2e.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.40.0"
