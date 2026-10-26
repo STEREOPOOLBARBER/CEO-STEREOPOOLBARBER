@@ -62,3 +62,6 @@ Solo el administrador (permiso `config`) configura el acceso de cada persona, en
 2. Aparece **¿Quién eres?** con los perfiles. El **Dueño** entra con su clave (de arranque **1111** hasta que la cambie en ⚙️ Config → Seguridad → 🔑 Mi clave y huella). Cada barbero/usuario entra con su **clave** o **huella**; los permisos son los que asignó el admin.
 3. Un correo que no es del dueño solo ve su propio perfil (y entra directo si no tiene clave ni huella). Un barbero sin correo queda autorizado en su celular al activar su huella (90 días).
 Pruebas: `test/google.e2e.mjs` y `test/perfiles.ui.mjs` (con GOOGLE_CLIENT_ID de prueba); `acceso.e2e`/`acceso.ui` corren con `--var GOOGLE_CLIENT_ID:` vacío.
+
+### Vista previa de los links (WhatsApp)
+El Worker agrega título, descripción y **logo** (el de ⚙️ Config → Marca) a `reservar.html` e `index.html` (etiquetas Open Graph). Cada tipo de link tiene su texto: reserva, «Tu cita en …» (`?c=`) y «Activa tu huella» (`?huella=`). Nunca incluye datos del cliente. WhatsApp guarda la vista previa en caché: si cambias el logo, un link ya enviado puede tardar en actualizarse (links nuevos salen bien).

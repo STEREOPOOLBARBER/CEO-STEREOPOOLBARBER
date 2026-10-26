@@ -1128,7 +1128,7 @@ function setEst(k,f,v){const e=D().cfg.est;e[k]={...(e[k]||{}),[f]:v.trim()||DEF
 function togDia(x){const a=D().cfg.dias;const i=a.indexOf(x);i<0?a.push(x):a.splice(i,1);dirty();renderConfig()}
 function togBarb(id){const b=D().barberos.find(x=>x.id===id);b.activo=b.activo===false;dirty();renderConfig()}
 function togServ(id){const s=D().servicios.find(x=>x.id===id);s.activo=s.activo===false;dirty();renderConfig()}
-async function subirLogo(inp){const f=inp.files[0];if(!f)return;try{D().cfg.logoImg=await API.putFoto(await compressImg(f,300,.85));dirty();renderConfig()}catch(e){toast('❌ '+e.message)}}
+async function subirLogo(inp){const f=inp.files[0];if(!f)return;try{D().cfg.logoImg=await API.putFoto(await compressImg(f,600,.85));dirty();renderConfig()}catch(e){toast('❌ '+e.message)}}
 async function subirYapeQR(inp){const f=inp.files[0];if(!f)return;try{D().cfg.yapeQR=await API.putFoto(await compressImg(f,700,.85));dirty();renderConfig()}catch(e){toast('❌ '+e.message)}}
 function addBloqueo(){const f=$('#blF').value;if(!f)return toast('Elige una fecha');D().cfg.bloqueos=[...(D().cfg.bloqueos||[]),{id:uid(),fecha:f,barberoId:$('#blB').value,motivo:$('#blM').value.trim()}];dirty();renderConfig()}
 function delBloqueo(id){D().cfg.bloqueos=D().cfg.bloqueos.filter(b=>b.id!==id);dirty();renderConfig()}
