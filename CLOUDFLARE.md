@@ -72,3 +72,6 @@ Al escribir los 8 dígitos del DNI, el formulario de reserva y el panel buscan e
 - Formulario público: máx. 12 consultas / 15 min por IP. Panel: requiere sesión. Resultados en caché 30 días (tabla `dnis`).
 - ⚙️ Config → Seguridad → **🪪 Probar consulta de DNI** muestra la respuesta cruda del servicio para verificar los campos.
 - Pruebas: `npm run test:dni` (con RENIEC simulado; ver cabecera del archivo).
+
+### Pegar mensajes de WhatsApp (Nueva cita)
+La caja verde de **Nueva cita** acepta (1) el mensaje de un cliente (rellena DNI, teléfono y nombre) o (2) una agenda completa tipo «Jesús / Domingo 9 am André…». En el caso 2 muestra una vista previa y solo crea las citas al tocar **Crear**. Reglas de servicio: sin palabra clave → corte + asesoría; «barba» → corte + barba; «facial» → facial + corte; «semi» → semiondulación + corte; «platinado» → platinado. Prueba: `test/agenda.ui.mjs`.

@@ -1,0 +1,34 @@
+// Prueba de pantalla: pegar la agenda de WhatsApp y crear todas las citas.
+// Requiere wrangler dev en localhost:8787 con --var ALLOW_PIN:true --var GOOGLE_CLIENT_ID: y adminPin 5821 sembrado.
+import { createRequire } from 'node:module';
+const { chromium } = createRequire(import.meta.url)(process.env.PW_PATH || 'playwright');
+const BASE = process.env.BASE || 'http://localhost:8787';
+let ok = 0, bad = 0; const check = (n, c, x = '') => { c ? ok++ : bad++; console.log(`${c ? '✅' : '❌'} ${n} ${c ? '' : x}`) };
+const TXT = `Jesús\n\n\nDomingo 9 am  André francia\nDomingo 10 am ERICK ROJAS\nDomingo 11 am David tucto\nTarazona\n\n\nLeandro\nDomingo 9 am ARMANDO\nJONATHAN DIAZ Domingo 10 am\nFranco Vásquez barba\nDomingo 11 am David viza alcedo\nsemi\n\nJavier\n\nDomingo 9 am    YAMIL DÍAZ\n(HIJO)\nDomingo 12 pm Luis facial`;
+const br = await chromium.launch(), ctx = await br.newContext({ viewport: { width: 420, height: 900 } }), P = await ctx.newPage();
+P.on('pageerror', e => console.log('PAGEERR', e.message));
+const r = await ctx.request.post(BASE + '/api/auth/login', { data: { pin: '5821' }, headers: { Origin: BASE } }); const ses = await r.json();
+await P.goto(BASE + '/index.html'); await P.evaluate(s => localStorage.setItem('brb_ses', JSON.stringify(s)), ses); await P.reload();
+await P.waitForSelector('#login', { state: 'hidden' });
+await P.evaluate(() => formCita()); await P.waitForSelector('#pegaTxt');
+check('la caja verde de pegar aparece en Nueva cita', true);
+await P.fill('#pegaTxt', TXT); await P.click('text=Rellenar'); await P.waitForSelector('#agL .card');
+check('detecta 8 citas', await P.locator('#agL .card').count() === 8, await P.locator('#agL .card').count());
+check('aparece el aviso "sin barbero" si no está registrado', /sin barbero/.test(await P.locator('#agL').innerText()));
+const servs = await P.$$eval('#agL .card select:nth-of-type(1)', s => s.map(x => x.selectedOptions[0].text));
+console.log(servs.join(' | '));
+check('barba → servicio con barba', /barba/i.test(servs[4]) && !/barba/i.test(servs[0]));
+const nombres = await P.$$eval('#agL .card input.in', s => s.map(x => x.value));
+check('los nombres quedan limpios', nombres[4] === 'Franco Vásquez' && nombres[2] === 'David Tucto Tarazona' && nombres[6] === 'Yamil Díaz (Hijo)', nombres.join());
+const bsel = await P.$$('#agL .card .g2 select:nth-of-type(2)'); const ids = await P.evaluate(() => S.barberos.filter(b => b.activo !== false).map(b => b.id));
+const grupo = [0, 0, 0, 1, 1, 1, 2, 2, 2].slice(0, 7); const g = [0, 0, 0, 1, 1, 1, 2, 2];
+for (let i = 0; i < 8; i++) await bsel[i].selectOption(ids[g[i]]);
+await P.waitForTimeout(200);
+check('el botón dice Crear 8 citas', /Crear 8/.test(await P.locator('#agBtn').innerText()), await P.locator('#agBtn').innerText());
+await P.click('#agBtn'); await P.waitForSelector('#agL', { state: 'hidden' });
+await P.waitForTimeout(800);
+const n = await P.evaluate(() => S.citas.filter(c => c.cliente.nombre === 'Franco Vásquez' || c.cliente.nombre === 'Yamil Díaz (Hijo)' || c.cliente.nombre === 'André Francia').length);
+check('las citas quedaron guardadas', n === 3, n);
+const f = await P.evaluate(() => S.citas.find(c => c.cliente.nombre === 'Franco Vásquez')?.servicioNombre);
+check('Franco (barba) guardado con servicio de barba', /barba/i.test(f || ''), f);
+console.log(`\n${ok} OK · ${bad} fallos`); await br.close(); process.exit(bad ? 1 : 0);

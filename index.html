@@ -669,6 +669,7 @@ function formCita(id){const c=id?cita(id):null,cl=c?.cliente||{};
  S._ed={fotoAntes:c?.fotoAntes||'',fotoDespues:c?.fotoDespues||'',refFoto:c?.refFoto||'',links:[...(c?.links||[])],precio:c?.precio};
  const estSel=c?.estado||'confirmada';
  openModal(`<div class="grab"></div>`+mHead(c?'✏️ Editar cita':'➕ Nueva cita')+`
+ ${c?'':pegarBox()}
  <div class="g2"><div><label class="lb">DNI (opcional)</label><input class="in" id="fDni" inputmode="numeric" maxlength="8" placeholder="8 dígitos" value="${esc(cl.dni||'')}" oninput="buscarDniP(this)"><small id="fDniEst" style="color:var(--mu);display:block;min-height:16px;margin-top:4px"></small></div><div><label class="lb">Teléfono</label><input class="in" id="fTel" inputmode="tel" placeholder="9XXXXXXXX" value="${esc(cl.tel||'')}"></div></div>
  <div class="g2"><div><label class="lb">Nombre *</label><input class="in" id="fNom" placeholder="Nombre y apellido" value="${esc(cl.nombre||'')}"></div><div><label class="lb">Ciudad / distrito</label><input class="in" id="fCiu" placeholder="Ej: Puente Piedra" value="${esc(cl.ciudad||'')}"></div></div>
  <div class="g2"><div><label class="lb">Barbero</label><select class="in" id="fBarb" onchange="fillHoras()">${bOpts}</select></div><div><label class="lb">Servicio</label><select class="in" id="fServ" onchange="const s=S.servicios.find(x=>x.id===this.value);if(s&&$('#fPre'))$('#fPre').value=s.precio">${S.servicios.map(s=>`<option value="${s.id}" ${s.id===c?.servicioId?'selected':''}>${s.emoji} ${esc(s.nombre)}</option>`).join('')}</select></div></div>
@@ -1098,6 +1099,55 @@ function resumenCitas(u){const now=Date.now(),act=S.citas.filter(c=>activa(c)&&c
  return (u.barberoId?`📅 ${mias.length} próximas · hoy ${hoyN}${mias[0]?` · siguiente <b style="color:var(--blue)">${falta(startTs(mias[0]))}</b>`:''}`:'')+(creo?`${u.barberoId?' · ':''}✍️ agendó ${creo}`:'')||'Sin citas'}
 function verCitasDe(bid){const b=barb(bid)||D()?.barberos.find(x=>x.id===bid);const now=Date.now(),cs=S.citas.filter(c=>c.barberoId===bid&&activa(c)&&startTs(c)>now-30*60000&&c.estado!=='atendida').sort((a,b)=>startTs(a)-startTs(b));
  openModal(mHead('📅 Citas de '+esc(b?.nombre||''))+(cs.map(c=>`<div class="li"><div class="t"><b>${esc(c.cliente?.nombre)}</b><small>${fLarga(c.fecha)} · ${h12(c.hora)} · ✂️ ${esc(c.servicioNombre)}</small></div><span class="tag cd ${startTs(c)<now?'late':''}">${cdLabel(startTs(c))}</span></div>`).join('')||'<div class="empty"><b>📭</b>Sin citas próximas</div>'))}
+/* ---------- pegar mensaje de WhatsApp: rellena una cita o crea toda una agenda ---------- */
+const nrm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+const tCase=s=>s.toLowerCase().replace(/(^|[\s(-])(\p{L})/gu,(_,a,b)=>a+b.toUpperCase()).replace(/\s+/g,' ').trim();
+const DOWN={domingo:0,lunes:1,martes:2,miercoles:3,jueves:4,viernes:5,sabado:6};
+function fechaDeDia(w){const t=hoy();if(w==='hoy')return t;if(w==='manana')return addD(t,1);const n=DOWN[w],h=pYmd(t).getDay();return addD(t,(n-h+7)%7)}
+function servPor(kw){const act=S.servicios.filter(s=>s.activo!==false),has=(s,k)=>nrm(s.nombre).includes(k);
+ const k=kw.includes('barba')?'barba':kw.includes('facial')?'facial':kw.includes('semi')?'semi':kw.includes('platin')?'platin':'';
+ if(k)return act.find(s=>has(s,k))||act[0];
+ return act.find(s=>has(s,'corte')&&has(s,'asesor')&&!has(s,'barba')&&!has(s,'facial')&&!has(s,'semi'))||act.find(s=>has(s,'corte'))||act[0]}
+function parseAgenda(txt){
+ const RX=/(domingo|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|hoy|ma[nñ]ana)\s+(?:a\s+las\s+)?(\d{1,2})(?:[:.](\d{2}))?\s*(a\.?\s?m\.?|p\.?\s?m\.?)?/gi;
+ const out=[];let barb='',prevBlank=true,cur=null;
+ for(const raw of String(txt).split(/\r?\n/)){const line=raw.trim();
+  if(!line){prevBlank=true;cur=null;continue}
+  const ms=[...line.matchAll(RX)];
+  if(!ms.length){if(prevBlank&&line.split(/\s+/).length<=3&&!/\d/.test(line)){barb=line.replace(/[:\-–—\s]+$/,'');cur=null}else if(cur)cur.resto+=' '+line;prevBlank=false;continue}
+  if(cur&&ms[0].index>0)cur.resto+=' '+line.slice(0,ms[0].index);
+  ms.forEach((m,i)=>{const fin=i+1<ms.length?ms[i+1].index:line.length;let h=+m[2];const mi=+(m[3]||0),ap=(m[4]||'').toLowerCase();
+   if(ap.startsWith('p')&&h<12)h+=12;else if(ap.startsWith('a')&&h===12)h=0;else if(!ap&&h>=1&&h<=7)h+=12;
+   cur={dia:nrm(m[1]),hora:`${pad(h)}:${pad(mi)}`,resto:line.slice(m.index+m[0].length,fin),barbTxt:barb};out.push(cur)});
+  prevBlank=false}
+ return out.map(e=>{let r=e.resto.replace(/\s+/g,' ').trim();const kw=nrm(r);
+  const tel=(r.match(/(?:\+?51)?\s?(9\d{2}\s?\d{3}\s?\d{3})/)||[])[1]?.replace(/\s/g,'')||'';if(tel)r=r.replace(/(?:\+?51)?\s?9\d{2}\s?\d{3}\s?\d{3}/,'');
+  const dni=(r.match(/\b\d{8}\b/)||[])[0]||'';if(dni)r=r.replace(dni,'');
+  const sv=servPor(kw);r=r.replace(/\b(barba|facial|semi(?:ondulaci[oó]n)?|platinado)\b/gi,'').replace(/\s+/g,' ').trim();
+  const b=S.barberos.find(x=>x.activo!==false&&nrm(x.nombre)===nrm(e.barbTxt))||S.barberos.find(x=>x.activo!==false&&e.barbTxt&&nrm(x.nombre).startsWith(nrm(e.barbTxt)))||null;
+  return{fecha:fechaDeDia(e.dia),hora:e.hora,nombre:tCase(r),tel,dni,servicioId:sv?.id,barberoId:b?.id||'',barbTxt:e.barbTxt,ok:true}})}
+function pegarBox(){return`<div style="background:rgba(37,211,102,.12);border:1px solid rgba(37,211,102,.5);border-radius:14px;padding:10px;margin-bottom:12px"><div style="font-size:13px;font-weight:700;color:#4ade80">📲 ¿Te mandaron datos o la agenda por WhatsApp? Pégalos aquí y se llenan solos <small style="font-weight:400">(opcional)</small></div><div style="display:flex;gap:8px;margin-top:8px"><textarea class="in" id="pegaTxt" rows="2" placeholder="Pega el mensaje de WhatsApp…" style="flex:1;min-height:44px"></textarea><button class="btn p" onclick="pegarProcesar()">Rellenar</button></div></div>`}
+function pegarProcesar(){const t=$('#pegaTxt').value;if(!t.trim())return toast('Pega primero el mensaje');
+ const l=parseAgenda(t);if(l.length>=2||(l.length===1&&/\n/.test(t.trim())))return agendaVista(l);
+ const dni=(t.match(/\b\d{8}\b/)||[])[0]||'',tel=((t.replace(dni,'').match(/(?:\+?51)?\s?(9\d{2}\s?\d{3}\s?\d{3})/)||[])[1]||'').replace(/\s/g,'');
+ let nom=(t.match(/nombre\s*[:\-]\s*([^\n,;]+)/i)||[])[1]||t.replace(/\d+/g,' ').replace(/[^\p{L}\s]/gu,' ').replace(/\b(hola|soy|mi|nombre|dni|cel|celular|tel|telefono|whatsapp|es|el|de)\b/gi,' ').split(/\s+/).filter(Boolean).slice(0,5).join(' ');
+ if(l.length===1&&l[0].nombre)nom=l[0].nombre;
+ if(dni){$('#fDni').value=dni;buscarDniP($('#fDni'))}if(tel&&!$('#fTel').value)$('#fTel').value=tel;if(nom&&!$('#fNom').value)$('#fNom').value=tCase(nom);
+ if(l.length===1){$('#fFecha').value=l[0].fecha;if(typeof fillHoras==='function'){fillHoras();setTimeout(()=>{if([...$('#fHora').options].some(o=>o.value===l[0].hora))$('#fHora').value=l[0].hora},50)}}
+ toast('✅ Datos rellenados. Revísalos.')}
+function agendaVista(l){S._ag=l;const adm=isAdmin(),bs=(adm?S.barberos.filter(b=>b.activo!==false):S.barberos.filter(b=>b.id===S.ses.barberoId));
+ const sOpts=id=>S.servicios.filter(s=>s.activo!==false).map(s=>`<option value="${s.id}" ${s.id===id?'selected':''}>${esc(s.nombre)}</option>`).join('');
+ const bOpts=id=>`<option value="">— Elige barbero —</option>`+bs.map(b=>`<option value="${b.id}" ${b.id===id?'selected':''}>${esc(b.nombre)}</option>`).join('');
+ openModal(mHead('📋 Agenda detectada')+`<p class="hint" style="margin-top:0">Revisa cada línea. Si el barbero del mensaje no está registrado, elígelo en la lista. Nada se guarda hasta que toques <b>Crear</b>.</p><div id="agL">${l.map((e,i)=>`<div class="card" id="ag${i}" style="padding:10px;margin-bottom:8px"><div style="display:flex;gap:8px;align-items:center"><input type="checkbox" ${e.ok?'checked':''} onchange="S._ag[${i}].ok=this.checked;agMarca()"><b style="flex:1">${fLarga(e.fecha)} · ${h12(e.hora)}</b><small id="agw${i}" style="color:#f87171"></small></div><input class="in" value="${esc(e.nombre)}" placeholder="Nombre" oninput="S._ag[${i}].nombre=this.value" style="margin-top:6px"><div class="g2" style="margin-top:6px"><select class="in" onchange="S._ag[${i}].servicioId=this.value">${sOpts(e.servicioId)}</select><select class="in" onchange="S._ag[${i}].barberoId=this.value;agMarca()">${bOpts(e.barberoId)}</select></div></div>`).join('')}</div><button class="btn p w" id="agBtn" style="margin-top:12px;padding:14px" onclick="agendaCrear()">✅ Crear citas</button>`);agMarca()}
+function agMarca(){const l=S._ag,vistos=new Set();let n=0;l.forEach((e,i)=>{const w=$('#agw'+i);let m='';const k=e.barberoId+e.fecha+e.hora;
+  if(e.ok){if(!e.barberoId)m='⚠️ sin barbero';else if(ocupado(S.citas,e.barberoId,e.fecha,e.hora))m='⛔ horario ocupado';else if(vistos.has(k))m='⛔ repetido';vistos.add(k)}
+  if(w)w.textContent=m;e._bad=!!m;if(e.ok&&!m)n++});
+ const b=$('#agBtn');if(b){b.textContent=n?`✅ Crear ${n} cita${n>1?'s':''}`:'Nada para crear';b.disabled=!n}}
+async function agendaCrear(){const l=S._ag.filter(e=>e.ok&&!e._bad&&e.nombre.trim());let n=0,err=[];$('#agBtn').disabled=true;
+ for(const e of l){const s=S.servicios.find(x=>x.id===e.servicioId);
+  try{await API.crearCita({fecha:e.fecha,hora:e.hora,barberoId:e.barberoId,servicioId:s?.id,servicioNombre:s?.nombre||'',precio:+s?.precio||0,cliente:{nombre:e.nombre.trim(),tel:e.tel||'',ciudad:'',dni:e.dni||''},nota:'',estado:'confirmada',adelanto:0,adelantoOk:false,origen:'panel',creadoPor:S.ses.uid||S.ses.barberoId||'dueno'});n++}catch(x){err.push(e.nombre)}}
+ closeModal();if(l[0])S.fecha=l[0].fecha;await reload();toast(`✅ ${n} cita${n!==1?'s':''} creada${n!==1?'s':''}${err.length?` · ❌ fallaron: ${err.join(', ')}`:''}`)}
+
 let dniAutoP='';
 async function buscarDniP(inp){const v=inp.value.replace(/\D/g,'');inp.value=v;const est=$('#fDniEst');if(!est)return;
  if(v.length!==8||!API.remote){est.textContent='';return}
