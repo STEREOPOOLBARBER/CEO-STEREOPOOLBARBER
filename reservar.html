@@ -295,9 +295,9 @@ async function s2(){
 function s3(){const s=serv(),np=sinPagoF();
  shell(`<h2>Tus datos</h2>
  <div class="card"><div class="res"><span>✂️</span><span><b>${esc(s.nombre)}</b> · ${soles(s.precio)}</span><span>💈</span><span>${esc(barbNom(F.barb))}</span><span>📅</span><span>${fLarga(F.fecha)} · ${h12(F.hora)}</span></div></div>
+ <label class="lb">DNI <small style="color:var(--mu)">(opcional · llena tus datos solo)</small></label><input class="in" id="cDni" inputmode="numeric" maxlength="8" placeholder="8 dígitos" autocomplete="off" value="${esc(F.cli.dni||'')}" oninput="buscarDni(this)"><small id="dniEst" style="color:var(--mu);display:block;min-height:16px;margin-top:4px"></small>
  <label class="lb">Nombre y apellido *</label><input class="in" id="cNom" autocomplete="name" value="${esc(F.cli.nombre)}">
  <label class="lb">WhatsApp *</label><div class="pre"><span>+51</span><input class="in" id="cTel" inputmode="tel" autocomplete="tel" placeholder="9XXXXXXXX" maxlength="11" value="${esc(F.cli.tel)}"></div>
- <label class="lb">DNI <small style="color:var(--mu)">(opcional)</small></label><input class="in" id="cDni" inputmode="numeric" maxlength="8" placeholder="8 dígitos" autocomplete="off" value="${esc(F.cli.dni||'')}" oninput="buscarDni(this)"><small id="dniEst" style="color:var(--mu);display:block;min-height:16px;margin-top:4px"></small>
  <label class="lb">Ciudad / distrito *</label><input class="in" id="cCiu" placeholder="Ej: Puente Piedra, Lima" value="${esc(F.cli.ciudad)}">
  <label class="lb">¿Algo que deba saber tu barbero?</label><textarea class="in" id="cNota" rows="2" placeholder="Ej: mid fade, dejar largo arriba">${esc(F.nota)}</textarea>
  <label class="lb">Foto de referencia (opcional)</label>
