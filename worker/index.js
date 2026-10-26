@@ -17,6 +17,8 @@
      TZ                 zona horaria del local (por defecto America/Lima)
    ===================================================================== */
 
+import { b64uEnc, verificarAtestacion, verificarAfirmacion } from './webauthn.js';
+
 const ACTIVOS = ['por_validar', 'confirmada', 'en_silla', 'atendida'];
 const DUR = 60;
 const PERMS = ['verTodas', 'verTel', 'verMontos', 'crear', 'cancelar', 'yape', 'links', 'dash', 'excel', 'config'];
@@ -41,6 +43,12 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS intentos(ip TEXT NOT NULL, ts INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS ix_intentos ON intentos(ip, ts)`,
   `CREATE TABLE IF NOT EXISTS nonces(h TEXT PRIMARY KEY, exp INTEGER NOT NULL)`,
+  // Acceso de barberos y personal: clave (la pone el admin) y huella (llave de acceso del celular)
+  `CREATE TABLE IF NOT EXISTS claves(sujeto TEXT PRIMARY KEY, salt TEXT NOT NULL, hash TEXT NOT NULL, v INTEGER NOT NULL, upd INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS passkeys(id TEXT PRIMARY KEY, sujeto TEXT NOT NULL, jwk TEXT NOT NULL, alg INTEGER NOT NULL, cnt INTEGER NOT NULL DEFAULT 0, etiqueta TEXT, creada INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS ix_passkeys_sujeto ON passkeys(sujeto)`,
+  `CREATE TABLE IF NOT EXISTS invitaciones(h TEXT PRIMARY KEY, sujeto TEXT NOT NULL, exp INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS retos(h TEXT PRIMARY KEY, tipo TEXT NOT NULL, sujeto TEXT, exp INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS accesos(id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, via TEXT NOT NULL, quien TEXT, ok INTEGER NOT NULL, motivo TEXT, ip TEXT)`,
 ];
 
@@ -223,6 +231,29 @@ function permisos(id, d) {
   if (id.rol === 'barbero') return { ...ROL_BARBERO, ...(d.cfg.permBarbero || {}) };
   return {};
 }
+/* ----- clave y huella de barberos / personal ----- */
+// "sujeto" = b_<id del barbero> o u_<id del usuario>; solo existe si está activo en la configuración.
+function porSujeto(sujeto, d) {
+  const s = String(sujeto || ''), tipo = s[0], id = s.slice(2);
+  if (tipo === 'b') { const b = d.barberos.find(x => x.id === id && x.activo !== false); return b ? { rol: 'barbero', barberoId: b.id, nombre: b.nombre, sujeto: s } : null }
+  if (tipo === 'u') { const u = d.usuarios.find(x => x.id === id && x.activo !== false); return u ? { rol: u.rol, uid: u.id, nombre: u.nombre, barberoId: u.barberoId || '', sujeto: s } : null }
+  return null;
+}
+async function hashClave(clave, salt) {
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(clave), 'PBKDF2', false, ['deriveBits']);
+  return b64uEnc(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: new TextEncoder().encode(salt), iterations: 100000 }, k, 256));
+}
+const igualTxt = (a, b) => { if (a.length !== b.length) return false; let r = 0; for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i); return r === 0 };
+const CLAVES_FLOJAS = ['123456', '1234567', '12345678', '123456789', '654321', '111111', '000000', 'abcdef', 'qwerty', 'password', 'contraseña', 'barberia', 'stereo'];
+async function nuevoReto(env, tipo, sujeto) {
+  const c = rnd(32);
+  await env.DB.prepare('INSERT INTO retos(h, tipo, sujeto, exp) VALUES(?, ?, ?, ?)').bind(await sha256(c), tipo, sujeto || null, Date.now() + 5 * 60e3).run();
+  return c;
+}
+const gastarReto = async (env, c, tipo) => env.DB.prepare('DELETE FROM retos WHERE h = ? AND tipo = ? AND exp > ? RETURNING sujeto').bind(await sha256(String(c || '')), tipo, Date.now()).first();
+const hashInv = c => sha256(String(c || '').trim().toUpperCase());
+const codigoInv = () => Array.from(crypto.getRandomValues(new Uint8Array(10)), b => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
+
 // Revalida la sesión contra los datos actuales: si quitan a alguien, pierde acceso al instante.
 async function sesion(req, env, d) {
   const t = cookieDe(req); if (!t) return null;
@@ -231,6 +262,8 @@ async function sesion(req, env, d) {
   const s = JSON.parse(r.data);
   let ident = null;
   if (s.via === 'google') ident = porEmail(s.email, d, env);
+  else if (s.via === 'clave') { const c = await env.DB.prepare('SELECT v FROM claves WHERE sujeto = ?').bind(s.sujeto).first(); if (c && c.v === s.cv) ident = porSujeto(s.sujeto, d) }
+  else if (s.via === 'huella') { const h = await env.DB.prepare('SELECT 1 AS x FROM passkeys WHERE id = ? AND sujeto = ?').bind(s.cid, s.sujeto).first(); if (h) ident = porSujeto(s.sujeto, d) }
   else if (s.via === 'pin' && pinPermitido(env)) { const p = pinDeRef(s.ref, d); if (p && await sha256(p) === s.pinH) ident = s.ident }
   if (!ident) return null;
   const perm = permisos(ident, d); if (!perm) return null;
@@ -375,7 +408,63 @@ async function api(req, env, path) {
   }
 
   /* ----- autenticación ----- */
-  if (path === '/auth/config' && m === 'GET') return json({ google: env.GOOGLE_CLIENT_ID || '', pin: pinPermitido(env) });
+  if (path === '/auth/config' && m === 'GET') {
+    const n = await env.DB.prepare('SELECT (SELECT COUNT(*) FROM passkeys) AS h, (SELECT COUNT(*) FROM claves) AS c').first();
+    return json({ google: env.GOOGLE_CLIENT_ID || '', pin: pinPermitido(env), huella: n.h > 0, clave: n.c > 0 });
+  }
+  // Nombres de quienes tienen clave (para elegir quién eres en la pantalla de ingreso).
+  if (path === '/auth/personal' && m === 'GET') {
+    const d = await datos(env), r = await env.DB.prepare('SELECT sujeto FROM claves').all();
+    return json(r.results.map(x => porSujeto(x.sujeto, d)).filter(Boolean).map(i => ({ sujeto: i.sujeto, nombre: i.nombre })));
+  }
+  if (path === '/auth/clave' && m === 'POST') {
+    await limitar(env, 'k:' + ipDe(req), 30, 15 * 60e3);
+    const b = await body(), sujeto = str(b.sujeto, 60), clave = String(b.clave || '').slice(0, 100);
+    await limitar(env, 'ks:' + sujeto, 6, 15 * 60e3);
+    const d = await datos(env), ident = porSujeto(sujeto, d), row = ident && await env.DB.prepare('SELECT * FROM claves WHERE sujeto = ?').bind(sujeto).first();
+    const ok = !!row && igualTxt(await hashClave(clave, row.salt), row.hash);
+    if (!ident || !ok) { await anotar(env, 'clave', ident?.nombre || sujeto, false, 'clave incorrecta', req); fail(403, 'Clave incorrecta') }
+    const cookie = await abrirSesion(env, { via: 'clave', sujeto, cv: row.v });
+    await anotar(env, 'clave', ident.nombre, true, ident.rol, req);
+    return json(ident, 200, { 'Set-Cookie': cookie });
+  }
+  if (path === '/auth/huella/reto' && m === 'GET') {
+    await limitar(env, 'hr:' + ipDe(req), 60, 15 * 60e3);
+    return json({ challenge: await nuevoReto(env, 'get'), rpId: new URL(req.url).hostname });
+  }
+  if (path === '/auth/huella' && m === 'POST') {
+    await limitar(env, 'h:' + ipDe(req), 30, 15 * 60e3);
+    const b = await body(), cred = b.credential, u = new URL(req.url);
+    if (!await gastarReto(env, b.challenge, 'get')) { await anotar(env, 'huella', '', false, 'reto vencido o repetido', req); fail(400, 'La verificación venció. Inténtalo otra vez.') }
+    const g = await env.DB.prepare('SELECT * FROM passkeys WHERE id = ?').bind(str(cred?.id, 600)).first(), d = await datos(env), ident = g && porSujeto(g.sujeto, d);
+    if (!g || !ident) { await anotar(env, 'huella', '', false, 'huella no registrada', req); fail(403, 'Esta huella no está registrada. Pide al administrador que la active.') }
+    let cnt; try { cnt = await verificarAfirmacion(cred, g, b.challenge, u.hostname, u.origin) } catch (e) { await anotar(env, 'huella', ident.nombre, false, e.message, req); fail(403, 'No se pudo verificar la huella') }
+    await env.DB.prepare('UPDATE passkeys SET cnt = ? WHERE id = ?').bind(cnt, g.id).run();
+    const cookie = await abrirSesion(env, { via: 'huella', sujeto: g.sujeto, cid: g.id });
+    await anotar(env, 'huella', ident.nombre, true, ident.rol, req);
+    return json(ident, 200, { 'Set-Cookie': cookie });
+  }
+  // La huella se activa con una invitación que crea el administrador (código de un solo uso, vale 24 h).
+  if (path === '/passkey/opciones' && m === 'POST') {
+    await limitar(env, 'pk:' + ipDe(req), 20, 15 * 60e3);
+    const b = await body(), inv = await env.DB.prepare('SELECT * FROM invitaciones WHERE h = ? AND exp > ?').bind(await hashInv(b.codigo), Date.now()).first();
+    if (!inv) fail(404, 'Este link ya no sirve. Pide uno nuevo al administrador.');
+    const d = await datos(env), ident = porSujeto(inv.sujeto, d); if (!ident) fail(404, 'Esta persona ya no está activa.');
+    const ex = await env.DB.prepare('SELECT id FROM passkeys WHERE sujeto = ?').bind(inv.sujeto).all(), u = new URL(req.url);
+    return json({ nombre: ident.nombre, publicKey: { challenge: await nuevoReto(env, 'create', inv.sujeto), rp: { id: u.hostname, name: d.cfg.nombre || 'Barbería' }, user: { id: b64uEnc(new TextEncoder().encode(inv.sujeto)), name: ident.nombre, displayName: ident.nombre }, pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }], authenticatorSelection: { authenticatorAttachment: 'platform', residentKey: 'required', requireResidentKey: true, userVerification: 'required' }, timeout: 60000, attestation: 'none', excludeCredentials: ex.results.map(x => ({ type: 'public-key', id: x.id })) } });
+  }
+  if (path === '/passkey/registrar' && m === 'POST') {
+    await limitar(env, 'pk:' + ipDe(req), 20, 15 * 60e3);
+    const b = await body(), h = await hashInv(b.codigo), inv = await env.DB.prepare('SELECT * FROM invitaciones WHERE h = ? AND exp > ?').bind(h, Date.now()).first();
+    if (!inv) fail(404, 'Este link ya no sirve. Pide uno nuevo al administrador.');
+    const reto = await gastarReto(env, b.challenge, 'create'); if (!reto || reto.sujeto !== inv.sujeto) fail(400, 'La verificación venció. Abre el link otra vez.');
+    const d = await datos(env), ident = porSujeto(inv.sujeto, d); if (!ident) fail(404, 'Esta persona ya no está activa.');
+    const u = new URL(req.url); let k; try { k = await verificarAtestacion(b.credential, b.challenge, u.hostname, u.origin) } catch (e) { fail(400, 'No se pudo activar la huella: ' + e.message) }
+    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM passkeys WHERE sujeto = ?').bind(inv.sujeto).first(); if (n.n >= 5) fail(409, 'Ya tiene 5 dispositivos. Pide al administrador que quite alguno.');
+    await env.DB.batch([env.DB.prepare('INSERT INTO passkeys(id, sujeto, jwk, alg, cnt, etiqueta, creada) VALUES(?,?,?,?,?,?,?)').bind(k.id, inv.sujeto, JSON.stringify(k.jwk), k.alg, k.cnt, str(b.etiqueta, 60) || 'Celular', Date.now()), env.DB.prepare('DELETE FROM invitaciones WHERE h = ?').bind(h)]);
+    await anotar(env, 'huella', ident.nombre, true, 'huella activada', req);
+    return json({ ok: true, nombre: ident.nombre });
+  }
   if (path === '/auth/nonce' && m === 'GET') {
     if (!env.GOOGLE_CLIENT_ID) fail(400, 'Falta configurar GOOGLE_CLIENT_ID en Cloudflare');
     await limitar(env, 'n:' + ipDe(req), 60, 15 * 60e3);
@@ -416,6 +505,32 @@ async function api(req, env, path) {
   const exigir = p => { if (!s.perm[p]) fail(403, 'No tienes permiso para esto') };
   const propia = c => { if (!s.perm.verTodas && c.barberoId !== s.barberoId) fail(403, 'No es tu cita') };
 
+  if (path === '/acceso' && m === 'GET') {
+    exigir('config');
+    const [c, h] = await Promise.all([env.DB.prepare('SELECT sujeto FROM claves').all(), env.DB.prepare('SELECT id, sujeto, etiqueta, creada FROM passkeys ORDER BY creada').all()]);
+    return json({ claves: c.results.map(x => x.sujeto), huellas: h.results });
+  }
+  if ((x = path.match(/^\/acceso\/([bu]_[\w-]+)\/clave$/)) && (m === 'PUT' || m === 'DELETE')) {
+    exigir('config'); const ident = porSujeto(x[1], d); if (!ident) fail(404, 'Esa persona todavía no existe: toca «Guardar configuración» primero.');
+    if (m === 'DELETE') { await env.DB.prepare('DELETE FROM claves WHERE sujeto = ?').bind(x[1]).run(); await anotar(env, 'clave', ident.nombre, true, 'clave quitada por ' + s.nombre, req); return json({ ok: true }) }
+    const clave = String((await body()).clave || '');
+    if (clave.length < 6 || clave.length > 64) fail(400, 'La clave debe tener entre 6 y 64 caracteres');
+    if (/^(.)\1+$/.test(clave) || CLAVES_FLOJAS.includes(clave.toLowerCase())) fail(400, 'Esa clave es muy fácil de adivinar. Usa otra.');
+    const salt = rnd(16);
+    await env.DB.prepare('INSERT INTO claves(sujeto, salt, hash, v, upd) VALUES(?, ?, ?, 1, ?) ON CONFLICT(sujeto) DO UPDATE SET salt = excluded.salt, hash = excluded.hash, v = claves.v + 1, upd = excluded.upd').bind(x[1], salt, await hashClave(clave, salt), Date.now()).run();
+    await anotar(env, 'clave', ident.nombre, true, 'clave cambiada por ' + s.nombre, req);
+    return json({ ok: true });
+  }
+  if ((x = path.match(/^\/acceso\/([bu]_[\w-]+)\/invitacion$/)) && m === 'POST') {
+    exigir('config'); const ident = porSujeto(x[1], d); if (!ident) fail(404, 'Esa persona todavía no existe: toca «Guardar configuración» primero.');
+    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM passkeys WHERE sujeto = ?').bind(x[1]).first(); if (n.n >= 5) fail(409, 'Ya tiene 5 dispositivos. Quita alguno primero.');
+    const codigo = codigoInv(), vence = Date.now() + 864e5;
+    await env.DB.prepare('INSERT INTO invitaciones(h, sujeto, exp) VALUES(?, ?, ?)').bind(await hashInv(codigo), x[1], vence).run();
+    return json({ codigo, vence });
+  }
+  if ((x = path.match(/^\/acceso\/huella\/([\w-]+)$/)) && m === 'DELETE') {
+    exigir('config'); await env.DB.prepare('DELETE FROM passkeys WHERE id = ?').bind(x[1]).run(); return json({ ok: true });
+  }
   if (path === '/accesos' && m === 'GET') {
     exigir('config');
     const r = await env.DB.prepare('SELECT ts, via, quien, ok, motivo, ip FROM accesos ORDER BY id DESC LIMIT 100').all();
@@ -614,6 +729,8 @@ export default {
       env.DB.prepare('DELETE FROM sesiones WHERE exp < ?').bind(Date.now()),
       env.DB.prepare('DELETE FROM intentos WHERE ts < ?').bind(Date.now() - 864e5),
       env.DB.prepare('DELETE FROM nonces WHERE exp < ?').bind(Date.now()),
+      env.DB.prepare('DELETE FROM retos WHERE exp < ?').bind(Date.now()),
+      env.DB.prepare('DELETE FROM invitaciones WHERE exp < ?').bind(Date.now()),
       env.DB.prepare('DELETE FROM accesos WHERE ts < ?').bind(Date.now() - 90 * 864e5),
     ]);
   },
