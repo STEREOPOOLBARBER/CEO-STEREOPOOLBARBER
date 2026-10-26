@@ -843,7 +843,7 @@ async function conVistaPrevia(req, env, url) {
   if (panel) {
     titulo = q.get('huella') ? `Activa tu huella · ${nombre}` : `${nombre} · Panel`;
     desc = q.get('huella') ? 'Toca para activar tu huella o Face ID y entrar sin escribir clave.' : 'Agenda, citas y clientes de la barbería.';
-  } else if (q.get('c')) {
+  } else if (q.get('c') || /\/estado(\.html)?$/.test(url.pathname)) {
     titulo = `Tu cita en ${nombre}`; desc = 'Mira el estado de tu cita y cómo llegar a la barbería 💈';
   } else {
     titulo = `${nombre} · Reserva tu cita`; desc = 'Elige tu corte, tu barbero y tu horario en 1 minuto. Reserva online 💈✂️';

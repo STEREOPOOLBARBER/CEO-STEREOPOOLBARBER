@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0812">
+<title>Estado de tu cita</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0812;--card:#15101f;--card2:#1d1530;--line:#33264a;--tx:#f3eefc;--mu:#a397b8;--blue:#8a3ffc;--pur:#ff3fd2;--grn:#3fb950;--red:#f85149;--yel:#d29922;--org:#f0883e}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--tx);font:15px/1.45 'DM Sans',system-ui,sans-serif}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.wrap{max-width:560px;margin:0 auto;padding:0 16px 30px;min-height:100vh;display:flex;flex-direction:column}
+.hero{display:flex;align-items:center;gap:12px;padding:18px 0 6px}
+.logo{overflow:hidden;width:54px;height:54px;border-radius:16px;background:linear-gradient(135deg,var(--blue),var(--pur));display:grid;place-items:center;font-size:30px;flex:none}
+.hero h1{font:800 22px/1.1 'Syne'}
+.hero p{color:var(--mu);font-size:13px;margin-top:3px}
+.hero a{color:var(--blue);text-decoration:none}
+.prog{display:flex;gap:6px;margin:14px 0 4px}
+.prog i{flex:1;height:5px;border-radius:9px;background:var(--line)}
+.prog i.on{background:linear-gradient(90deg,var(--blue),var(--pur))}
+.pt{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);font-weight:700;margin:10px 0 2px}
+h2{font:800 24px 'Syne';margin-bottom:12px}
+.opt{display:flex;gap:12px;align-items:center;background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:12px;margin-bottom:10px;width:100%;text-align:left}
+.opt.on{border-color:var(--blue);background:rgba(138,63,252,.08)}
+.opt .em{width:60px;height:60px;border-radius:14px;background:var(--card2);display:grid;place-items:center;font-size:30px;flex:none;overflow:hidden}
+.opt .em img{width:100%;height:100%;object-fit:cover}
+.opt .em.round{border-radius:50%}
+.opt .t{flex:1;min-width:0}
+.opt .t b{display:block;font-size:16px}
+.opt .t small{color:var(--mu);font-size:13px}
+.opt .pr{font:800 17px 'Syne';color:var(--grn)}
+.days{display:flex;gap:8px;overflow-x:auto;padding:2px 0 12px;scrollbar-width:none}
+.days::-webkit-scrollbar{display:none}
+.day{flex:none;width:66px;padding:10px 0;border-radius:14px;border:1.5px solid var(--line);background:var(--card);text-align:center}
+.day b{display:block;font:800 22px 'Syne'}
+.day small{font-size:11px;color:var(--mu);text-transform:uppercase;font-weight:700}
+.day.on{background:var(--blue);border-color:var(--blue)}.day.on small{color:#fff}
+.day:disabled{opacity:.3;cursor:not-allowed}
+.slots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.slot{padding:14px 0;border-radius:12px;border:1.5px solid var(--line);background:var(--card);font-weight:700}
+.slot.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.slot:disabled{opacity:.3;text-decoration:line-through;cursor:not-allowed}
+.lb{display:block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);font-weight:700;margin:14px 0 6px}
+.in{width:100%;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px;outline:none}
+.in:focus{border-color:var(--blue)}
+.pre{display:flex}.pre span{padding:13px;border:1px solid var(--line);border-right:0;border-radius:12px 0 0 12px;background:var(--card2);color:var(--mu)}.pre .in{border-radius:0 12px 12px 0}
+.upl{display:flex;align-items:center;gap:12px;background:var(--card);border:1.5px dashed var(--line);border-radius:14px;padding:12px;cursor:pointer}
+.upl input{display:none}
+.upl .prev{width:64px;height:64px;border-radius:12px;background:var(--card2);display:grid;place-items:center;font-size:26px;overflow:hidden;flex:none}
+.upl .prev img{width:100%;height:100%;object-fit:cover}
+.foot{position:sticky;bottom:0;margin-top:auto;padding:14px 0 calc(14px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%);display:flex;gap:8px}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:14px;padding:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px}
+.btn.p{background:var(--blue);border-color:var(--blue);color:#fff;flex:1}
+.btn.g{background:#238636;border-color:#2ea043;color:#fff;flex:1}
+.btn:disabled{opacity:.45}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:12px}
+.res{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;font-size:14px}
+.res span:nth-child(odd){color:var(--mu)}
+.pay{background:linear-gradient(135deg,rgba(255,63,210,.18),rgba(138,63,252,.12));border:1px solid var(--pur);border-radius:20px;padding:18px;text-align:center}
+.amt{font:800 46px/1 'Syne';color:var(--pur);margin:6px 0}
+.ynum{font:800 26px 'Syne';letter-spacing:.04em}
+.timer{font:800 28px 'Syne';color:var(--yel)}
+.copy{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:7px 12px;font-weight:700;font-size:13px;margin-top:6px}
+.qr{width:180px;border-radius:14px;margin:12px auto 0;display:block;background:#fff}
+.ok{text-align:center;padding:20px 0}
+.ok b{font-size:70px;display:block}
+.code{font:800 30px 'Syne';letter-spacing:.15em;color:var(--blue)}
+.err{color:var(--red);font-size:13px;margin-top:6px;min-height:18px}
+.warn{background:rgba(210,153,34,.1);border:1px solid var(--yel);color:var(--yel);border-radius:14px;padding:12px;font-size:14px;margin-bottom:12px}
+.empty{text-align:center;color:var(--mu);padding:30px 10px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,140px);background:var(--card2);border:1px solid var(--line);padding:11px 18px;border-radius:99px;font-weight:700;z-index:80;transition:.3s;max-width:92%;text-align:center}
+.toast.on{transform:translate(-50%,0)}
+.chk{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--mu);margin-top:14px}
+.chk input{width:20px;height:20px;accent-color:var(--blue);flex:none;margin-top:1px}
+.spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:sp 1s linear infinite;margin:60px auto}
+@keyframes sp{to{transform:rotate(360deg)}}
+/* pantalla de carga */
+#splash{position:fixed;inset:0;z-index:100;background-color:#000;transition:background-color .9s,opacity .5s}
+#splash canvas{position:absolute;inset:0;width:100%;height:100%}
+#splash.glow canvas{animation:glow 1.3s ease-in-out infinite alternate}
+@keyframes glow{from{filter:drop-shadow(0 0 0 rgba(255,200,60,0)) brightness(1)}to{filter:drop-shadow(0 0 18px rgba(255,200,60,.45)) brightness(1.12)}}
+#splash .ld{position:absolute;left:50%;bottom:14%;transform:translateX(-50%);width:120px;height:3px;border-radius:3px;background:#222;overflow:hidden}
+#splash .ld::after{content:'';position:absolute;inset:0;width:40%;background:linear-gradient(90deg,#b8860b,#ffd76a,#b8860b);animation:ldm 1s ease-in-out infinite}
+@keyframes ldm{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
+/* narrador */
+#narr{position:fixed;left:6px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:60;display:flex;align-items:flex-end;gap:8px;pointer-events:none;transition:bottom .25s}
+#narr .av{width:92px;height:92px;background:center/contain no-repeat;filter:drop-shadow(0 6px 12px rgba(0,0,0,.7));pointer-events:auto;cursor:pointer;flex:none;position:relative;display:grid;place-items:center;font-size:26px;touch-action:none;-webkit-user-select:none;user-select:none;transition:.2s}
+#narr .av.talk{animation:bob .3s ease-in-out infinite alternate}
+@keyframes bob{to{transform:translateY(-3px) scale(1.04)}}
+#narr .sp{position:absolute;right:2px;top:2px;font-size:12px;background:#000;border:1px solid #e01b1b;border-radius:50%;width:24px;height:24px;display:grid;place-items:center}
+#narr .bub{max-width:min(68vw,290px);background:#15101f;border:1px solid #e01b1b;color:#fff;padding:10px 12px;border-radius:16px 16px 16px 4px;font-size:14px;font-weight:600;line-height:1.35;opacity:0;transform:translateY(8px) scale(.96);transform-origin:bottom left;transition:.25s;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+#narr .bub.on{opacity:1;transform:none;pointer-events:auto}
+#narr .bub b{display:block;font:800 11px 'Syne';letter-spacing:.08em;text-transform:uppercase;color:#ff4d4d;margin-bottom:2px}
+#narr{display:block;width:92px;height:92px}
+#narr .av{position:absolute;left:0;top:0}
+#narr .bub{position:absolute;left:calc(100% + 8px);bottom:6px;width:max-content}
+#narr.rev .bub{left:auto;right:calc(100% + 8px);border-radius:16px 16px 4px 16px;transform-origin:bottom right}
+#narr.top .bub{bottom:auto;top:6px}
+#narr.off{display:none}
+#narr.drag .av{cursor:grabbing;filter:drop-shadow(0 12px 18px rgba(0,0,0,.8));transform:scale(1.06)}
+#nArm{position:fixed;left:0;bottom:calc(16px + env(safe-area-inset-bottom));z-index:60;width:48px;height:48px;border-radius:0 24px 24px 0;background:#15101f;border:1px solid #e01b1b;border-left:0;font-size:24px;display:none;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.5);cursor:pointer;transition:bottom .25s}
+.est{display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;padding:6px 0 14px}.est b.i{font-size:54px;line-height:1}.est h2{margin:4px 0 0}.est .fl{font:800 22px 'Syne';margin-top:6px}
+.mapa{padding:10px}.mapa iframe{width:100%;height:230px;border:0;border-radius:12px;background:#222;display:block}.mapa .g2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.mapa a.btn{text-decoration:none;color:var(--tx);font-size:14px;padding:12px}
+.wrap{padding-bottom:90px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero" id="hero"><div class="logo">💈</div><div><h1>Cargando…</h1></div></header>
+  <div id="app"><div class="spin"></div></div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+/* =====================================================================
+   ESTADO DE LA CITA (público). Solo para consultar la cita con su código:
+   estado.html?c=CODIGO. Usa GET /api/publico y GET /api/publico/cita/:codigo;
+   reprogramar con POST /api/publico/cita/:codigo/reprogramar (el Worker valida las 24 h).
+   ===================================================================== */
+const CONFIG={API_URL:'/api',DUR:60};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const pad=n=>String(n).padStart(2,'0');
+const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const pYmd=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+const addD=(s,n)=>{const d=pYmd(s);d.setDate(d.getDate()+n);return ymd(d)};
+const hoy=()=>ymd(new Date());
+const toMin=h=>{if(!h)return null;const[a,b]=h.split(':').map(Number);return a*60+b};
+const fromMin=m=>`${pad(Math.floor(m/60))}:${pad(m%60)}`;
+const DIAS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'],DIASL=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'],MES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'],MESC=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const fLarga=s=>{const d=pYmd(s);return `${DIASL[d.getDay()]} ${d.getDate()} de ${MES[d.getMonth()]}`};
+const h12=h=>{if(!h)return'';let[H,M]=h.split(':').map(Number);const ap=H>=12?'p.m.':'a.m.';H=H%12||12;return `${H}:${pad(M)} ${ap}`};
+const soles=n=>{n=Number(n)||0;return 'S/ '+(n%1?n.toFixed(2):n)};
+const waNum=t=>{let d=String(t||'').replace(/\D/g,'');if(d.length===9)d='51'+d;return d};
+const waUrl=(n,t)=>(!n||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent))?`https://wa.me/${n||''}?text=${encodeURIComponent(t)}`:`https://web.whatsapp.com/send?phone=${n}&text=${encodeURIComponent(t)}`;
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),2800)}
+const DEF_EST={por_validar:{t:'Yape por validar',i:'💸',c:'#f0883e'},confirmada:{t:'Confirmada',i:'✅',c:'#8a3ffc'},en_silla:{t:'En silla',i:'💺',c:'#ff3fd2'},atendida:{t:'Atendido',i:'✔️',c:'#3fb950'},no_vino:{t:'No vino',i:'❌',c:'#f85149'},cancelada:{t:'Cancelada',i:'🚫',c:'#a397b8'},expirada:{t:'Expirada',i:'⌛',c:'#a397b8'}};
+function slotsDia(cfg){const out=[],dur=CONFIG.DUR,fin=toMin(cfg.cierre),ri=toMin(cfg.refIni),rf=toMin(cfg.refFin);let t=toMin(cfg.apertura),g=0;if(t==null||fin==null)return out;while(t+dur<=fin&&g++<60){if(ri!=null&&rf!=null&&rf>ri&&t<rf&&t+dur>ri){t=rf;continue}out.push(fromMin(t));t+=dur}return out}
+const bloqueado=(cfg,f,bid)=>(cfg.bloqueos||[]).some(b=>b.fecha===f&&(!b.barberoId||b.barberoId===bid));
+const trabaja=(cfg,b,f)=>{const d=pYmd(f).getDay();return b&&b.activo!==false&&(cfg.dias||[]).includes(d)&&(b.dias||[]).includes(d)&&!bloqueado(cfg,f,b.id)};
+function applyTheme(c){const s=document.documentElement.style;const a1=!c.acento||c.acento==='#388bfd'?'#8a3ffc':c.acento,a2=!c.acento2||c.acento2==='#a371f7'?'#ff3fd2':c.acento2;s.setProperty('--blue',a1);s.setProperty('--pur',a2)}
+const startOf=(f,h)=>{const[y,m,d]=f.split('-').map(Number),[H,M]=(h||'00:00').split(':').map(Number);return new Date(y,m-1,d,H,M).getTime()};
+const fmtF=d=>{d=Math.max(0,Math.floor(d));if(d<3600)return `${Math.floor(d/60)} min ${pad(d%60)} s`;if(d<86400)return `${Math.floor(d/3600)} h ${Math.floor(d%3600/60)} min`;return `${Math.floor(d/86400)} d ${Math.floor(d%86400/3600)} h`};
+function mapaHTML(c){const la=parseFloat(c.lat),lo=parseFloat(c.lng),dir=esc(c.direccion||c.ciudad||'');
+ if(isFinite(la)&&isFinite(lo)&&(la||lo)){const bb=[lo-.004,la-.0022,lo+.004,la+.0022].map(n=>n.toFixed(5)).join(',');
+  return `<div class="card mapa"><iframe title="Mapa de la barbería" loading="lazy" referrerpolicy="no-referrer" src="https://www.openstreetmap.org/export/embed.html?bbox=${bb}&layer=mapnik&marker=${la},${lo}"></iframe><p style="margin:10px 2px 0;font-size:14px">📍 ${dir}</p>
+  <div class="g2"><a class="btn" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${la},${lo}">🧭 Cómo llegar</a><a class="btn" target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=${la}&mlon=${lo}#map=18/${la}/${lo}">🗺️ Abrir mapa</a></div></div>`}
+ if(c.maps)return `<div class="card mapa"><p style="margin:0 2px 10px;font-size:14px">📍 ${dir}</p><a class="btn g" style="text-decoration:none;color:#fff" target="_blank" rel="noopener" href="${esc(c.maps)}">🧭 Ver mapa y cómo llegar</a></div>`;
+ return `<div class="card"><p style="margin:0;font-size:14px">📍 ${dir}</p></div>`}
+const API={
+ async req(m,p,b){const r=await fetch(CONFIG.API_URL+p,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||('Error '+r.status));return j},
+ publico(){return this.req('GET','/publico')},
+ estado(c){return this.req('GET','/publico/cita/'+encodeURIComponent(c))},
+ reprogramar(c,fecha,hora){return this.req('POST','/publico/cita/'+encodeURIComponent(c)+'/reprogramar',{fecha,hora})},
+ foto(k){return !k?'':/^(data:|https?:)/.test(k)?k:`${CONFIG.API_URL}/fotos/${k}`}
+};
+const P={cfg:{},barberos:[],ocupados:[]},E={codigo:'',info:null,rf:null,rh:null,timer:null};
+
+function hero(){const c=P.cfg;applyTheme(c);
+ $('#hero').innerHTML=`<div class="logo">${c.logoImg?`<img src="${esc(API.foto(c.logoImg))}" style="width:100%;height:100%;object-fit:cover">`:esc(c.logo||'💈')}</div><div><h1>${esc(c.nombre||'Barbería')}</h1>${c.eslogan?`<p>${esc(c.eslogan)}</p>`:''}<p>📍 ${esc(c.direccion||c.ciudad||'')}</p></div>`}
+function shell(inner,foot=''){$('#app').innerHTML=inner+(foot?`<div class="foot">${foot}</div>`:'')}
+
+/* Pantalla para escribir el código (si el link no lo trae) */
+function pedirCodigo(msg){clearInterval(E.timer);
+ shell(`<h2>🔎 Ver estado de mi cita</h2><p class="pt">Escribe el código de 6 letras que te llegó por WhatsApp.</p>
+ <input class="in" id="cod" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="Ej: GXCYZW" style="text-transform:uppercase;letter-spacing:.2em;font-size:22px;text-align:center" value="${esc(E.codigo)}" onkeydown="if(event.key==='Enter')buscar()">
+ ${msg?`<p class="pt" style="color:#f85149;margin-top:8px">${esc(msg)}</p>`:''}`,
+ `<button class="btn p" onclick="buscar()">Ver mi cita →</button>`);setTimeout(()=>$('#cod')?.focus(),50)}
+function buscar(){const c=($('#cod')?.value||'').trim().toUpperCase();if(!/^[A-Z0-9]{6}$/.test(c))return toast('El código tiene 6 letras o números');cargar(c)}
+async function cargar(cod){E.codigo=cod;$('#app').innerHTML='<div class="spin"></div>';
+ try{E.info=await API.estado(cod);history.replaceState(null,'','?c='+cod);pintar()}catch(e){pedirCodigo(e.message)}}
+
+const puedeRep=i=>!!(i&&i.puedeReprog&&startOf(i.fecha,i.hora)-Date.now()>=(+i.horasReprog||24)*3600e3);
+function pintar(){const c=P.cfg,i=E.info;clearInterval(E.timer);
+ const e={...(DEF_EST[i.estado]||DEF_EST.por_validar),...((c.est||{})[i.estado]||{})},ts=startOf(i.fecha,i.hora),viva=['por_validar','confirmada'].includes(i.estado);
+ const pago=!(+i.adelanto>0)?'Pagas todo en el local':i.adelantoOk?`✅ Adelanto ${soles(i.adelanto)} validado`:i.sinComprobante?`⏳ Falta enviar el comprobante del adelanto (${soles(i.adelanto)})`:`🔎 Adelanto ${soles(i.adelanto)} en validación`;
+ const fl=()=>{const d=(ts-Date.now())/1000;return viva?(d>0?`⏳ Faltan ${fmtF(d)}`:'🕘 Es tu hora'):''};
+ shell(`<div class="est"><b class="i">${e.i}</b><h2 style="color:${e.c}">${esc(e.t)}</h2><div class="fl" id="fl" style="color:var(--tx)">${fl()}</div></div>
+ <div class="card"><div class="res"><span>🔖</span><span>Código <b>${esc(i.codigo)}</b></span><span>👤</span><span>${esc(i.cliente?.nombre||'')}</span><span>✂️</span><span><b>${esc(i.servicio||'')}</b> · ${soles(i.precio)}</span><span>💈</span><span>${esc(i.barbero||'')}</span><span>📅</span><span>${fLarga(i.fecha)} · ${h12(i.hora)}</span><span>💸</span><span>${pago}</span></div></div>
+ ${(viva&&(+i.tolerancia>0||c.politicaTxt))?`<div class="card" style="font-size:14px;line-height:1.45">📜 <b>Política</b>${+i.tolerancia>0?`<br>⏱️ Tienes <b>${+i.tolerancia} minutos</b> de tolerancia. Pasado ese tiempo la cita puede liberarse.`:''}${c.politicaTxt?`<br>${esc(c.politicaTxt)}`:''}</div>`:''}
+ ${puedeRep(i)?`<button class="btn w" style="margin-top:10px" onclick="reprogUI()">📅 Reprogramar mi cita</button><p class="pt" style="text-align:center;margin-top:6px">Puedes cambiarla hasta ${i.horasReprog||24} h antes de tu corte.</p>`:''}
+ ${mapaHTML(c)}`,
+ `${c.whatsapp?`<button class="btn g" onclick="escribir()">💬 Escribir a la barbería</button>`:''}<button class="btn" onclick="cargar(E.codigo)">🔄 Actualizar</button>`);
+ let n=0;E.timer=setInterval(async()=>{const x=$('#fl');if(x)x.textContent=fl();if(++n%30)return;try{const nuevo=await API.estado(E.codigo);const cambio=nuevo.estado!==E.info.estado||nuevo.fecha!==E.info.fecha||nuevo.hora!==E.info.hora;E.info=nuevo;if(cambio)pintar()}catch(_){}},1000)}
+function escribir(){const i=E.info;window.open(waUrl(waNum(P.cfg.whatsapp),`Hola 👋 Soy ${(i.cliente?.nombre||'').split(' ')[0]}. Mi código de cita es ${i.codigo}.`),'_blank')}
+
+/* Reprogramar: mismo barbero, solo días y horas libres */
+function libres(fecha,bid){const cfg=P.cfg,b=P.barberos.find(x=>x.id===bid);if(!trabaja(cfg,b,fecha))return[];
+ const esHoy=fecha===hoy(),n=new Date(),nm=n.getHours()*60+n.getMinutes();
+ return slotsDia(cfg).filter(h=>!esHoy||toMin(h)>nm+10).map(h=>({h,ok:!P.ocupados.some(o=>o.b===bid&&o.f===fecha&&o.h===h)}))}
+async function reprogUI(){const i=E.info;if(!puedeRep(i))return pintar();clearInterval(E.timer);
+ try{const d=await API.publico();P.ocupados=d.ocupados||[]}catch(e){}
+ const ini=addD(hoy(),+P.cfg.anticipacion||0),dias=[];for(let k=0;k<Math.max(1,+P.cfg.ventana||14);k++){const f=addD(ini,k);dias.push({f,ok:libres(f,i.barberoId).some(x=>x.ok)})}
+ if(!E.rf||!dias.find(d=>d.f===E.rf&&d.ok))E.rf=dias.find(d=>d.ok)?.f||null;
+ const sl=E.rf?libres(E.rf,i.barberoId):[];if(E.rh&&!sl.find(x=>x.h===E.rh&&x.ok))E.rh=null;
+ shell(`<h2>📅 Reprogramar</h2><p class="pt">Ahora: <b>${fLarga(i.fecha)} · ${h12(i.hora)}</b> con ${esc(i.barbero||'')}. Elige el nuevo día y hora.</p>
+ ${dias.some(d=>d.ok)?`<div class="days">${dias.map(d=>{const x=pYmd(d.f);return `<button class="day ${E.rf===d.f?'on':''}" ${d.ok?'':'disabled'} onclick="E.rf='${d.f}';E.rh=null;reprogUI()"><small>${d.f===hoy()?'Hoy':DIAS[x.getDay()]}</small><b>${x.getDate()}</b><small>${MESC[x.getMonth()]}</small></button>`}).join('')}</div>
+ <div class="slots" style="margin-top:10px">${sl.map(x=>`<button class="slot ${E.rh===x.h?'on':''}" ${x.ok?'':'disabled'} onclick="E.rh='${x.h}';reprogUI()">${h12(x.h)}</button>`).join('')}</div>`:`<div class="empty">😕 Tu barbero no tiene horarios libres en los próximos días. Escríbenos por WhatsApp.</div>`}`,
+ `<button class="btn" onclick="E.rf=E.rh=null;pintar()">←</button><button class="btn p" ${E.rh?'':'disabled'} onclick="reprogOk()">✅ Confirmar cambio</button>`)}
+async function reprogOk(){const i=E.info;if(!E.rf||!E.rh)return;if(!confirm(`¿Cambiar tu cita al ${fLarga(E.rf)} a las ${h12(E.rh)}?`))return;
+ try{await API.reprogramar(i.codigo,E.rf,E.rh);toast('✅ Cita reprogramada');E.rf=E.rh=null;await cargar(i.codigo)}catch(e){toast('❌ '+e.message);reprogUI()}}
+
+(async function(){
+ try{const d=await API.publico();P.cfg={dias:[1,2,3,4,5,6],apertura:'09:00',cierre:'20:00',refIni:'13:00',refFin:'14:00',anticipacion:0,ventana:14,...(d.cfg||{})};P.barberos=d.barberos||[];P.ocupados=d.ocupados||[];hero()}catch(e){$('#hero').innerHTML='<div class="logo">💈</div><div><h1>Estado de tu cita</h1></div>'}
+ const c=(new URLSearchParams(location.search).get('c')||'').trim().toUpperCase();
+ if(/^[A-Z0-9]{6}$/.test(c))cargar(c);else pedirCodigo('');
+})();
+</script>
+</body>
+</html>

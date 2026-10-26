@@ -351,7 +351,7 @@ async function enviarCap(){if(F.busy)return;F.busy=true;const b=$('#bCap');b.dis
 function vencido(){clearInterval(timerInt);say('vencido');$('#app').innerHTML=`<div class="ok"><b>⌛</b><h2>Se acabó el tiempo</h2><p style="color:var(--mu)">Tu horario se liberó porque no recibimos el comprobante a tiempo. Puedes volver a reservar.</p></div><div class="foot"><button class="btn p" onclick="reiniciar()">🔄 Reservar de nuevo</button></div>`}
 /* paso 5: listo */
 function s5(){const cfg=P.cfg,s=serv(),c=F.cita,np=!c.expira&&sinPagoF();lsSet('ultima',{codigo:c.codigo,fecha:F.fecha,hora:F.hora});
- const base=(cfg.linkBase||'').trim()||location.origin+location.pathname,seg=`${base}?c=${c.codigo}`,plant=(cfg.waReserva||'')+((cfg.waReserva||'').includes('{seguimiento}')?'':'\n\n🔎 Estado de la cita: {seguimiento}');
+ const base=(cfg.linkBase||'').trim()||location.origin+location.pathname,seg=(()=>{try{const u=new URL(base,location.href);u.pathname=u.pathname.replace(/reservar(\.html)?$/,'estado.html').replace(/\/$/,'/estado.html');if(!/estado\.html$/.test(u.pathname))u.pathname=u.pathname.replace(/[^/]*$/,'estado.html');u.search='?c='+c.codigo;u.hash='';return u.href}catch(e){return `${base}?c=${c.codigo}`}})(),plant=(cfg.waReserva||'')+((cfg.waReserva||'').includes('{seguimiento}')?'':'\n\n🔎 Estado de la cita: {seguimiento}');
  const msg=tpl(plant,{seguimiento:seg,cliente:F.cli.nombre,telefono:F.cli.tel,ciudad:F.cli.ciudad,servicio:s.nombre,precio:soles(s.precio),barbero:barbNom(c.barberoId),fecha:fLarga(F.fecha),hora:h12(F.hora),codigo:c.codigo,negocio:cfg.nombre,direccion:cfg.direccion||cfg.ciudad,nota:F.nota,adelanto:soles(adel()),pago:np?'':`Adelanto ${soles(adel())} enviado por Yape (adjunto captura)`});
  shell(`<div class="ok"><b>✅</b><h2>${esc(cfg.txtFinal||'¡Reserva recibida!')}</h2><p style="color:var(--mu)">Tu código</p><div class="code">${esc(c.codigo)}</div></div>
  <div class="card"><div class="res"><span>✂️</span><span><b>${esc(s.nombre)}</b> · ${soles(s.precio)}</span><span>💈</span><span>${esc(barbNom(c.barberoId))}</span><span>📅</span><span>${fLarga(F.fecha)} · ${h12(F.hora)}</span><span>📍</span><span>${esc(cfg.direccion||cfg.ciudad)}</span></div></div>
@@ -456,6 +456,9 @@ const VOZ_F=/(female|mujer|paulina|m[oó]nica|sabina|helena|laura|marisol|luc[i�
 const VOZ_M=/(male|hombre|jorge|pablo|diego|carlos|miguel|juan|ra[uú]l|[aá]lvaro|enrique|antonio|andr[eé]s|alberto|luciano|pedro|jaime|ricardo|tom[aá]s|david|fernando|reed|esd\b)/i;
 function elegirVoz(){const vs=speechSynthesis.getVoices().filter(v=>/^es/i.test(v.lang));const lat=v=>/es[-_](PE|419|MX|US|AR|CO|CL)/i.test(v.lang);
  NR.voice=vs.find(v=>VOZ_M.test(v.name)&&!VOZ_F.test(v.name)&&lat(v))||vs.find(v=>VOZ_M.test(v.name)&&!VOZ_F.test(v.name))||vs.find(v=>!VOZ_F.test(v.name)&&lat(v))||vs.find(v=>!VOZ_F.test(v.name))||vs.find(lat)||vs[0]||null}
+/* Al ocultar al personaje, el toque no debe "atravesarlo" y presionar lo que hay detrás:
+   se descarta el próximo click (el que el celular genera al soltar el dedo). */
+function tragarClick(){const f=e=>{e.stopPropagation();e.preventDefault()};addEventListener('click',f,true);setTimeout(()=>removeEventListener('click',f,true),450)}
 function narrInit(){const c=P.cfg,el=$('#narr');if(!c.narrOn||!el){el?.remove();$('#nArm')?.remove();return}
  if(NR.voz===null)NR.voz=!!c.narrVoz;
  el.innerHTML=`<div class="av" id="nAv"><span class="sp" id="nSp"></span></div><div class="bub" id="nBub"></div>`;
@@ -467,9 +470,11 @@ function narrInit(){const c=P.cfg,el=$('#narr');if(!c.narrOn||!el){el?.remove();
  av.addEventListener('pointerdown',e=>{if(e.target===spb)return;pid=e.pointerId;try{av.setPointerCapture(pid)}catch(_){}const r=el.getBoundingClientRect();ox=r.left;oy=r.top;sx=e.clientX;sy=e.clientY;mov=false});
  av.addEventListener('pointermove',e=>{if(pid!==e.pointerId)return;const dx=e.clientX-sx,dy=e.clientY-sy;if(!mov&&Math.hypot(dx,dy)<8)return;mov=true;el.classList.add('drag');const w=innerWidth,h=innerHeight,x=Math.min(Math.max(2,ox+dx),w-96),y=Math.min(Math.max(2,oy+dy),h-96);
   el.style.left=x+'px';el.style.top=y+'px';el.style.bottom='auto';narrLado(x,y);NR.pos={x:x/w,y:y/h}});
- av.addEventListener('pointerup',e=>{if(pid!==e.pointerId)return;pid=null;el.classList.remove('drag');if(mov){lsSet('narrPos',NR.pos);return}NR.off=true;lsSet('narrOff',true);speechSynthesis?.cancel();clearTimeout(NR.hide);$('#nBub').classList.remove('on');narrEstado()});
+ av.addEventListener('pointerup',e=>{if(pid!==e.pointerId)return;pid=null;el.classList.remove('drag');if(mov){lsSet('narrPos',NR.pos);return}tragarClick();NR.off=true;lsSet('narrOff',true);speechSynthesis?.cancel();NR.audio.pause();clearTimeout(NR.hide);$('#nBub').classList.remove('on');narrEstado()});
+ av.addEventListener('touchend',e=>{if(e.cancelable)e.preventDefault()},{passive:false});
  av.addEventListener('pointercancel',()=>{pid=null;el.classList.remove('drag')});
  addEventListener('resize',narrColoca);
+ addEventListener('click',e=>{if(NR.hablo||NR.sono||NR.off||!NR.voz||e.target.closest?.('#narr,#nArm'))return;NR.hablo=true;if(NR.last&&['hola','holaLink'].includes(NR.lastKey))repetir()},{capture:true});
  addEventListener('pointerdown',()=>{if(NR.unlocked)return;NR.unlocked=true;NR.audio.src='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAABErAAABAAgAZGF0YQAAAAA=';NR.audio.play().then(()=>NR.audio.pause()).catch(()=>{})},{capture:true,once:true});
  $('#nBub').addEventListener('click',()=>$('#nBub').classList.remove('on'));
  badge();narrColoca();narrEstado();
@@ -484,9 +489,9 @@ function show(t,k){if(!t||NR.off)return;const b=$('#nBub'),av=$('#nAv');if(!b)re
  try{speechSynthesis?.cancel()}catch(_){}NR.audio.pause();
  if(!NR.voz){setTimeout(()=>av.classList.remove('talk'),1600);return}
  const tts=()=>{if(!('speechSynthesis' in window)){av.classList.remove('talk');return}try{const u=new SpeechSynthesisUtterance(t.replace(/S\/\s?(\d+(?:\.\d+)?)/g,'$1 soles').replace(/(\d{3}) (\d{3}) (\d{3})/g,'$1, $2, $3').replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu,''));
-  u.lang=NR.voice?.lang||'es-PE';if(NR.voice)u.voice=NR.voice;u.pitch=Math.min(2,Math.max(0,+P.cfg.narrTono||.5));u.rate=(+P.cfg.narrRate||1)*.93;u.onend=()=>av.classList.remove('talk');speechSynthesis.speak(u)}catch(e){}};
+  u.lang=NR.voice?.lang||'es-PE';if(NR.voice)u.voice=NR.voice;u.pitch=Math.min(2,Math.max(0,+P.cfg.narrTono||.5));u.rate=(+P.cfg.narrRate||1)*.93;u.onstart=()=>{NR.sono=true};u.onend=()=>av.classList.remove('talk');speechSynthesis.speak(u)}catch(e){}};
  const ak=k&&P.cfg.narrAudio?.[k];
- if(ak)API.audioUrl(ak).then(u=>{NR.audio.src=u;NR.audio.onended=()=>av.classList.remove('talk');return NR.audio.play()}).catch(tts);else tts()}
+ if(ak)API.audioUrl(ak).then(u=>{NR.audio.src=u;NR.audio.onended=()=>av.classList.remove('talk');return NR.audio.play().then(()=>{NR.sono=true})}).catch(tts);else tts()}
 
 /* =================== INICIO =================== */
 splashInit();

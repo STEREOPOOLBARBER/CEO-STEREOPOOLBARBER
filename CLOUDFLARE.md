@@ -78,3 +78,6 @@ La caja verde de **Nueva cita** acepta (1) el mensaje de un cliente (rellena DNI
 
 ### Política y reprogramación
 ⚙️ Config → **📜 Política**: minutos de tolerancia, hasta cuántas horas antes se puede reprogramar (24 por defecto), cuántas veces (1 por defecto, o «No permitir») y un texto libre. En «Ver estado de cita» el cliente ve la política y el botón **📅 Reprogramar mi cita** solo si faltan al menos esas horas; el servidor vuelve a comprobarlo (`POST /api/publico/cita/:codigo/reprogramar`). Mismo barbero, solo días/horas libres. El panel marca la cita «🔁 Reprogramada (antes …)» y avisa. Prueba: `npm run test:reprog`.
+
+### Página de estado de cita (`estado.html`)
+Página solo para consultar la cita: `estado.html?c=CODIGO` (o escribir el código). Muestra estado, cuenta regresiva, datos, política, mapa, botón de WhatsApp y **Reprogramar** (si faltan ≥ 24 h). Los mensajes de WhatsApp (`{seguimiento}`) ya apuntan aquí; los links viejos `reservar.html?c=` siguen funcionando. Tiene su propia vista previa en WhatsApp («Tu cita en …»).
