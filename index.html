@@ -475,8 +475,8 @@ async function verFoto(k){const v=$('#viewer');v.innerHTML='<img alt=""><button 
 /* =================== AGENDA =================== */
 function contarVisitas(){const m={};S.citas.forEach(c=>{if(c.estado==='atendida'){const k=telKey(c.cliente?.tel);if(k)m[k]=(m[k]||0)+1}});return m}
 function renderAgenda(){
- const all=scope(),dia=all.filter(c=>c.fecha===S.fecha),pv=all.filter(c=>c.estado==='por_validar').length,demo=S.citas.some(c=>c.demo);
- const dias=[];for(let i=-1;i<7;i++)dias.push(addD(hoy(),i));if(!dias.includes(S.fecha))dias.push(S.fecha);
+ const all=scope(),dia=S.fecha==='todos'?all:all.filter(c=>c.fecha===S.fecha),pv=all.filter(c=>c.estado==='por_validar').length,demo=S.citas.some(c=>c.demo);
+ const dias=[];for(let i=-1;i<7;i++)dias.push(addD(hoy(),i));if(S.fecha!=='todos'&&!dias.includes(S.fecha))dias.push(S.fecha);
  const cuenta=f=>all.filter(c=>c.fecha===f&&activa(c)).length;
  const filtros=[];if(S.barbF)filtros.push(`<span class="fchip" onclick="S.barbF='';renderAgenda()">💈 ${esc(barb(S.barbF)?.nombre||'')} ✕</span>`);if(S.filtro!=='todos')filtros.push(`<span class="fchip">${est(S.filtro).i} ${esc(est(S.filtro).t)}</span>`);
  if(filtros.length||S.q)filtros.push(`<span class="fchip x" onclick="limpiar()">✕ Limpiar</span>`);
@@ -484,7 +484,7 @@ function renderAgenda(){
  ${demo&&can('config')?`<div class="banner pu">🧪 <b>Estás viendo datos de ejemplo.</b> Prueba todo libremente; cuando estés listo pon tus datos en ⚙️ Config y borra los ejemplos.<div class="row"><button class="btn sm" onclick="goTab('config')">⚙️ Ir a Config</button><button class="btn sm r" onclick="quitarDemo()">🧹 Quitar ejemplos</button></div></div>`:''}
  ${can('config')&&pagoOn()&&!S.cfg.yapeNum?`<div class="banner">⚠️ Falta tu número de Yape. Sin él, el formulario no cobra el adelanto. <span style="text-decoration:underline;cursor:pointer" onclick="S.open='yape';goTab('config')">Configurar</span></div>`:''}
  <div class="stats">
-  <div class="stat" onclick="setFiltro('todos')"><b style="color:var(--grn)">${dia.filter(c=>activa(c)).length}</b><span>📅 Citas ${S.fecha===hoy()?'de hoy':'del día'}</span></div>
+  <div class="stat" onclick="setFiltro('todos')"><b style="color:var(--grn)">${dia.filter(c=>activa(c)).length}</b><span>📅 Citas ${S.fecha==='todos'?'en total':S.fecha===hoy()?'de hoy':'del día'}</span></div>
   <div class="stat" onclick="verPorValidar()"><b style="color:var(--red)">${pv}</b><span>🟡 Yape por validar</span></div>
   <div class="stat" onclick="setFiltro('confirmada')"><b style="color:var(--blue)">${dia.filter(c=>c.estado==='confirmada'||c.estado==='en_silla').length}</b><span>🔵 Por atender</span></div>
   <div class="stat" onclick="setFiltro('atendida')"><b style="color:var(--pur)">${dia.filter(c=>c.estado==='atendida').length}</b><span>✅ Atendidos</span></div>
@@ -493,7 +493,7 @@ function renderAgenda(){
   <div class="row"><div class="search">🔍<input id="q" placeholder="Buscar nombre, celular, código…" value="${esc(S.q)}" oninput="S.q=this.value;renderLista()">${isAdmin()?`<button class="ibtn bare" onclick="S.showF=!S.showF;renderAgenda()">⚙️</button>`:''}</div></div>
   ${S.showF&&isAdmin()?`<select class="in" style="margin-top:10px" onchange="S.barbF=this.value;renderAgenda()"><option value="">💈 Todos los barberos</option>${S.barberos.map(b=>`<option value="${b.id}" ${S.barbF===b.id?'selected':''}>${esc(b.nombre)}</option>`).join('')}</select>`:''}
   ${filtros.length?`<div class="row" style="margin-top:10px;flex-wrap:wrap">${filtros.join('')}</div>`:''}
-  <div class="days">${dias.map(f=>{const d=pYmd(f),n=cuenta(f);return `<button class="day ${f===S.fecha?'on':''}" onclick="S.fecha='${f}';renderAgenda()">${n?`<i>${n}</i>`:''}<small>${f===hoy()?'Hoy':f===addD(hoy(),1)?'Mañ':DIAS[d.getDay()]}</small><b>${d.getDate()}</b><small>${MESC[d.getMonth()]}</small></button>`}).join('')}<label class="day cal">📅<input type="date" onchange="if(this.value){S.fecha=this.value;renderAgenda()}"></label></div>
+  <div class="days"><button class="day ${S.fecha==='todos'?'on':''}" onclick="S.fecha='todos';renderAgenda()">${all.filter(c=>c.fecha>=hoy()&&activa(c)).length?`<i>${all.filter(c=>c.fecha>=hoy()&&activa(c)).length}</i>`:''}<small>Todos</small><b>📅</b><small>los días</small></button>${dias.map(f=>{const d=pYmd(f),n=cuenta(f);return `<button class="day ${f===S.fecha?'on':''}" onclick="S.fecha='${f}';renderAgenda()">${n?`<i>${n}</i>`:''}<small>${f===hoy()?'Hoy':f===addD(hoy(),1)?'Mañ':DIAS[d.getDay()]}</small><b>${d.getDate()}</b><small>${MESC[d.getMonth()]}</small></button>`}).join('')}<label class="day cal">📅<input type="date" onchange="if(this.value){S.fecha=this.value;renderAgenda()}"></label></div>
   <div class="chiprow"><button class="chip ${S.filtro==='todos'?'on':''}" onclick="tapTodos()">Todos<i class="cc">${dia.filter(c=>c.estado!=='expirada').length}</i></button><div class="chips">${FILTROS.slice(1).map(k=>{const n=['por_validar','pendiente_pago'].includes(k)?all.filter(c=>c.estado===k).length:dia.filter(c=>k==='cancelada'?['cancelada','expirada'].includes(c.estado):c.estado===k).length;return `<button class="chip ${S.filtro===k?'on':''}" onclick="setFiltro('${k}')">${est(k).i} ${esc(est(k).t)}${n?`<i class="cc">${n}</i>`:''}</button>`}).join('')}</div></div>
   <p class="hint" style="margin-top:4px;font-size:11px">Toca 2 veces "Todos" para ver todas las etiquetas</p>
   <div class="tools">${can('dash')?`<button class="tool" title="Clientes" onclick="abrirClientes()">👥</button>`:''}${can('verMontos')?`<button class="tool" title="Caja" onclick="abrirCaja()">📊</button>`:''}<button class="tool" title="Actualizar" onclick="reload().then(()=>toast('🔄 Actualizado'))">🔄</button><button class="tool" title="Ayuda" onclick="ayuda()">📖</button>${can('crear')?`<button class="tool p" title="Nueva cita" onclick="formCita()">➕</button>`:''}${S.cfg.modWalkin&&can('crear')?`<button class="tool pu" title="Cliente sin cita" onclick="walkIn()">⚡</button>`:''}</div>
@@ -525,23 +525,23 @@ function renderNext(){const el=$('#nextBox');if(!el)return;const c=proxima();if(
  ${silla.length?`<p class="hint" style="margin-top:8px">💺 En silla: ${silla.map(x=>`${esc(x.cliente?.nombre?.split(' ')[0]||'')} con ${esc(barb(x.barberoId)?.nombre||'')}${x.enSillaTs?` (${Math.round((Date.now()-x.enSillaTs)/60000)} min)`:''}`).join(' · ')}</p>`:''}</div>`;hydrate(el)}
 function tickCD(){$$('[data-cd]').forEach(e=>{const ts=+e.dataset.cd;e.textContent=cdLabel(ts);e.classList.toggle('late',ts<Date.now()-60000)});$$('[data-cdt]').forEach(e=>e.textContent=falta(+e.dataset.cdt));$$('[data-silla]').forEach(e=>e.textContent=`💺 ${Math.max(1,Math.round((Date.now()-e.dataset.silla)/60000))} min en silla`);if(S.tab==='agenda')renderNext()}
 function tapTodos(){const n=Date.now();if(n-(S._tt||0)<380){S._tt=0;abrirEtiquetas();return}S._tt=n;if(S.filtro!=='todos')setFiltro('todos')}
-function abrirEtiquetas(){const all=scope(),dia=all.filter(c=>c.fecha===S.fecha);
+function abrirEtiquetas(){const all=scope(),dia=S.fecha==='todos'?all:all.filter(c=>c.fecha===S.fecha);
  const rows=FILTROS.map(k=>{const src=k==='todos'?dia.filter(c=>c.estado!=='expirada'):['por_validar','pendiente_pago'].includes(k)?all.filter(c=>c.estado===k):dia.filter(c=>k==='cancelada'?['cancelada','expirada'].includes(c.estado):c.estado===k);
   const e=k==='todos'?{i:'📋',t:'Todos',c:'#8a3ffc'}:est(k),tot=src.reduce((a,c)=>a+(c.gratis?0:+c.precio||0),0);
   return `<button class="et" style="color:${e.c};border-color:${e.c};background:color-mix(in srgb,${e.c} 10%,var(--card))" onclick="closeModal();setFiltro('${k}')"><span>${e.i} ${esc(e.t)}</span><em>${can('verMontos')?'S/ '+tot.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2}):''}</em><b>${src.length}</b></button>`}).join('');
- openModal(`<div class="grab"></div>${mHead('🏷️ Todas las etiquetas')}<p class="hint" style="margin:0 0 14px">Cuentan las citas del <b style="color:var(--tx)">${fLarga(S.fecha)}</b>. «Yape por validar» cuenta todos los días. Toca una para filtrar.</p>${rows}`)}
+ openModal(`<div class="grab"></div>${mHead('🏷️ Todas las etiquetas')}<p class="hint" style="margin:0 0 14px">${S.fecha==='todos'?'Cuentan las citas de <b style="color:var(--tx)">todos los días</b>.':`Cuentan las citas del <b style="color:var(--tx)">${fLarga(S.fecha)}</b>. «Yape por validar» cuenta todos los días.`} Toca una para filtrar.</p>${rows}`)}
 function limpiar(){S.q='';S.barbF='';S.filtro='todos';renderAgenda()}
 function setFiltro(f){S.filtro=f;renderAgenda()}
 function verPorValidar(){if(S.tab!=='agenda')goTab('agenda');S.filtro='por_validar';S.q='';renderAgenda()}
 function renderLista(){
- let cs=scope();const q=S.q.trim().toLowerCase(),global=!!q||['por_validar','pendiente_pago'].includes(S.filtro);
+ let cs=scope();const q=S.q.trim().toLowerCase(),global=!!q||S.fecha==='todos'||['por_validar','pendiente_pago'].includes(S.filtro);
  if(!global)cs=cs.filter(c=>c.fecha===S.fecha);
  if(S.barbF)cs=cs.filter(c=>c.barberoId===S.barbF);
  if(S.filtro==='cancelada')cs=cs.filter(c=>c.estado==='cancelada'||c.estado==='expirada');
  else if(S.filtro!=='todos')cs=cs.filter(c=>c.estado===S.filtro);
  else if(!q)cs=cs.filter(c=>c.estado!=='expirada');
  if(q)cs=cs.filter(c=>[c.cliente?.nombre,c.cliente?.tel,c.cliente?.ciudad,c.codigo,c.servicioNombre].join(' ').toLowerCase().includes(q));
- cs.sort((a,b)=>(a.fecha+a.hora).localeCompare(b.fecha+b.hora));
+ const h0=hoy();cs.sort((a,b)=>{const pa=a.fecha>=h0,pb=b.fecha>=h0;if(pa!==pb)return pa?-1:1;const k=(a.fecha+a.hora).localeCompare(b.fecha+b.hora);return pa?k:-k});
  const el=$('#lista');if(!el)return;
  if(!cs.length){el.innerHTML=`<div class="empty"><b>✂️</b>No hay citas${global?'':' para '+fLarga(S.fecha)}<br><br><button class="btn p" onclick="formCita()">➕ Agendar una cita</button></div>`;return}
  const vis=contarVisitas(),grupos={};cs.forEach(c=>(grupos[c.barberoId]=grupos[c.barberoId]||[]).push(c));
@@ -612,7 +612,7 @@ function formCita(id){const c=id?cita(id):null,cl=c?.cliente||{};
  <div class="g2"><div><label class="lb">Nombre *</label><input class="in" id="fNom" placeholder="Nombre y apellido" value="${esc(cl.nombre||'')}"></div><div><label class="lb">Teléfono</label><input class="in" id="fTel" inputmode="tel" placeholder="9XXXXXXXX" value="${esc(cl.tel||'')}"></div></div>
  <label class="lb">Ciudad / distrito</label><input class="in" id="fCiu" placeholder="Ej: Puente Piedra" value="${esc(cl.ciudad||'')}">
  <div class="g2"><div><label class="lb">Barbero</label><select class="in" id="fBarb" onchange="fillHoras()">${bOpts}</select></div><div><label class="lb">Servicio</label><select class="in" id="fServ" onchange="const s=S.servicios.find(x=>x.id===this.value);if(s&&$('#fPre'))$('#fPre').value=s.precio">${S.servicios.map(s=>`<option value="${s.id}" ${s.id===c?.servicioId?'selected':''}>${s.emoji} ${esc(s.nombre)}</option>`).join('')}</select></div></div>
- <div class="g2"><div><label class="lb">Fecha</label><input type="date" class="in" id="fFecha" value="${c?.fecha||S.fecha}" onchange="fillHoras()"></div><div><label class="lb">Hora</label><select class="in" id="fHora"></select></div></div>
+ <div class="g2"><div><label class="lb">Fecha</label><input type="date" class="in" id="fFecha" value="${c?.fecha||(S.fecha==='todos'?hoy():S.fecha)}" onchange="fillHoras()"></div><div><label class="lb">Hora</label><select class="in" id="fHora"></select></div></div>
  <p class="hint" id="fWarn" style="color:var(--yel);margin-top:4px"></p>
  <div class="g2"><div><label class="lb">Estado</label><select class="in" id="fEst" style="text-transform:uppercase;font-weight:600">${['por_validar','pendiente_pago',...FILTROS.slice(2),'expirada'].filter(k=>c||['confirmada','en_silla','atendida','pendiente_pago','por_validar'].includes(k)).map(k=>`<option value="${k}" ${estSel===k?'selected':''}>${est(k).t.toUpperCase()}</option>`).join('')}</select></div>
   <div><label class="lb">💰 Precio S/</label>${can('verMontos')?`<input class="in" id="fPre" type="number" min="0" step="0.5" value="${c?.precio??(S.servicios.find(s=>s.id===c?.servicioId)||S.servicios[0])?.precio??''}">`:`<input class="in" disabled value="S/ •••">`}</div></div>
