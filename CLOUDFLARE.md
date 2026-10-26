@@ -65,3 +65,10 @@ Pruebas: `test/google.e2e.mjs` y `test/perfiles.ui.mjs` (con GOOGLE_CLIENT_ID de
 
 ### Vista previa de los links (WhatsApp)
 El Worker agrega título, descripción y **logo** (el de ⚙️ Config → Marca) a `reservar.html` e `index.html` (etiquetas Open Graph). Cada tipo de link tiene su texto: reserva, «Tu cita en …» (`?c=`) y «Activa tu huella» (`?huella=`). Nunca incluye datos del cliente. WhatsApp guarda la vista previa en caché: si cambias el logo, un link ya enviado puede tardar en actualizarse (links nuevos salen bien).
+
+### Consulta de DNI (RENIEC vía Shalom API)
+Al escribir los 8 dígitos del DNI, el formulario de reserva y el panel buscan el nombre y lo rellenan (editable). La consulta la hace el Worker; solo se devuelve el **nombre**.
+- Secreto obligatorio: Workers → Settings → Variables and Secrets → **Secret** `SHALOM_API_KEY` (nunca en el código ni en GitHub).
+- Formulario público: máx. 12 consultas / 15 min por IP. Panel: requiere sesión. Resultados en caché 30 días (tabla `dnis`).
+- ⚙️ Config → Seguridad → **🪪 Probar consulta de DNI** muestra la respuesta cruda del servicio para verificar los campos.
+- Pruebas: `npm run test:dni` (con RENIEC simulado; ver cabecera del archivo).

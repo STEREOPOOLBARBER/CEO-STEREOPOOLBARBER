@@ -411,6 +411,7 @@ function expirarLocal(){const cs=lsGet('citas',[]),now=Date.now();let ch=false;c
 const API={
  get remote(){return !!CONFIG.API_URL},
  async req(m,p,b){const r=await fetch(CONFIG.API_URL+p,{method:m,credentials:'same-origin',headers:b?{'Content-Type':'application/json'}:{},body:b?JSON.stringify(b):undefined});const j=await r.json().catch(()=>({}));if(r.status===401){localStorage.removeItem('brb_ses');location.reload()}if(!r.ok)throw new Error(j.error||('Error '+r.status));return j},
+ async dni(d){return this.req('GET','/dni/'+d)},
  async authCfg(){return this.req('GET','/auth/config')},
  async google(credential){return this.req('POST','/auth/google',{credential})},
  async logout(){if(this.remote)await this.req('POST','/auth/logout').catch(()=>{})},
@@ -669,7 +670,7 @@ function formCita(id){const c=id?cita(id):null,cl=c?.cliente||{};
  const estSel=c?.estado||'confirmada';
  openModal(`<div class="grab"></div>`+mHead(c?'✏️ Editar cita':'➕ Nueva cita')+`
  <div class="g2"><div><label class="lb">Nombre *</label><input class="in" id="fNom" placeholder="Nombre y apellido" value="${esc(cl.nombre||'')}"></div><div><label class="lb">Teléfono</label><input class="in" id="fTel" inputmode="tel" placeholder="9XXXXXXXX" value="${esc(cl.tel||'')}"></div></div>
- <div class="g2"><div><label class="lb">DNI (opcional)</label><input class="in" id="fDni" inputmode="numeric" maxlength="8" placeholder="8 dígitos" value="${esc(cl.dni||'')}"></div><div><label class="lb">Ciudad / distrito</label><input class="in" id="fCiu" placeholder="Ej: Puente Piedra" value="${esc(cl.ciudad||'')}"></div></div>
+ <div class="g2"><div><label class="lb">DNI (opcional)</label><input class="in" id="fDni" inputmode="numeric" maxlength="8" placeholder="8 dígitos" value="${esc(cl.dni||'')}" oninput="buscarDniP(this)"><small id="fDniEst" style="color:var(--mu);display:block;min-height:16px;margin-top:4px"></small></div><div><label class="lb">Ciudad / distrito</label><input class="in" id="fCiu" placeholder="Ej: Puente Piedra" value="${esc(cl.ciudad||'')}"></div></div>
  <div class="g2"><div><label class="lb">Barbero</label><select class="in" id="fBarb" onchange="fillHoras()">${bOpts}</select></div><div><label class="lb">Servicio</label><select class="in" id="fServ" onchange="const s=S.servicios.find(x=>x.id===this.value);if(s&&$('#fPre'))$('#fPre').value=s.precio">${S.servicios.map(s=>`<option value="${s.id}" ${s.id===c?.servicioId?'selected':''}>${s.emoji} ${esc(s.nombre)}</option>`).join('')}</select></div></div>
  <div class="g2"><div><label class="lb">Fecha</label><input type="date" class="in" id="fFecha" value="${c?.fecha||(esRango()?hoy():S.fecha)}" onchange="fillHoras()"></div><div><label class="lb">Hora</label><select class="in" id="fHora"></select></div></div>
  <p class="hint" id="fWarn" style="color:var(--yel);margin-top:4px"></p>
@@ -1084,6 +1085,7 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barbero
   ${c.modFidelidad?`<label class="lb">Corte gratis cada</label><input class="in" type="number" min="2" value="${c.fidelidad}" onchange="setN('fidelidad',this.value)">`:''}`)}
  ${acc('seguridad','🔐 Seguridad y respaldo',API.remote?'Accesos, respaldo y pruebas':'PIN admin, exportar, ejemplos',()=>`
   ${API.remote?'<p class="hint" style="margin-top:0">🔒 El acceso es solo con Google. Los dueños se definen en Cloudflare (variable OWNER_EMAILS); barberos y personal, por su correo.</p>':`<label class="lb">PIN de administrador</label><input class="in" inputmode="numeric" maxlength="6" value="${esc(c.adminPin)}" onchange="setC('adminPin',this.value.replace(/\\D/g,''))">`}
+  ${API.remote?`<button class="btn w" style="margin-top:12px" onclick="probarDni()">🪪 Probar consulta de DNI</button>`:''}
   ${API.remote?`<button class="btn w" style="margin-top:12px" onclick="accDueno()">🔑 Mi clave y huella (dueño)</button>`:''}
   ${API.remote?`<div class="g2" style="margin-top:12px"><button class="btn" onclick="probarNube()">🔍 Probar nube</button><button class="btn" onclick="verAccesos()">📜 Registro de accesos</button></div>`:''}
   <div class="g2" style="margin-top:12px"><button class="btn" onclick="exportar()">⬇️ Exportar</button><label class="btn">⬆️ Importar<input type="file" accept=".json" style="display:none" onchange="importar(this)"></label></div>
@@ -1096,6 +1098,16 @@ function resumenCitas(u){const now=Date.now(),act=S.citas.filter(c=>activa(c)&&c
  return (u.barberoId?`📅 ${mias.length} próximas · hoy ${hoyN}${mias[0]?` · siguiente <b style="color:var(--blue)">${falta(startTs(mias[0]))}</b>`:''}`:'')+(creo?`${u.barberoId?' · ':''}✍️ agendó ${creo}`:'')||'Sin citas'}
 function verCitasDe(bid){const b=barb(bid)||D()?.barberos.find(x=>x.id===bid);const now=Date.now(),cs=S.citas.filter(c=>c.barberoId===bid&&activa(c)&&startTs(c)>now-30*60000&&c.estado!=='atendida').sort((a,b)=>startTs(a)-startTs(b));
  openModal(mHead('📅 Citas de '+esc(b?.nombre||''))+(cs.map(c=>`<div class="li"><div class="t"><b>${esc(c.cliente?.nombre)}</b><small>${fLarga(c.fecha)} · ${h12(c.hora)} · ✂️ ${esc(c.servicioNombre)}</small></div><span class="tag cd ${startTs(c)<now?'late':''}">${cdLabel(startTs(c))}</span></div>`).join('')||'<div class="empty"><b>📭</b>Sin citas próximas</div>'))}
+let dniAutoP='';
+async function buscarDniP(inp){const v=inp.value.replace(/\D/g,'');inp.value=v;const est=$('#fDniEst');if(!est)return;
+ if(v.length!==8||!API.remote){est.textContent='';return}
+ est.textContent='🔎 Buscando en RENIEC…';
+ try{const r=await API.dni(v);if($('#fDni')?.value!==v)return;const n=$('#fNom');
+  if(n&&(!n.value.trim()||n.value===dniAutoP)){n.value=r.nombre;dniAutoP=r.nombre}
+  est.textContent='✅ '+r.nombre}
+ catch(e){est.textContent='⚠️ '+e.message}}
+async function probarDni(){const d=prompt('DNI de 8 dígitos para probar la conexión con RENIEC:');if(!d)return;
+ try{const r=await API.req('GET','/dni/'+d.replace(/\D/g,'')+'?crudo=1');alert('Nombre que usará el sistema: '+(r.nombre||'(no se pudo armar)')+'\n\nRespuesta del servicio:\n'+JSON.stringify(r.crudo,null,1).slice(0,1200))}catch(e){alert('❌ '+e.message)}}
 function togUser(id){const u=D().usuarios.find(x=>x.id===id);u.activo=u.activo===false;dirty();renderConfig()}
 function togPB(k){const c=D().cfg;c.permBarbero={...ROLES.barbero.p,...(c.permBarbero||{})};c.permBarbero[k]=!c.permBarbero[k];dirty();renderConfig()}
 function editUser(id){const u=id?D().usuarios.find(x=>x.id===id):{id:'',nombre:'',pin:'',rol:'recepcion',barberoId:'',permisos:{...ROLES.recepcion.p},activo:true};S._u=clone(u);

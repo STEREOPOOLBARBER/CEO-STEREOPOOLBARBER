@@ -49,6 +49,7 @@ const SCHEMA = [
   `CREATE INDEX IF NOT EXISTS ix_passkeys_sujeto ON passkeys(sujeto)`,
   `CREATE TABLE IF NOT EXISTS invitaciones(h TEXT PRIMARY KEY, sujeto TEXT NOT NULL, exp INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS retos(h TEXT PRIMARY KEY, tipo TEXT NOT NULL, sujeto TEXT, exp INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS dnis(dni TEXT PRIMARY KEY, nombre TEXT NOT NULL, ts INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS accesos(id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, via TEXT NOT NULL, quien TEXT, ok INTEGER NOT NULL, motivo TEXT, ip TEXT)`,
 ];
 
@@ -194,6 +195,33 @@ function fotosPublicas(d) {
   for (const v of Object.values(d.cfg)) if (typeof v === 'string' && /^f_[\w-]+$/.test(v)) s.add(v);
   for (const x of [...d.barberos, ...d.servicios]) if (x.foto) s.add(x.foto);
   return s;
+}
+
+/* ---------- consulta de DNI (RENIEC vía Shalom API) ---------- */
+// La clave vive como secreto del Worker (SHALOM_API_KEY); el navegador nunca la ve. Solo se devuelve el nombre.
+const titulo = t => String(t || '').toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (_, a, b) => a + b.toUpperCase()).replace(/\s+/g, ' ').trim();
+function nombreDeReniec(j) {
+  const o = j?.data && typeof j.data === 'object' ? j.data : j?.result && typeof j.result === 'object' ? j.result : j || {};
+  const k = {}; for (const [a, v] of Object.entries(o)) if (typeof v === 'string') k[a.toLowerCase().replace(/[^a-z]/g, '')] = v;
+  const completo = k.nombrecompleto || k.fullname || k.nombrescompletos;
+  if (completo) return titulo(completo);
+  const nombres = k.nombres || k.nombre || k.prenombres || k.firstname || '';
+  const ap = k.apellidopaterno || k.appaterno || k.paterno || k.apellidop || '', am = k.apellidomaterno || k.apmaterno || k.materno || k.apellidom || k.apellidos || '';
+  return titulo(`${nombres} ${ap} ${am}`);
+}
+async function consultarDni(env, dni, crudo = false) {
+  if (!env.SHALOM_API_KEY) fail(503, 'La consulta de DNI no está configurada (falta el secreto SHALOM_API_KEY).');
+  if (!crudo) { const c = await env.DB.prepare('SELECT nombre FROM dnis WHERE dni = ? AND ts > ?').bind(dni, Date.now() - 30 * 864e5).first(); if (c) return { nombre: c.nombre } }
+  let r; try { r = await fetch(`${env.DNI_API_URL || 'https://api.shalom-api.lat'}/account/dni/${dni}`, { headers: { 'x-api-key': env.SHALOM_API_KEY }, signal: AbortSignal.timeout(8000) }) } catch { fail(502, 'No se pudo consultar el DNI ahora. Escribe el nombre a mano.') }
+  if (r.status === 404) fail(404, 'No encontramos ese DNI');
+  if (r.status === 401 || r.status === 403) { console.error('Shalom API: clave rechazada'); fail(502, 'La consulta de DNI no está disponible') }
+  if (r.status === 429) fail(429, 'Muchas consultas, espera un momento');
+  if (!r.ok) fail(502, 'No se pudo consultar el DNI ahora. Escribe el nombre a mano.');
+  const j = await r.json().catch(() => ({}));
+  if (crudo) return { crudo: j, nombre: nombreDeReniec(j) };
+  const nombre = nombreDeReniec(j); if (!nombre) fail(404, 'No encontramos ese DNI');
+  await env.DB.prepare('INSERT INTO dnis(dni, nombre, ts) VALUES(?, ?, ?) ON CONFLICT(dni) DO UPDATE SET nombre = excluded.nombre, ts = excluded.ts').bind(dni, nombre, Date.now()).run();
+  return { nombre };
 }
 
 /* ---------- autenticación ---------- */
@@ -386,6 +414,10 @@ async function api(req, env, path) {
     return json({ ...vistaPublica(d), ocupados: r.results, ts: env.TURNSTILE_SITEKEY || '' });
   }
   let x;
+  if ((x = path.match(/^\/publico\/dni\/(\d{8})$/)) && m === 'GET') {
+    await limitar(env, 'dni:' + ipDe(req), 12, 15 * 60e3);
+    return json(await consultarDni(env, x[1]));
+  }
   if ((x = path.match(/^\/publico\/link\/([\w-]{6,80})$/)) && m === 'GET') {
     const r = await env.DB.prepare('SELECT data FROM links WHERE token = ?').bind(x[1]).first();
     if (!r) return json(null);
@@ -555,6 +587,12 @@ async function api(req, env, path) {
   const exigir = p => { if (!s.perm[p]) fail(403, 'No tienes permiso para esto') };
   const propia = c => { if (!s.perm.verTodas && c.barberoId !== s.barberoId) fail(403, 'No es tu cita') };
 
+  if ((x = path.match(/^\/dni\/(\d{8})$/)) && m === 'GET') {
+    await limitar(env, 'dnip:' + s.nombre, 120, 15 * 60e3);
+    // Con ?crudo=1 el dueño ve la respuesta completa del servicio para comprobar los campos.
+    if (new URL(req.url).searchParams.get('crudo') === '1') { exigir('config'); return json(await consultarDni(env, x[1], true)) }
+    return json(await consultarDni(env, x[1]));
+  }
   if (path === '/acceso' && m === 'GET') {
     exigir('config');
     const [c, h] = await Promise.all([env.DB.prepare('SELECT sujeto FROM claves').all(), env.DB.prepare('SELECT id, sujeto, etiqueta, creada FROM passkeys ORDER BY creada').all()]);
