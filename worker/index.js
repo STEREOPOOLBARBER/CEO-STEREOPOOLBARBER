@@ -279,7 +279,7 @@ function vistaPanel(d, citas, s) {
     usuarios = usuarios.filter(u => u.id === s.uid).map(({ pin, email, ...u }) => u);
   }
   if (!s.perm.verTodas) citas = citas.filter(c => c.barberoId === s.barberoId);
-  if (!s.perm.verTel) citas = citas.map(c => c.cliente?.tel ? { ...c, cliente: { ...c.cliente, tel: '••• ••• ' + String(c.cliente.tel).slice(-3) } } : c);
+  if (!s.perm.verTel) citas = citas.map(c => c.cliente?.tel ? { ...c, cliente: { ...c.cliente, tel: '••• ••• ' + String(c.cliente.tel).slice(-3), dni: undefined } } : c);
   return { cfg, barberos, servicios: d.servicios, usuarios, citas };
 }
 function vistaPublica(d) {
@@ -502,9 +502,10 @@ async function reservar(req, env, b) {
     const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: String(b.turnstile || ''), remoteip: ipDe(req) }) });
     if (!(await r.json()).success) fail(400, 'No pudimos verificar que no eres un robot. Inténtalo de nuevo.');
   }
-  const cliente = { nombre: str(b.cliente?.nombre, 80), tel: String(b.cliente?.tel || '').replace(/\D/g, '').slice(-9), ciudad: str(b.cliente?.ciudad, 60) };
+  const cliente = { nombre: str(b.cliente?.nombre, 80), tel: String(b.cliente?.tel || '').replace(/\D/g, '').slice(-9), dni: String(b.cliente?.dni || '').replace(/\D/g, ''), ciudad: str(b.cliente?.ciudad, 60) };
   if (cliente.nombre.length < 3) fail(400, 'Escribe tu nombre completo');
   if (!/^9\d{8}$/.test(cliente.tel)) fail(400, 'Escribe un WhatsApp válido (9 dígitos, empieza con 9)');
+  if (cliente.dni && cliente.dni.length !== 8) fail(400, 'El DNI debe tener 8 dígitos (o déjalo vacío)');
   if (cliente.ciudad.length < 2) fail(400, 'Escribe tu ciudad o distrito');
 
   await expirar(env);

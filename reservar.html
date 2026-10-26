@@ -283,6 +283,7 @@ function s3(){const s=serv(),np=sinPagoF();
  <div class="card"><div class="res"><span>✂️</span><span><b>${esc(s.nombre)}</b> · ${soles(s.precio)}</span><span>💈</span><span>${esc(barbNom(F.barb))}</span><span>📅</span><span>${fLarga(F.fecha)} · ${h12(F.hora)}</span></div></div>
  <label class="lb">Nombre y apellido *</label><input class="in" id="cNom" autocomplete="name" value="${esc(F.cli.nombre)}">
  <label class="lb">WhatsApp *</label><div class="pre"><span>+51</span><input class="in" id="cTel" inputmode="tel" autocomplete="tel" placeholder="9XXXXXXXX" maxlength="11" value="${esc(F.cli.tel)}"></div>
+ <label class="lb">DNI <small style="color:var(--mu)">(opcional)</small></label><input class="in" id="cDni" inputmode="numeric" maxlength="8" placeholder="8 dígitos" autocomplete="off" value="${esc(F.cli.dni||'')}">
  <label class="lb">Ciudad / distrito *</label><input class="in" id="cCiu" placeholder="Ej: Puente Piedra, Lima" value="${esc(F.cli.ciudad)}">
  <label class="lb">¿Algo que deba saber tu barbero?</label><textarea class="in" id="cNota" rows="2" placeholder="Ej: mid fade, dejar largo arriba">${esc(F.nota)}</textarea>
  <label class="lb">Foto de referencia (opcional)</label>
@@ -291,12 +292,13 @@ function s3(){const s=serv(),np=sinPagoF();
  <div id="ts" style="margin-top:12px"></div><p class="err" id="err"></p>`,
  `<button class="btn" onclick="guardaCli();back()">←</button><button class="btn p" id="bRes" onclick="reservar()">${np?'✅ Reservar':`Reservar y pagar ${soles(adel())} →`}</button>`);
  if(CONFIG.TURNSTILE_SITEKEY)loadTS()}
-function guardaCli(){const g=id=>$(id)?.value.trim()||'';F.cli={nombre:g('#cNom'),tel:g('#cTel').replace(/\D/g,''),ciudad:g('#cCiu')};F.nota=g('#cNota')}
+function guardaCli(){const g=id=>$(id)?.value.trim()||'';F.cli={nombre:g('#cNom'),tel:g('#cTel').replace(/\D/g,''),dni:g('#cDni').replace(/\D/g,''),ciudad:g('#cCiu')};F.nota=g('#cNota')}
 async function refFoto(inp){const f=inp.files[0];if(!f)return;try{F.ref=await compressImg(f,900,.72);$('#refPrev').innerHTML=`<img src="${F.ref}">`}catch(e){toast('❌ '+e.message)}}
 function loadTS(){const r=()=>window.turnstile.render('#ts',{sitekey:CONFIG.TURNSTILE_SITEKEY,theme:'dark',callback:t=>F.ts=t});if(window.turnstile)return r();const s=document.createElement('script');s.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';s.onload=r;document.head.appendChild(s)}
 async function reservar(){if(F.busy)return;guardaCli();const e=$('#err'),c=F.cli;
  if(c.nombre.length<3)return e.textContent='Escribe tu nombre completo';
  if(!/^9\d{8}$/.test(c.tel.slice(-9))||c.tel.length<9)return e.textContent='Escribe un WhatsApp válido (9 dígitos, empieza con 9)';
+ if(c.dni&&c.dni.length!==8)return e.textContent='El DNI debe tener 8 dígitos (o déjalo vacío)';
  if(c.ciudad.length<2)return e.textContent='Escribe tu ciudad o distrito';
  if(!$('#cOk').checked)return e.textContent='Marca la casilla para continuar';
  if(CONFIG.TURNSTILE_SITEKEY&&!F.ts)return e.textContent='Completa la verificación';
