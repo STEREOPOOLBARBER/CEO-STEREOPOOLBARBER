@@ -778,7 +778,7 @@ async function conVistaPrevia(req, env, url) {
   } else {
     titulo = `${nombre} · Reserva tu cita`; desc = 'Elige tu corte, tu barbero y tu horario en 1 minuto. Reserva online 💈✂️';
   }
-  const logo = typeof d.cfg.logoImg === 'string' && fotosPublicas(d).has(d.cfg.logoImg) ? `${url.origin}/api/fotos/${d.cfg.logoImg}` : '';
+  const logo = typeof d.cfg.logoImg === 'string' && fotosPublicas(d).has(d.cfg.logoImg) ? `${url.origin}/api/fotos/${d.cfg.logoImg}` : `${url.origin}/logo.jpg`;
   const tags = [['og:type', 'website'], ['og:site_name', nombre], ['og:title', titulo], ['og:description', desc], ['og:url', url.origin + url.pathname + (q.get('huella') || q.get('c') ? '' : url.search)], ['og:locale', 'es_PE'],
     ...(logo ? [['og:image', logo], ['og:image:alt', `Logo de ${nombre}`], ['twitter:card', 'summary']] : [['twitter:card', 'summary']]), ['twitter:title', titulo], ['twitter:description', desc], ['description', desc]]
     .map(([k, v]) => `<meta ${k.startsWith('og:') ? 'property' : 'name'}="${k}" content="${esc(v)}">`).join('');
