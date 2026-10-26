@@ -25,6 +25,7 @@ const ROL_BARBERO = { verTel: true, crear: true, links: true };
 const SES_MS = 14 * 864e5;
 const COOKIE = 'brb_s';
 const MAX_FOTO = 3 * 1024 * 1024;
+const MAX_AUDIO = 2.5 * 1024 * 1024;
 const DEF = { dias: [1, 2, 3, 4, 5, 6], apertura: '09:00', cierre: '20:00', refIni: '13:00', refFin: '14:00', anticipacion: 0, ventana: 14, modAdelanto: true, yapeNum: '', adelanto: 10, holdMin: 20, bloqueos: [] };
 
 const SCHEMA = [
@@ -165,6 +166,21 @@ async function guardarFoto(env, data, key = 'f_' + uid()) {
   return key;
 }
 // Fotos que el formulario público necesita ver (logo, barberos, servicios…). El resto es privado.
+// Audios del narrador (la voz grabada por el dueño). Se guardan en R2 con clave a_xxx.
+function leerAudio(data) {
+  const m = /^data:(audio\/[a-z0-9.+-]+)(?:;[a-z0-9=.+-]+)*;base64,([A-Za-z0-9+/=]+)$/i.exec(String(data || ''));
+  if (!m || !/^audio\/(wav|x-wav|wave|mpeg|mp3|mp4|x-m4a|aac|ogg|webm|3gpp)$/i.test(m[1])) fail(400, 'Audio no válido');
+  const bin = atob(m[2]); if (bin.length > MAX_AUDIO) fail(413, 'El audio pesa demasiado (máx. 2.5 MB)');
+  const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return { tipo: m[1].toLowerCase(), bytes };
+}
+async function guardarAudio(env, data) {
+  if (!env.FOTOS) fail(503, 'Falta conectar el almacén de fotos (R2). En Cloudflare: Settings → Bindings → agrega R2 con el nombre FOTOS.');
+  const { tipo, bytes } = leerAudio(data), key = 'a_' + uid();
+  await env.FOTOS.put(key, bytes, { httpMetadata: { contentType: tipo } });
+  return key;
+}
+function audiosPublicos(d) { const s = new Set(); for (const v of Object.values(d.cfg.narrAudio || {})) if (typeof v === 'string' && /^a_[\w-]+$/.test(v)) s.add(v); return s }
 function fotosPublicas(d) {
   const s = new Set();
   for (const v of Object.values(d.cfg)) if (typeof v === 'string' && /^f_[\w-]+$/.test(v)) s.add(v);
@@ -350,6 +366,14 @@ async function api(req, env, path) {
     return new Response(o.body, { headers: { 'Content-Type': o.httpMetadata?.contentType || 'image/jpeg', 'Cache-Control': publica ? 'public, max-age=86400' : 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' } });
   }
 
+  if ((x = path.match(/^\/audio\/(a_[\w-]+)$/)) && m === 'GET') {
+    const d = await datos(env);
+    if (!audiosPublicos(d).has(x[1]) && !await sesion(req, env, d)) fail(401, 'Inicia sesión para oír este audio');
+    if (!env.FOTOS) fail(503, 'Falta conectar el almacén de fotos (R2)');
+    const o = await env.FOTOS.get(x[1]); if (!o) fail(404, 'Audio no encontrado');
+    return new Response(o.body, { headers: { 'Content-Type': o.httpMetadata?.contentType || 'audio/wav', 'Cache-Control': 'public, max-age=86400', 'X-Content-Type-Options': 'nosniff' } });
+  }
+
   /* ----- autenticación ----- */
   if (path === '/auth/config' && m === 'GET') return json({ google: env.GOOGLE_CLIENT_ID || '', pin: pinPermitido(env) });
   if (path === '/auth/nonce' && m === 'GET') {
@@ -476,6 +500,7 @@ async function api(req, env, path) {
     exigir('links'); await env.DB.prepare('DELETE FROM links WHERE id = ?').bind(x[1]).run(); return json({ ok: true });
   }
   if (path === '/fotos' && m === 'POST') return json({ key: await guardarFoto(env, (await body()).data) });
+  if (path === '/audio' && m === 'POST') { exigir('config'); return json({ key: await guardarAudio(env, (await body()).data) }) }
 
   /* ----- respaldo completo (migrar desde el modo local) ----- */
   if (path === '/exportar' && m === 'GET') {

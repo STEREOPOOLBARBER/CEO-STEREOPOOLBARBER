@@ -177,8 +177,8 @@ const DEF_CFG={nombre:'Stereo Barber Pool',eslogan:'Barber · Pool · Lima',logo
  waYape:'Hola {cliente} 👋 Para confirmar tu cita del {fecha} a las {hora} falta el adelanto de *{adelanto}* por Yape al *{yape}*. Envíanos la captura por aquí 🙏',
  waVuelve:'Hola {cliente} 👋 ¡Te extrañamos en *{negocio}*, sobrino! Ya toca corte 💈\nReserva aquí: {link}',
  linkBase:'',
- waReserva:'💈 *NUEVA RESERVA* — #{codigo}\n\n👤 {cliente}\n📱 {telefono}\n📍 {ciudad}\n✂️ {servicio} — {precio}\n💈 {barbero}\n📅 {fecha} · {hora}\n💸 {pago}\n📝 {nota}',
- narrOn:true,narrNombre:'Tío Stereo',narrImg:'',narrVoz:false,narrRate:1,narrTono:.5,splashOn:true,splashImg:'',splashMelt:true,
+ waReserva:'💈 *NUEVA RESERVA* — #{codigo}\n\n👤 {cliente}\n📱 {telefono}\n📍 {ciudad}\n✂️ {servicio} — {precio}\n💈 {barbero}\n📅 {fecha} · {hora}\n💸 {pago}\n📝 {nota}\n\n🔎 Estado de la cita: {seguimiento}',
+ narrOn:true,narrNombre:'Tío Stereo',narrImg:'',narrVoz:false,narrRate:1,narrTono:.5,narrAudio:{},splashOn:true,splashImg:'',splashMelt:true,
  narr:{holaLink:'¡Qué tal, sobrino {cliente}! Este link es solo para ti 💪 Elige tu corte.',hola:'¡Qué tal, sobrino! Soy el {narrador} 💪 Elige tu corte y yo te guío.',servicio:'¡Buena elección, sobrino! {servicio}, {precio}. Ahora elige a tu barbero.',barbero:'{barbero} te va a dejar fino, sobrino. {especialidad} 💪',cualquiera:'Tranqui sobrino, te asigno al primero que esté libre. Elige día y hora.',dia:'{fecha}. ¿A qué hora te acomoda, sobrino?',hora:'{fecha} a las {hora} ✅ Ese turno ya es casi tuyo, sobrino.',datos:'Listo {cliente}, yapea {adelanto} al {yape} y sube la captura, sobrino.',listo:'¡Reserva hecha, sobrino {cliente}! Nos vemos el {fecha} a las {hora} 🔥',ocupado:'Uy sobrino, te ganaron ese turno. Elige otro.',vencido:'Se acabó el tiempo, sobrino, pero tranqui: reserva de nuevo.',estado_por_validar:'Tranqui {cliente}, estamos validando tu Yape. En un ratito te confirmo, sobrino.',estado_confirmada:'¡Listo {cliente}! Tu cita está CONFIRMADA: {fecha} a las {hora} con {barbero}. Puntual, sobrino 💪',estado_en_silla:'{cliente}, ya estás en la silla. Relájate que te dejamos fino.',estado_atendida:'¡Corte terminado, {cliente}! Gracias por venir. Cuando quieras repetir, aquí estoy, sobrino.',estado_no_vino:'{cliente}, no llegaste a tu cita. Si quieres, reserva otra vez, sobrino.',estado_cancelada:'Tu cita fue cancelada. Si fue un error, escríbenos por WhatsApp.',estado_expirada:'Se acabó el tiempo para enviar el comprobante, {cliente}. Reserva de nuevo, sobrino.'},
  est:{},adminPin:'1234',bloqueos:[]};
 const DEF_BARB=()=>[['Jhon','Fades y degradados'],['Brayan','Diseños y freestyle'],['Piero','Cortes clásicos'],['Alexis','Barba y perfilado'],['Renzo','Taper y mullet']].map(([n,e],i)=>({id:'b'+(i+1),nombre:n,esp:e,foto:'',color:COLORES[i],pin:String(i+1).repeat(4),comision:50,dias:[1,2,3,4,5,6],activo:true}));
@@ -236,6 +236,7 @@ const API={
  async captura(id,cod,data){if(this.remote)return this.req('POST',`/publico/reservas/${id}/captura`,{codigo:cod,data});
   const cs=expirarLocal(),c=cs.find(x=>x.id===id&&x.codigo===cod);if(!c)throw new Error('Reserva no encontrada');if(c.estado==='expirada')throw new Error('Se venció el tiempo de pago');if(c.estado!=='por_validar'||!c.expira)throw new Error('Esta reserva ya fue procesada');
   const k='f_'+uid();await IDB.put(k,data);c.yapeCaptura=k;c.estado='por_validar';c.expira=null;c.upd=Date.now();lsSet('citas',cs);return{ok:true}},
+ async audioUrl(k){if(NR.cache.has(k))return NR.cache.get(k);let u;if(this.remote){const r=await fetch(`${CONFIG.API_URL}/audio/${k}`);if(!r.ok)throw new Error('audio');u=URL.createObjectURL(await r.blob())}else{u=await IDB.get(k);if(!u)throw new Error('audio')}NR.cache.set(k,u);return u},
  async estado(cod){if(this.remote)return this.req('GET','/publico/cita/'+encodeURIComponent(cod));const c=lsGet('citas',[]).find(x=>x.codigo===String(cod).toUpperCase());if(!c)throw new Error('No encontramos una cita con ese código');const b=lsGet('barberos',[]).find(x=>x.id===c.barberoId);return{codigo:c.codigo,estado:c.estado,fecha:c.fecha,hora:c.hora,servicio:c.servicioNombre,precio:c.precio,adelanto:c.adelanto,adelantoOk:!!c.adelantoOk,barbero:b?.nombre||'',cliente:{nombre:c.cliente?.nombre||''},sinComprobante:c.estado==='por_validar'&&!c.yapeCaptura&&!!c.expira,expira:c.expira||null}},
  async link(t){if(this.remote)return this.req('GET','/publico/link/'+encodeURIComponent(t));return lsGet('links',[]).find(l=>l.token===t)||null},
  async foto(k){if(!k)return'';if(/^(data:|https?:)/.test(k))return k;if(this.remote)return `${CONFIG.API_URL}/fotos/${k}`;return(await IDB.get(k))||''}
@@ -340,11 +341,12 @@ async function enviarCap(){if(F.busy)return;F.busy=true;const b=$('#bCap');b.dis
 function vencido(){clearInterval(timerInt);say('vencido');$('#app').innerHTML=`<div class="ok"><b>⌛</b><h2>Se acabó el tiempo</h2><p style="color:var(--mu)">Tu horario se liberó porque no recibimos el comprobante a tiempo. Puedes volver a reservar.</p></div><div class="foot"><button class="btn p" onclick="reiniciar()">🔄 Reservar de nuevo</button></div>`}
 /* paso 5: listo */
 function s5(){const cfg=P.cfg,s=serv(),c=F.cita,np=!c.expira&&sinPagoF();lsSet('ultima',{codigo:c.codigo,fecha:F.fecha,hora:F.hora});
- const msg=tpl(cfg.waReserva,{cliente:F.cli.nombre,telefono:F.cli.tel,ciudad:F.cli.ciudad,servicio:s.nombre,precio:soles(s.precio),barbero:barbNom(c.barberoId),fecha:fLarga(F.fecha),hora:h12(F.hora),codigo:c.codigo,negocio:cfg.nombre,direccion:cfg.direccion||cfg.ciudad,nota:F.nota,adelanto:soles(adel()),pago:np?'':`Adelanto ${soles(adel())} enviado por Yape (adjunto captura)`});
+ const base=(cfg.linkBase||'').trim()||location.origin+location.pathname,seg=`${base}?c=${c.codigo}`,plant=(cfg.waReserva||'')+((cfg.waReserva||'').includes('{seguimiento}')?'':'\n\n🔎 Estado de la cita: {seguimiento}');
+ const msg=tpl(plant,{seguimiento:seg,cliente:F.cli.nombre,telefono:F.cli.tel,ciudad:F.cli.ciudad,servicio:s.nombre,precio:soles(s.precio),barbero:barbNom(c.barberoId),fecha:fLarga(F.fecha),hora:h12(F.hora),codigo:c.codigo,negocio:cfg.nombre,direccion:cfg.direccion||cfg.ciudad,nota:F.nota,adelanto:soles(adel()),pago:np?'':`Adelanto ${soles(adel())} enviado por Yape (adjunto captura)`});
  shell(`<div class="ok"><b>✅</b><h2>${esc(cfg.txtFinal||'¡Reserva recibida!')}</h2><p style="color:var(--mu)">Tu código</p><div class="code">${esc(c.codigo)}</div></div>
  <div class="card"><div class="res"><span>✂️</span><span><b>${esc(s.nombre)}</b> · ${soles(s.precio)}</span><span>💈</span><span>${esc(barbNom(c.barberoId))}</span><span>📅</span><span>${fLarga(F.fecha)} · ${h12(F.hora)}</span><span>📍</span><span>${esc(cfg.direccion||cfg.ciudad)}</span></div></div>
  <div class="warn">⏳ ${np?'La barbería confirmará tu cita por WhatsApp.':'Validaremos tu Yape y te confirmamos por WhatsApp.'} Toca el botón verde para avisarnos ahora.</div>`,
- `${cfg.whatsapp?`<button class="btn g" onclick="window.open(waUrl('${waNum(cfg.whatsapp)}',MSG),'_blank')">💬 Avisar por WhatsApp</button>`:''}<button class="btn" onclick="verEstado()">📋 Ver estado de mi cita</button><button class="btn" onclick="reiniciar()">＋ Otra</button>`);
+ `${cfg.whatsapp?`<button class="btn g" onclick="window.open(waUrl('${waNum(cfg.whatsapp)}',MSG),'_blank')">💬 Avisar por WhatsApp</button>`:''}<button class="btn" onclick="reiniciar()">＋ Otra</button>`);
  window.MSG=msg}
 /* =================== paso 6: estado de la cita =================== */
 const startOf=(f,h)=>{const[y,m,d]=f.split('-').map(Number),[H,M]=(h||'00:00').split(':').map(Number);return new Date(y,m-1,d,H,M).getTime()};
@@ -412,7 +414,7 @@ function meltSplash(){const sp=$('#splash');if(!sp||SPL.done)return;
 function splashListo(){setTimeout(meltSplash,Math.max(0,1100-(Date.now()-SPL.start)))}
 
 /* =================== NARRADOR =================== */
-const NR={last:'',voz:lsGet('narrVoz',null),off:lsGet('narrOff',false),pos:lsGet('narrPos',null),hide:null,voice:null};
+const NR={last:'',lastKey:'',audio:new Audio(),cache:new Map(),unlocked:false,voz:lsGet('narrVoz',null),off:lsGet('narrOff',false),pos:lsGet('narrPos',null),hide:null,voice:null};
 function nv(){const s=serv(),b=P.barberos.find(x=>x.id===(F.cita?.barberoId||F.barb));return{narrador:P.cfg.narrNombre,servicio:s?.nombre||'',precio:s?soles(s.precio):'',barbero:b?.nombre||'',especialidad:b?.esp||'',fecha:F.fecha?fLarga(F.fecha).toLowerCase():'',hora:F.hora?h12(F.hora):'',cliente:(F.cli.nombre||'').split(' ')[0],adelanto:soles(adel()),yape:(P.cfg.yapeNum||'').replace(/(\d{3})(\d{3})(\d{3})/,'$1 $2 $3'),negocio:P.cfg.nombre}}
 function narrColoca(){const el=$('#narr');if(!el)return;const w=innerWidth,h=innerHeight;let x,y;
  if(NR.pos){x=Math.min(Math.max(2,NR.pos.x*w),w-96);y=Math.min(Math.max(2,NR.pos.y*h),h-96);el.style.left=x+'px';el.style.top=y+'px';el.style.bottom='auto'}
@@ -421,7 +423,7 @@ function narrColoca(){const el=$('#narr');if(!el)return;const w=innerWidth,h=inn
 /* El globo de texto sale hacia el lado con más espacio y nunca se corta. */
 function narrLado(x,y){const el=$('#narr'),b=$('#nBub'),w=innerWidth,izq=x-12,der=w-(x+92)-12,rev=izq>der;el.classList.toggle('rev',rev);el.classList.toggle('top',y<170);if(b)b.style.maxWidth=Math.max(130,Math.min(290,rev?izq:der))+'px'}
 function narrEstado(){const el=$('#narr'),ar=$('#nArm');if(el)el.classList.toggle('off',NR.off);if(ar)ar.style.display=NR.off?'grid':'none'}
-function narrVolver(){NR.off=false;lsSet('narrOff',false);narrEstado();narrColoca();if(NR.last)show(NR.last)}
+function narrVolver(){NR.off=false;lsSet('narrOff',false);narrEstado();narrColoca();if(NR.last)repetir()}
 /* Voz de hombre rudo: se busca una voz masculina en español y se baja el tono. */
 const VOZ_F=/(female|mujer|paulina|m[oó]nica|sabina|helena|laura|marisol|luc[ií]a|mar[ií]a|paloma|elena|esperanza|valentina|camila|dalia|elvira|salome|sof[ií]a|isabela|carmen|rosa|ximena|angelica|catalina|marina|nuria|esf\b)/i;
 const VOZ_M=/(male|hombre|jorge|pablo|diego|carlos|miguel|juan|ra[uú]l|[aá]lvaro|enrique|antonio|andr[eé]s|alberto|luciano|pedro|jaime|ricardo|tom[aá]s|david|fernando|reed|esd\b)/i;
@@ -433,7 +435,7 @@ function narrInit(){const c=P.cfg,el=$('#narr');if(!c.narrOn||!el){el?.remove();
  API.foto(c.narrImg).then(src=>{const u=src||IMG_NARR,i=new Image();i.onload=()=>{$('#nAv').style.backgroundImage=`url("${u}")`};i.onerror=()=>{$('#nAv').insertAdjacentText('afterbegin','💪')};i.src=u});
  const av=$('#nAv'),spb=$('#nSp');let pid=null,sx=0,sy=0,ox=0,oy=0,mov=false;
  spb.addEventListener('pointerdown',e=>e.stopPropagation());
- spb.addEventListener('click',e=>{e.stopPropagation();NR.voz=!NR.voz;lsSet('narrVoz',NR.voz);badge();if(!NR.voz)speechSynthesis?.cancel();else show(NR.last)});
+ spb.addEventListener('click',e=>{e.stopPropagation();NR.voz=!NR.voz;lsSet('narrVoz',NR.voz);badge();if(!NR.voz)speechSynthesis?.cancel();else repetir()});
  /* arrastrar = mover al personaje · tocar sin arrastrar = hacerlo desaparecer (el brazo 💪 de la esquina lo trae de vuelta) */
  av.addEventListener('pointerdown',e=>{if(e.target===spb)return;pid=e.pointerId;try{av.setPointerCapture(pid)}catch(_){}const r=el.getBoundingClientRect();ox=r.left;oy=r.top;sx=e.clientX;sy=e.clientY;mov=false});
  av.addEventListener('pointermove',e=>{if(pid!==e.pointerId)return;const dx=e.clientX-sx,dy=e.clientY-sy;if(!mov&&Math.hypot(dx,dy)<8)return;mov=true;el.classList.add('drag');const w=innerWidth,h=innerHeight,x=Math.min(Math.max(2,ox+dx),w-96),y=Math.min(Math.max(2,oy+dy),h-96);
@@ -441,17 +443,23 @@ function narrInit(){const c=P.cfg,el=$('#narr');if(!c.narrOn||!el){el?.remove();
  av.addEventListener('pointerup',e=>{if(pid!==e.pointerId)return;pid=null;el.classList.remove('drag');if(mov){lsSet('narrPos',NR.pos);return}NR.off=true;lsSet('narrOff',true);speechSynthesis?.cancel();clearTimeout(NR.hide);$('#nBub').classList.remove('on');narrEstado()});
  av.addEventListener('pointercancel',()=>{pid=null;el.classList.remove('drag')});
  addEventListener('resize',narrColoca);
+ addEventListener('pointerdown',()=>{if(NR.unlocked)return;NR.unlocked=true;NR.audio.src='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAABErAAABAAgAZGF0YQAAAAA=';NR.audio.play().then(()=>NR.audio.pause()).catch(()=>{})},{capture:true,once:true});
  $('#nBub').addEventListener('click',()=>$('#nBub').classList.remove('on'));
  badge();narrColoca();narrEstado();
  if('speechSynthesis' in window){elegirVoz();speechSynthesis.onvoiceschanged=elegirVoz}}
 function badge(){const b=$('#nSp');if(b)b.textContent=NR.voz?'🔊':'🔇'}
-function say(k,v){if(!P?.cfg?.narrOn||!$('#nBub'))return;let t=tpl(P.cfg.narr?.[k],v||nv()).trim();if(!t)return;t=t[0].toUpperCase()+t.slice(1);NR.last=t;show(t)}
-function show(t){if(!t||NR.off)return;const b=$('#nBub'),av=$('#nAv');if(!b)return;
+function say(k,v){if(!P?.cfg?.narrOn||!$('#nBub'))return;let t=tpl(P.cfg.narr?.[k],v||nv()).trim();if(!t)return;t=t[0].toUpperCase()+t.slice(1);NR.last=t;NR.lastKey=k;show(t,k)}
+const repetir=()=>show(NR.last,NR.lastKey);
+/* Si el dueño grabó su voz para esa frase, suena la grabación; si no, la voz del celular (grave). */
+function show(t,k){if(!t||NR.off)return;const b=$('#nBub'),av=$('#nAv');if(!b)return;
  b.innerHTML=`<b>${esc(P.cfg.narrNombre||'')}</b>${esc(t)}`;b.classList.add('on');av.classList.add('talk');
  clearTimeout(NR.hide);const ms=Math.max(3500,t.length*65);NR.hide=setTimeout(()=>{b.classList.remove('on');av.classList.remove('talk')},ms);
- if(NR.voz&&'speechSynthesis' in window){try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t.replace(/S\/\s?(\d+(?:\.\d+)?)/g,'$1 soles').replace(/(\d{3}) (\d{3}) (\d{3})/g,'$1, $2, $3').replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu,''));
-  u.lang=NR.voice?.lang||'es-PE';if(NR.voice)u.voice=NR.voice;u.pitch=Math.min(2,Math.max(0,+P.cfg.narrTono||.5));u.rate=(+P.cfg.narrRate||1)*.93;u.onend=()=>av.classList.remove('talk');speechSynthesis.speak(u)}catch(e){}}
- else setTimeout(()=>av.classList.remove('talk'),1600)}
+ try{speechSynthesis?.cancel()}catch(_){}NR.audio.pause();
+ if(!NR.voz){setTimeout(()=>av.classList.remove('talk'),1600);return}
+ const tts=()=>{if(!('speechSynthesis' in window)){av.classList.remove('talk');return}try{const u=new SpeechSynthesisUtterance(t.replace(/S\/\s?(\d+(?:\.\d+)?)/g,'$1 soles').replace(/(\d{3}) (\d{3}) (\d{3})/g,'$1, $2, $3').replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu,''));
+  u.lang=NR.voice?.lang||'es-PE';if(NR.voice)u.voice=NR.voice;u.pitch=Math.min(2,Math.max(0,+P.cfg.narrTono||.5));u.rate=(+P.cfg.narrRate||1)*.93;u.onend=()=>av.classList.remove('talk');speechSynthesis.speak(u)}catch(e){}};
+ const ak=k&&P.cfg.narrAudio?.[k];
+ if(ak)API.audioUrl(ak).then(u=>{NR.audio.src=u;NR.audio.onended=()=>av.classList.remove('talk');return NR.audio.play()}).catch(tts);else tts()}
 
 /* =================== INICIO =================== */
 splashInit();
