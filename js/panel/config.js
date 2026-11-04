@@ -5,7 +5,7 @@ function setC(k,v){D().cfg[k]=v;dirty()}
 function setN(k,v){D().cfg[k]=Math.max(0,+v||0);dirty()}
 function setB(k){D().cfg[k]=!D().cfg[k];dirty();renderConfig()}
 function acc(id,title,sub,body){return `<div class="acc ${S.open===id?'open':''}" id="acc_${id}"><button data-on-click="a6eb6b3e0" data-p0="${id}"><b>${title}<small>${sub}</small></b><i>›</i></button><div><div class="accb">${body()}</div></div></div>`}
-function accTog(id){const el=$('#acc_'+id);if(!el)return;const abrir=!el.classList.contains('open');$$('.acc.open').forEach(x=>x.classList.remove('open'));S.open=abrir?id:'';if(abrir){el.classList.add('open');setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'start'}),320)}}
+function accTog(id){const el=$('#acc_'+id);if(!el)return;const abrir=!el.classList.contains('open');$$('.acc.open').forEach(x=>x.classList.remove('open'));S.open=abrir?id:'';if(abrir){el.classList.add('open');if(id==='waapi')cargarWA();setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'start'}),320)}}
 // Interruptor: recibe el NOMBRE de la función y sus datos (no código), así funciona con la CSP estricta.
 const SW_OK=new Set(['togUser','togPB','togBarb','togServ','setB','togPermU']);
 const sw=(on,f,...a)=>`<button class="sw ${on?'on':''}" data-on-click="a6e350824" data-f="${f}" data-a="${esc(JSON.stringify(a))}"></button>`;
@@ -119,6 +119,7 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barbero
   <p class="hint" style="margin-top:0">Toca una variable para insertarla. Las líneas con variables vacías se ocultan solas.</p>
   ${[['waConfirma','✅ Confirmación'],['waVuelve','💈 Cliente por recuperar'],['waRecuerda','⏰ Recordatorio'],['waYape','💸 Pedir adelanto'],['waGracias','🙏 Agradecimiento'],['waReserva','📥 Aviso de nueva reserva (cliente → tú)']].map(([k,t])=>`<label class="lb">${t}</label><textarea class="in" id="ta_${k}" rows="6" data-on-change="a79203c4c" data-p0="${k}">${esc(c[k])}</textarea><div class="vars">${VARS.map(v=>`<button data-on-click="aa7ec0841" data-p0="${k}" data-p1="${v}">{${v}}</button>`).join('')}<button style="color:var(--mu)" data-on-click="a04fd9758" data-p0="${k}" data-p1="${k}">↺ original</button></div>`).join('')}
   <label class="lb">Vista previa (confirmación)</label><div class="url" style="white-space:pre-wrap;color:var(--tx)">${esc(tplPreview(c.waConfirma))}</div>`)}
+ ${API.remote?acc('waapi','🤖 WhatsApp automático','API oficial de Meta · número nuevo',()=>`<div id="waCfg"><div class="spin"></div></div>`):''}
  ${acc('form','📝 Formulario del cliente','Textos que ve tu cliente',()=>`
   <label class="lb">Título del primer paso</label><input class="in" value="${esc(c.txtBienvenida)}" data-on-change="a5b1dd04e">
   <label class="lb">Mensaje al terminar</label><input class="in" value="${esc(c.txtFinal)}" data-on-change="a3440152d">
@@ -375,3 +376,42 @@ async function borrarTodo(){if(!confirm('¿Borrar TODAS las citas?')||prompt('Es
 /* Campos simples de configuración (sin JavaScript en línea): data-cfg = nombre del campo. */
 ACC.cfgTexto=function(){setC(this.dataset.cfg,this.value.trim())};
 ACC.cfgNumero=function(){setN(this.dataset.cfg,this.value)};
+
+/* ---------- 🤖 WhatsApp automático (API oficial de Meta) ----------
+   Se guarda aparte de la configuración general (el token va cifrado en el servidor y nunca vuelve completo). */
+const WA_TPL={recordatorio:'Hola {{1}} 👋 Te recordamos tu cita en {{2}}: {{3}} a las {{4}} con {{5}}. Confirma que vienes o reprograma aquí: {{6}} ¡Te esperamos!',
+ confirmacion:'Hola {{1}} ✅ Tu cita en {{2}} está confirmada para {{3}} a las {{4}}. Mira el estado de tu cita aquí: {{5}} ¡Gracias por reservar!'};
+async function cargarWA(){const el=$('#waCfg');if(!el)return;let w;try{w=await API.req('GET','/whatsapp/config')}catch(e){el.innerHTML='<p class="hint">❌ '+esc(e.message)+'</p>';return}S._wa=w;
+ const ok=w.conectado?.ok,paso=(n,t)=>`<div class="stp"><b>${n}</b><div>${t}</div></div>`,cp=(t,v)=>`<div class="row" style="margin-top:4px"><code style="flex:1;font-size:11px;word-break:break-all;color:var(--tx)">${esc(v)}</code><button class="btn sm" data-on-click="waCopiar" data-p0="${esc(v)}">📋</button></div>`;
+ el.innerHTML=`<div class="card" style="padding:12px;border-color:${ok?'#3fb950':'var(--line)'}">${ok?`✅ <b>Conectado</b> · ${esc(w.conectado.numero)} · ${esc(w.conectado.nombre)}${w.conectado.calidad?` · calidad ${esc(w.conectado.calidad)}`:''}`:'⚪ <b>Sin conectar.</b> Mientras tanto, los recordatorios funcionan con un toque (⏰ en la agenda).'}</div>
+ <details style="margin-top:10px"><summary class="lb" style="cursor:pointer">📘 Cómo conectar tu número nuevo (una sola vez)</summary>
+ ${paso(1,'Compra un chip nuevo: ese número <b>no puede estar en la app de WhatsApp</b> (ni en WhatsApp Business del celular).')}
+ ${paso(2,'Entra a <b>developers.facebook.com</b> → <b>Mis apps</b> → <b>Crear app</b> → tipo <b>Empresa</b> → agrega el producto <b>WhatsApp</b>. Te pedirá tu cuenta comercial de Meta (Business).')}
+ ${paso(3,'En <b>WhatsApp → Configuración de la API</b>: <b>Agregar número de teléfono</b>, ponle el nombre de la barbería y verifícalo con el código SMS.')}
+ ${paso(4,'Copia el <b>Identificador del número de teléfono</b> (Phone number ID) y el <b>Identificador de la cuenta de WhatsApp Business</b> y pégalos abajo.')}
+ ${paso(5,'Token permanente: en <b>business.facebook.com → Configuración del negocio → Usuarios del sistema</b> crea uno (Administrador), asígnale la app y genera un token con los permisos <b>whatsapp_business_messaging</b> y <b>whatsapp_business_management</b>. Pégalo abajo.')}
+ ${paso(6,'En tu app: <b>Configuración → Básica → Clave secreta de la app</b> (App secret). Pégala abajo.')}
+ ${paso(7,`Webhook (para saber si llegó/leyó y recibir los «sí, voy»): <b>WhatsApp → Configuración</b> → URL de devolución de llamada y token de verificación (guarda primero esta sección para que aparezca el token), y suscríbete a <b>messages</b>.${cp('URL',w.webhook)}${w.verifyToken?cp('Token',w.verifyToken):''}`)}
+ ${paso(8,`Plantillas: en <b>WhatsApp Manager → Plantillas de mensajes</b> crea 2 de categoría <b>Utilidad</b>, idioma <b>Español</b>:<br><b>${esc(w.tplRecordatorio)}</b>${cp('',WA_TPL.recordatorio)}<b>${esc(w.tplConfirmacion)}</b>${cp('',WA_TPL.confirmacion)}<small>Meta las revisa (minutos u horas). Los nombres deben coincidir con los de abajo.</small>`)}
+ ${paso(9,'En <b>WhatsApp Manager</b> agrega un <b>método de pago</b>: Meta cobra cada mensaje de plantilla (centavos de dólar; el precio exacto lo muestra Meta).')}
+ </details>
+ <div class="g2"><div><label class="lb">Phone number ID</label><input class="in" id="waPhone" inputmode="numeric" value="${esc(w.phoneId)}"></div><div><label class="lb">WhatsApp Business Account ID</label><input class="in" id="waWaba" inputmode="numeric" value="${esc(w.wabaId)}"></div></div>
+ <label class="lb">Token de acceso ${w.tokenEnCloudflare?'(definido como secreto en Cloudflare)':''}</label><input class="in" id="waToken" type="password" autocomplete="off" placeholder="${w.token?'Guardado '+esc(w.token)+' · escribe uno nuevo para cambiarlo':'Pega aquí el token permanente'}">
+ <label class="lb">App secret (para verificar el webhook)</label><input class="in" id="waSecreto" type="password" autocomplete="off" placeholder="${w.secreto?'Guardado · escribe uno nuevo para cambiarlo':'Pega aquí la clave secreta de la app'}">
+ <div class="g2"><div><label class="lb">Plantilla de recordatorio</label><input class="in" id="waTplR" value="${esc(w.tplRecordatorio)}"></div><div><label class="lb">Plantilla de confirmación</label><input class="in" id="waTplC" value="${esc(w.tplConfirmacion)}"></div></div>
+ <div class="g2"><div><label class="lb">Idioma de las plantillas</label><input class="in" id="waIdi" value="${esc(w.idioma)}"></div><div><label class="lb">Versión de la API</label><input class="in" id="waVer" value="${esc(w.version)}"></div></div>
+ <label class="lb">Envíos automáticos</label>
+ <label class="chk"><input type="checkbox" id="waA1" ${w.auto.diaAntes?'checked':''}><span>Recordar <b>el día anterior</b> desde las <input class="in" id="waH1" type="time" value="${esc(w.auto.horaDiaAntes)}" style="width:110px;display:inline-block;padding:6px"></span></label>
+ <label class="chk"><input type="checkbox" id="waA2" ${w.auto.dosHoras?'checked':''}><span>Recordar <b>2 horas antes</b></span></label>
+ <label class="chk"><input type="checkbox" id="waA3" ${w.auto.alConfirmar?'checked':''}><span>Avisar <b>«cita confirmada»</b> cuando se valida el Yape de una reserva web</span></label>
+ <button class="btn p w" style="margin-top:12px" data-on-click="waGuardar">💾 Guardar WhatsApp</button>
+ <div class="g2" style="margin-top:8px"><button class="btn" data-on-click="waProbar">🔌 Probar conexión</button><button class="btn" data-on-click="waPrueba">📱 Mensaje de prueba</button></div>
+ ${ok||w.token?`<button class="btn r w" style="margin-top:8px" data-on-click="waDesconectar">Desconectar</button>`:''}
+ <p class="hint">Solo se envían recordatorios a citas <b>confirmadas</b>, una vez por cita. Si el cliente responde «sí» o «voy», su cita queda como <b>👍 Confirmó</b>.</p>`;hydrate(el)}
+ACC.waCopiar=function(){copiar(this.dataset.p0)};
+ACC.waGuardar=async function(){const v=id=>$('#'+id).value.trim();this.disabled=true;
+ try{await API.req('PUT','/whatsapp/config',{phoneId:v('waPhone'),wabaId:v('waWaba'),token:v('waToken'),secreto:v('waSecreto'),tplRecordatorio:v('waTplR'),tplConfirmacion:v('waTplC'),idioma:v('waIdi'),version:v('waVer'),auto:{diaAntes:$('#waA1').checked,horaDiaAntes:v('waH1'),dosHoras:$('#waA2').checked,alConfirmar:$('#waA3').checked}});toast('✅ WhatsApp guardado');await cargarWA()}catch(e){toast('❌ '+e.message)}this.disabled=false};
+ACC.waProbar=async function(){this.disabled=true;try{const r=await API.req('POST','/whatsapp/probar',{});toast(`✅ Conectado: ${r.numero} · ${r.nombre}`);await cargarWA();reload()}catch(e){toast('❌ '+e.message)}this.disabled=false};
+ACC.waPrueba=async function(){const t=prompt('¿A qué celular envío el mensaje de prueba? (debe estar en tu lista de números de prueba de Meta mientras la app esté en desarrollo)');if(!t)return;
+ try{await API.req('POST','/whatsapp/probar',{tel:t});toast('📱 Mensaje de prueba enviado (plantilla hello_world)');await cargarWA()}catch(e){toast('❌ '+e.message)}};
+ACC.waDesconectar=async function(){if(!confirm('¿Desconectar WhatsApp automático? Se borran el token y la clave guardados y se apagan los envíos.'))return;try{await API.req('POST','/whatsapp/desconectar',{});toast('Desconectado');await cargarWA();reload()}catch(e){toast('❌ '+e.message)}};

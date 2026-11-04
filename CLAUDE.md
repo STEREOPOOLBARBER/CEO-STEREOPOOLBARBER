@@ -67,6 +67,12 @@ Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño pru
 - Retención en el cron (`retencion()`), **apagada por defecto**: `retencionMeses` (anonimiza inactivos sin notas) y `capturasDias` (borra capturas de Yape). Caché de DNI se borra a los 30 días.
 - Respaldos en R2 **cifrados** AES-256-GCM (`cifrar`/`descifrar` en `modulos/respaldos.js`; clave = secreto `RESPALDO_CLAVE` o una aleatoria en `kv.claveRespaldo`). La descarga del panel los entrega descifrados.
 
+## WhatsApp
+- **Manual (siempre disponible):** ⏰ en la agenda (citas de mañana y próximas 3 h) → abre WhatsApp con `waRecuerda` y el link de estado; guarda `cita.recordado`.
+- **Automático (API oficial de Meta, `modulos/whatsapp.js`):** configuración en `kv.whatsappApi` (token y app secret **cifrados**, o secretos `WHATSAPP_TOKEN`/`WHATSAPP_APP_SECRET`). Envío solo con **plantillas** (`recordatorio_cita` 6 variables, `cita_confirmada` 5). Cron: día anterior (desde la hora elegida), 2 h antes, confirmación al validar Yape de reservas web; una vez por cita (`cita.wa.<tipo>`), tabla `wa_mensajes` (migración v3). Webhook `/api/whatsapp/webhook` (verify token + firma `X-Hub-Signature-256`): estados (entregado/leído) y respuestas «sí/voy» → `cita.asistencia`.
+- **Confirmar asistencia:** `POST /api/publico/cita/:codigo/confirmar` (botón en `estado.html`) → `cita.asistencia = {ts, via}`; en la agenda «👍 Confirmó que viene».
+- Pruebas con Meta simulado: `WHATSAPP_API_URL` (`test/whatsapp.e2e.mjs`).
+
 ## Rendimiento
 - `GET /api/panel` trae solo la ventana de citas (35 días atrás, 120 adelante, más Yape pendientes). Lo demás: `GET /api/citas/buscar` (filtros y páginas en D1). Clientes usa la ficha del servidor; el Dashboard pide solo el periodo elegido (`traerRango`) más retención y «por recuperar» desde `clientes`; solo el Excel de citas baja toda la historia.
 

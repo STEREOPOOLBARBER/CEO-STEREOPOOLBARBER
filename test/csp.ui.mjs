@@ -24,6 +24,8 @@ await P.click('text=⚙️ Config'); await P.waitForTimeout(400);
 const accs = await P.$$eval('.acc > button', b => b.length);
 for (let i = 0; i < accs; i++) { await P.locator('.acc > button').nth(i).click(); await P.waitForTimeout(150) }
 await revisar(P, `Config (${accs} secciones)`);
+await P.evaluate(() => { S.open = ''; renderConfig() }); await P.locator('#acc_waapi > button').click(); await P.waitForSelector('#waPhone', { timeout: 8000 });
+await revisar(P, 'Config → 🤖 WhatsApp automático'); check('la guía para conectar el número nuevo está en Config', await P.locator('text=Cómo conectar tu número nuevo').count() === 1);
 // interruptor (sw) sin código en texto
 await P.evaluate(() => { S.open = 'barberos'; renderConfig() });
 const antes = await P.evaluate(() => D().barberos[0].activo !== false);
@@ -36,6 +38,8 @@ await P.evaluate(() => editServicio(D().servicios[0].id)); await P.waitForTimeou
 await P.evaluate(() => editUser()); await P.waitForTimeout(300); await revisar(P, 'Nuevo usuario');
 const p0 = await P.evaluate(() => S._u.permisos.dash); await P.locator('#uPerms .sw').nth(7).click(); await P.waitForTimeout(150);
 check('permisos de usuario se cambian (togPermU)', await P.evaluate(() => S._u.rol) === 'personal'); await P.evaluate(() => closeModal());
+await P.evaluate(() => { goTab('agenda') }); await P.waitForTimeout(300);
+await P.click('button[title="Recordatorios por WhatsApp"]'); await P.waitForSelector('text=⏰ Recordatorios'); await revisar(P, 'Recordatorios'); await P.evaluate(() => closeModal());
 await P.evaluate(() => abrirMenu()); await P.waitForTimeout(300); await revisar(P, 'Menú'); await P.evaluate(() => closeModal());
 await P.evaluate(() => abrirCaja()); await P.waitForTimeout(400); await revisar(P, 'Caja'); await P.evaluate(() => closeModal());
 await P.evaluate(() => abrirDash()); await P.waitForSelector('.sheet .dsec', { timeout: 8000 }); await revisar(P, 'Dashboard'); await P.evaluate(() => closeModal());
@@ -56,6 +60,10 @@ await R.locator('[data-on-click][data-p0]').first().click(); await R.waitForTime
 check('reservar avanza al paso 2 con clic', await R.evaluate(() => F.step) === 1);
 await R.locator('[data-on-click][data-p0]').first().click(); await R.waitForTimeout(800); await revisar(R, 'Reservar: día y hora');
 check('reservar avanza al paso 3 con clic', await R.evaluate(() => F.step) === 2);
+// ---- confirmar asistencia desde el link
+const cod = await P.evaluate(async () => (await API.req('POST', '/citas', { fecha: addD(hoy(), 2), hora: '12:00', barberoId: S.barberos[1].id, servicioId: S.servicios[0].id, cliente: { nombre: 'Link Confirma', tel: '987000777' }, estado: 'confirmada' })).codigo);
+const EC = await nueva(); await EC.goto(B + '/estado.html?c=' + cod); await EC.waitForSelector('text=✅ Confirmo que voy', { timeout: 8000 }); await revisar(EC, 'Estado con botón de confirmar');
+await EC.click('text=✅ Confirmo que voy'); await EC.waitForSelector('text=Confirmaste que vienes', { timeout: 8000 }); check('el cliente confirma su asistencia desde el link', true);
 // ---- estado de cita
 const E = await nueva(); await E.goto(B + '/estado.html'); await E.waitForSelector('#cod'); await E.fill('#cod', 'ZZZZZZ'); await E.keyboard.press('Enter'); await E.waitForTimeout(800);
 check('estado.html: Enter busca el código (keydown sin JS en línea)', /No encontramos/i.test(await E.locator('body').innerText())); await revisar(E, 'Estado');

@@ -64,6 +64,7 @@ function pintar(){const c=P.cfg,i=E.info;clearInterval(E.timer);
  shell(`<div class="est"><b class="i">${e.i}</b><h2 style="color:${e.c}">${esc(e.t)}</h2><div class="fl" id="fl" style="color:var(--tx)">${fl()}</div></div>
  <div class="card"><div class="res"><span>🔖</span><span>Código <b>${esc(i.codigo)}</b></span><span>👤</span><span>${esc(i.cliente?.nombre||'')}</span><span>✂️</span><span><b>${esc(i.servicio||'')}</b> · ${soles(i.precio)}</span><span>💈</span><span>${esc(i.barbero||'')}</span><span>📅</span><span>${fLarga(i.fecha)} · ${h12(i.hora)}</span><span>💸</span><span>${pago}</span></div></div>
  ${viva&&c.politicaTxt?`<div class="card" style="font-size:14px;line-height:1.45">📜 <b>Política</b><div style="white-space:pre-line;margin-top:4px">${esc(c.politicaTxt)}</div></div>`:''}
+ ${viva&&API.confirmable(i)?(i.asistencia?`<div class="card" style="text-align:center;color:#3fb950;font-weight:700">👍 Confirmaste que vienes. ¡Te esperamos!</div>`:`<button class="btn p w" style="margin-top:10px;padding:15px;font-size:17px" data-on-click="confirmarAsistencia">✅ Confirmo que voy</button>`):''}
  ${puedeRep(i)?`<button class="btn w" style="margin-top:10px" data-on-click="a998d7b77">📅 Reprogramar mi cita</button><p class="pt" style="text-align:center;margin-top:6px">Puedes cambiarla hasta ${i.horasReprog||24} h antes de tu corte.</p>`:''}
  ${mapaHTML(c)}`,
  `${c.whatsapp?`<button class="btn g" data-on-click="aad98fbcb">💬 Escribir a la barbería</button>`:''}<button class="btn" data-on-click="afbbd1a2b">🔄 Actualizar</button>`);
@@ -91,3 +92,7 @@ async function reprogOk(){const i=E.info;if(!E.rf||!E.rh)return;if(!confirm(`¿C
  const c=(new URLSearchParams(location.search).get('c')||'').trim().toUpperCase();
  if(/^[A-Z0-9]{6}$/.test(c))cargar(c);else pedirCodigo('');
 })();
+
+/* Confirmar asistencia desde el link de la cita (reduce los «no vino»). */
+API.confirmable=i=>startOf(i.fecha,i.hora)-Date.now()>-30*60e3;
+ACC.confirmarAsistencia=async function(){this.disabled=true;try{await API.req('POST','/publico/cita/'+encodeURIComponent(E.codigo)+'/confirmar',{});toast('👍 ¡Listo! Te esperamos');await cargar(E.codigo)}catch(e){this.disabled=false;toast('❌ '+e.message)}};

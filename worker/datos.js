@@ -43,6 +43,10 @@ export const MIGRACIONES = [
     `CREATE INDEX IF NOT EXISTS ix_cli_gasto ON clientes(gasto, tel)`,
     `CREATE INDEX IF NOT EXISTS ix_cli_nombre ON clientes(nombre_n, tel)`,
   ], despues: rehacerClientes },
+  { v: 3, nombre: 'mensajes de WhatsApp', sql: [
+    `CREATE TABLE IF NOT EXISTS wa_mensajes(id TEXT PRIMARY KEY, cita_id TEXT NOT NULL, tipo TEXT NOT NULL, ts INTEGER NOT NULL, estado TEXT NOT NULL DEFAULT 'enviado')`,
+    `CREATE INDEX IF NOT EXISTS ix_wa_cita ON wa_mensajes(cita_id)`,
+  ] },
 ];
 export let schemaListo = null;
 export function asegurarSchema(env) { return schemaListo ||= aplicarMigraciones(env).catch(e => { schemaListo = null; throw e }) }

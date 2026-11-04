@@ -195,7 +195,7 @@ async function boot(){
 }
 async function reload(notify){
  try{const d=await API.load();Object.assign(S,{cfg:mergeCfg(d.cfg),barberos:d.barberos||[],servicios:d.servicios||[],usuarios:d.usuarios||[],citas:(d.citas||[]).map(c=>c.estado==='pendiente_pago'?{...c,estado:'por_validar'}:c)})}catch(e){toast('⚠️ '+e.message);return}
- if(API.remote){const v=API._v;if(v!==S._vPrev){S._vPrev=v;S.extra=new Map();S.rangosOk=new Set();S.hist=null;S.busq=null}S.ventana=API._d?.ventana||null;S.visitas=API._d?.visitas||null;S.primeraFecha=API._d?.primeraFecha||null;mezclar([])}
+ if(API.remote){const v=API._v;if(v!==S._vPrev){S._vPrev=v;S.extra=new Map();S.rangosOk=new Set();S.hist=null;S.busq=null}S.ventana=API._d?.ventana||null;S.visitas=API._d?.visitas||null;S.primeraFecha=API._d?.primeraFecha||null;S.waOk=!!API._d?.wa?.ok;S.waDiaAntes=!!API._d?.wa?.diaAntes;mezclar([])}
  const pm=permsFor(S.ses);if(pm===null){toast('Tu usuario fue desactivado');localStorage.removeItem('brb_ses');return setTimeout(()=>location.reload(),900)}S.perm=pm;
  if(notify&&S.loaded){const nuevas=S.citas.filter(c=>!S.known.has(c.id)&&mine(c)&&c.origen==='web');if(nuevas.length){toast(`🔔 ${nuevas.length} reserva(s) nueva(s)`);navigator.vibrate?.([120,60,120]);beep()}
   const rep=S.citas.filter(c=>c.reprogTs&&mine(c)&&S.known.has(c.id)&&c.reprogTs>(S.repVisto||0));if(rep.length){toast(`🔁 ${rep.map(c=>c.cliente?.nombre?.split(' ')[0]).join(', ')} reprogramó: ${fLarga(rep[0].fecha)} · ${h12(rep[0].hora)}`);navigator.vibrate?.([120,60,120]);beep()}}

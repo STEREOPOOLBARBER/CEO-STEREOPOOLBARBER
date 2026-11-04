@@ -145,3 +145,8 @@ La estructura de la base de datos ahora es **versionada** (`MIGRACIONES` en `wor
 - **Derechos del cliente**: en su ficha → 🔏 Datos personales → **📄 Descargar sus datos** o **🗑️ Anonimizar** (escribiendo ANONIMIZAR). Queda en la bitácora sin su nombre.
 - **Retención** (apagada por defecto): anonimizar clientes inactivos tras 12/24/36 meses y borrar capturas de Yape tras 90/180/365 días.
 - **Respaldos cifrados** (AES-256). Recomendado: crear el secreto `RESPALDO_CLAVE` (texto largo al azar) en Settings → Variables and secrets. Si se cambia esa clave, los respaldos anteriores ya no se pueden abrir (descárgalos antes).
+
+### WhatsApp: recordatorios y confirmación de asistencia
+- **⏰ Recordatorios** (agenda): citas de mañana y de las próximas 3 horas; 💬 abre WhatsApp con el mensaje y el link de la cita. La 🔔 avisa desde las 5 p. m. si faltan recordar.
+- **El cliente confirma** desde el link de su cita («✅ Confirmo que voy») o respondiendo «sí» por WhatsApp → en la agenda: **👍 Confirmó que viene**.
+- **🤖 WhatsApp automático** (⚙️ Config): listo para conectar un **número nuevo** con la API oficial de Meta (guía de 9 pasos en la misma pantalla, con las plantillas para copiar). Recordatorio el día antes, 2 h antes y «cita confirmada» al validar el Yape. Meta cobra cada mensaje de plantilla.

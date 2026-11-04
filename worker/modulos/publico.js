@@ -1,5 +1,5 @@
 import { ACTIVOS, DEF, addD, ahoraLocal, codigo, fail, json, minutosHasta, reglaReprog, slotsDia, str, toMin, trabaja, uid } from '../comun.js';
-import { audiosPublicos, citaPorId, datos, expirar, filaCita, fotosPublicas, guardarCita, guardarFoto, insertarCita } from '../datos.js';
+import { audiosPublicos, bumpStmt, citaPorId, datos, expirar, filaCita, fotosPublicas, guardarCita, guardarFoto, insertarCita } from '../datos.js';
 import { auditar, sesion } from './auth.js';
 import { consultarDni } from './dni.js';
 import { anotarSeg, fichaValida, frenar, ipDe, limitar, nuevaFicha, turnstileOk } from './seguridad.js';
@@ -110,7 +110,7 @@ export async function rutasPublicas(c) {
     if (!r) fail(404, 'No encontramos una cita con ese código');
     const c = filaCita(r), d = await datos(env), b = d.barberos.find(y => y.id === c.barberoId);
     const cfg = { ...DEF, ...d.cfg }, rg = reglaReprog(env, cfg, c);
-    return json({ barberoId: c.barberoId, reprog: c.reprog || 0, puedeReprog: rg.ok, tolerancia: +cfg.tolerancia || 0, horasReprog: +cfg.horasReprog || 24, codigo: c.codigo, estado: c.estado, fecha: c.fecha, hora: c.hora, servicio: c.servicioNombre || '', precio: +c.precio || 0, adelanto: +c.adelanto || 0, adelantoOk: !!c.adelantoOk, barbero: b?.nombre || '', cliente: { nombre: c.cliente?.nombre || '', tel: '••• ••• ' + String(c.cliente?.tel || '').slice(-3) }, sinComprobante: c.estado === 'por_validar' && !c.yapeCaptura && !!c.expira, expira: c.expira ?? null });
+    return json({ asistencia: !!c.asistencia, barberoId: c.barberoId, reprog: c.reprog || 0, puedeReprog: rg.ok, tolerancia: +cfg.tolerancia || 0, horasReprog: +cfg.horasReprog || 24, codigo: c.codigo, estado: c.estado, fecha: c.fecha, hora: c.hora, servicio: c.servicioNombre || '', precio: +c.precio || 0, adelanto: +c.adelanto || 0, adelantoOk: !!c.adelantoOk, barbero: b?.nombre || '', cliente: { nombre: c.cliente?.nombre || '', tel: '••• ••• ' + String(c.cliente?.tel || '').slice(-3) }, sinComprobante: c.estado === 'por_validar' && !c.yapeCaptura && !!c.expira, expira: c.expira ?? null });
   }
   if ((x = path.match(/^\/publico\/cita\/([A-Za-z0-9]{6})\/reprogramar$/)) && m === 'POST') {
     await frenar(env, 'RL_RES', 'rp:' + ipDe(req));
@@ -133,6 +133,19 @@ export async function rutasPublicas(c) {
     await guardarCita(env, c);
     await auditar(env, 'Cliente', 'Reprogramó', c.codigo, `${c.cliente?.nombre || ''} · ${antes.fecha} ${antes.hora} → ${fecha} ${hora}`);
     return json({ ok: true, fecha, hora });
+  }
+  // El cliente confirma que irá (desde el link de su cita): reduce los «no vino».
+  if ((x = path.match(/^\/publico\/cita\/([A-Za-z0-9]{6})\/confirmar$/)) && m === 'POST') {
+    await frenar(env, 'RL_RES', 'cf:' + ipDe(req), [10, 60 * 60e3]);
+    const r = await env.DB.prepare('SELECT * FROM citas WHERE codigo = ?').bind(x[1].toUpperCase()).first();
+    if (!r) fail(404, 'No encontramos una cita con ese código');
+    const c = filaCita(r);
+    if (!['confirmada', 'por_validar'].includes(c.estado) || minutosHasta(env, c.fecha, c.hora) < -30) fail(400, 'Esta cita ya no se puede confirmar');
+    if (!c.asistencia) {
+      await env.DB.batch([env.DB.prepare('UPDATE citas SET data = json_set(data, ?, json(?)) WHERE id = ?').bind('$.asistencia', JSON.stringify({ ts: Date.now(), via: 'link' }), c.id), bumpStmt(env)]);
+      await auditar(env, 'Cliente', 'Confirmó asistencia', c.codigo, 'desde el link de su cita');
+    }
+    return json({ ok: true });
   }
   if (path === '/publico/reservas' && m === 'POST') return reservar(req, env, await body());
   if ((x = path.match(/^\/publico\/reservas\/([\w-]+)\/captura$/)) && m === 'POST') {

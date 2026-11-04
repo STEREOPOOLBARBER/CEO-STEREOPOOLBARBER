@@ -79,8 +79,8 @@ export async function rutasCitas(c) {
       env.DB.prepare(`SELECT * FROM citas WHERE ((fecha BETWEEN ? AND ?) OR estado = 'por_validar')${sb} ORDER BY fecha, hora`).bind(desde, hasta, ...ab).all(),
       env.DB.prepare(`SELECT MIN(fecha) AS f FROM citas WHERE 1 = 1${sb}`).bind(...ab).first(),
     ]);
-    const vis = await visitasPorCliente(env, s, r.results.map(x => x.tel));
-    return json({ ...vistaPanel(d, r.results.map(filaCita), s), v: ver, ventana: { desde, hasta }, visitas: vis, primeraFecha: pri?.f || null });
+    const vis = await visitasPorCliente(env, s, r.results.map(x => x.tel)), wa = (await leerKV(env, ['whatsappApi'])).whatsappApi || {};
+    return json({ ...vistaPanel(d, r.results.map(filaCita), s), v: ver, ventana: { desde, hasta }, visitas: vis, primeraFecha: pri?.f || null, wa: { ok: !!wa.conectado?.ok, diaAntes: !!wa.auto?.diaAntes } });
   }
   if (path === '/citas/buscar' && m === 'GET') {
     return json(await buscarCitas(env, s, Object.fromEntries(new URL(req.url).searchParams)));
