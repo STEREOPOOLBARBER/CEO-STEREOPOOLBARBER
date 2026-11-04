@@ -16,7 +16,9 @@ Sistema de reservas de una barbería en Puente Piedra (Lima, Perú). El dueño n
 | `desarrollo` | `ceo-stereopoolbarber-staging` (`--env staging`) | `stereo-barber-db-staging` / `stereo-barber-fotos-staging` | Probar cambios con datos de prueba |
 | `main` | `ceo-stereopoolbarber` (producción) | `stereo-barber-db` / `stereo-barber-fotos` | Clientes reales |
 
-Flujo: trabajar en `desarrollo` → `npm test` → push → el dueño prueba en staging → se pasa a `main` (merge) → Cloudflare despliega producción. GitHub Actions (`.github/workflows/pruebas.yml`) corre las pruebas en cada push.
+**Por ahora (decisión del dueño): se trabaja directo en `main`** hasta que el sistema se use todos los días. El staging ya está creado y configurado (Worker `ceo-stereopoolbarber-staging`, rama `desarrollo`, `OWNER_EMAILS` puesto) para activarlo más adelante; solo le falta agregar su origen en Google Cloud. Mientras tanto, `npm test` en verde antes de cada push a `main` es obligatorio.
+
+Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño prueba en staging → se pasa a `main` (merge) → Cloudflare despliega producción. GitHub Actions (`.github/workflows/pruebas.yml`) corre las pruebas en cada push.
 
 ## Estructura
 - `index.html` — panel (dueño, barberos, personal). Un solo archivo con su JS; modo nube (`/api`) o local (localStorage, solo demo).
