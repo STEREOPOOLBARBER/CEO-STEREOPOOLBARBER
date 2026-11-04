@@ -1,3 +1,4 @@
+import { rehacerClientes } from './clientes.js';
 import { codigo, fail, json } from '../comun.js';
 import { INSERT_CITA, bump, filaCita, guardarAudio, guardarFoto, kvStmt, paramsCita } from '../datos.js';
 import { auditar, pinPermitido, quienEs } from './auth.js';
@@ -47,6 +48,7 @@ export async function rutasConfig(c) {
     }
     for (const l of (b.links || []).filter(l => l.id && l.token)) await env.DB.prepare('INSERT OR IGNORE INTO links(id, token, creado, data) VALUES(?, ?, ?, ?)').bind(l.id, l.token, l.creado || Date.now(), JSON.stringify(l)).run();
     await bump(env);
+    await rehacerClientes(env);
     return json({ citas: n, omitidas: err, fotos });
   }
 

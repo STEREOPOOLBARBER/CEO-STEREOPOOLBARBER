@@ -10,7 +10,7 @@ for (let d = -700; d < 0; d++) {
   for (const b of ['b1', 'b2', 'b3']) {
     const hs = [...horas].sort(() => azar() - .5).slice(0, 3);
     for (const h of hs) {
-      n++; const data = { cliente: { nombre: n === 5 ? 'Zacarías Antiguo' : nombres[Math.floor(azar() * 10)] + ' ' + ap[Math.floor(azar() * 10)], tel: '9' + String(n % 400).padStart(8, '0'), dni: String(40000000 + n % 400), ciudad: 'Lima' }, servicioNombre: 'Corte clásico', precio: 30, origen: 'panel' };
+      n++; const data = { cliente: { nombre: n === 5 ? 'Zacarías Antiguo' : nombres[Math.floor(azar() * 10)] + ' ' + ap[Math.floor(azar() * 10)], tel: n === 5 ? '999999999' : '9' + String(n % 400).padStart(8, '0'), dni: String(40000000 + n % 400), ciudad: 'Lima' }, servicioNombre: 'Corte clásico', precio: 30, origen: 'panel' };
       rows.push(`('h${n}','H${String(n).padStart(5, '0')}','${f}','${h}','${b}','atendida',NULL,${1700000000000 + n},NULL,'${JSON.stringify(data).replace(/'/g, "''")}')`);
     }
   }

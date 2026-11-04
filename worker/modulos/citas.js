@@ -1,3 +1,4 @@
+import { actualizarCliente, cursorDe, leerCursor, rehacerClientes, sinAcentos, telDe } from './clientes.js';
 import { addD, ahoraLocal, codigo, fail, json, str, uid } from '../comun.js';
 import { bumpStmt, citaPorId, datos, expirar, filaCita, guardarCita, insertarCita, kvStmt, leerKV } from '../datos.js';
 import { auditar, pinPermitido, quienEs } from './auth.js';
@@ -22,8 +23,13 @@ export function enmascarar(s, citas) {
 /* El panel no descarga toda la historia: solo una ventana de días alrededor de hoy (y los Yape pendientes).
    Lo demás se pide por rango, búsqueda o páginas con /citas/buscar. */
 export const VENTANA_ATRAS = 35, VENTANA_ADELANTE = 120;
-export async function visitasPorCliente(env, s) {
+export async function visitasPorCliente(env, s, tels) {
   if (!s.perm.verTel) return {};
+  if (s.perm.verTodas) {
+    const m = {}, ts = [...new Set(tels)].filter(Boolean);
+    for (let i = 0; i < ts.length; i += 90) { const p = ts.slice(i, i + 90), r = await env.DB.prepare(`SELECT tel, visitas FROM clientes WHERE visitas > 0 AND tel IN (${p.map(() => '?').join(',')})`).bind(...p).all(); for (const y of r.results) m[y.tel] = y.visitas }
+    return m;
+  }
   const r = await env.DB.prepare(`SELECT json_extract(data, '$.cliente.tel') AS t, COUNT(*) AS n FROM citas WHERE estado = 'atendida'${s.perm.verTodas ? '' : ' AND barbero_id = ?'} GROUP BY t`).bind(...(s.perm.verTodas ? [] : [s.barberoId])).all();
   const m = {}; for (const x of r.results) { const k = String(x.t || '').replace(/\D/g, '').slice(-9); if (k) m[k] = (m[k] || 0) + x.n }
   return m;
@@ -38,20 +44,25 @@ export async function buscarCitas(env, s, q) {
   if (est.length) { w.push(`estado IN (${est.map(() => '?').join(',')})`); a.push(...est) }
   const txt = String(q.q || '').trim().toLowerCase().slice(0, 60);
   if (txt.length >= 2) {
-    const like = '%' + txt.replace(/[\\%_]/g, m => '\\' + m) + '%';
-    if (s.perm.verTel) { w.push(`(lower(data) LIKE ? ESCAPE '\\' OR lower(codigo) LIKE ? ESCAPE '\\')`); a.push(like, like) }
-    else { w.push(`(lower(json_extract(data, '$.cliente.nombre')) LIKE ? ESCAPE '\\' OR lower(codigo) LIKE ? ESCAPE '\\')`); a.push(like, like) }
+    const esc = t => '%' + t.replace(/[\\%_]/g, m => '\\' + m) + '%', like = esc(txt), sa = esc(sinAcentos(txt));
+    // Sin acentos: «jose» encuentra «José» (vía la ficha de clientes, que guarda el nombre normalizado).
+    if (s.perm.verTel) { w.push(`(lower(data) LIKE ? ESCAPE '\\' OR lower(codigo) LIKE ? ESCAPE '\\' OR tel IN (SELECT tel FROM clientes WHERE buscar LIKE ? ESCAPE '\\'))`); a.push(like, like, sa) }
+    else { w.push(`(lower(json_extract(data, '$.cliente.nombre')) LIKE ? ESCAPE '\\' OR lower(codigo) LIKE ? ESCAPE '\\' OR tel IN (SELECT tel FROM clientes WHERE nombre_n LIKE ? ESCAPE '\\'))`); a.push(like, like, sa) }
   }
+  // Paginación por cursor (sin búsqueda): (fecha, hora, id) > último visto. No se repiten ni saltan citas si alguien agenda mientras se pagina.
+  const cur = txt.length < 2 && q.cursor ? leerCursor(q.cursor) : null;
+  const cw = cur && cur.length === 3 ? ' AND (fecha, hora, id) > (?, ?, ?)' : '';
   const donde = w.length ? ' WHERE ' + w.join(' AND ') : '';
   const lim = Math.min(500, Math.max(1, +q.limit || 50)), off = Math.max(0, +q.offset || 0);
   // Con búsqueda: primero las próximas (de la más cercana a la más lejana) y luego las pasadas (de la más reciente a la más antigua).
-  const orden = txt.length >= 2 ? ` ORDER BY (fecha < ?) , CASE WHEN fecha >= ? THEN fecha || hora END ASC, fecha DESC, hora DESC` : ' ORDER BY fecha, hora';
+  const orden = txt.length >= 2 ? ` ORDER BY (fecha < ?) , CASE WHEN fecha >= ? THEN fecha || hora END ASC, fecha DESC, hora DESC` : ' ORDER BY fecha, hora, id';
   const ordArgs = txt.length >= 2 ? [hoy, hoy] : [];
   const [tot, r] = await Promise.all([
     env.DB.prepare('SELECT COUNT(*) AS n FROM citas' + donde).bind(...a).first(),
-    env.DB.prepare('SELECT * FROM citas' + donde + orden + ' LIMIT ? OFFSET ?').bind(...a, ...ordArgs, lim, off).all(),
+    env.DB.prepare('SELECT * FROM citas' + (donde || ' WHERE 1 = 1') + cw + orden + ' LIMIT ? OFFSET ?').bind(...a, ...(cw ? cur : []), ...ordArgs, lim, cw ? 0 : off).all(),
   ]);
-  return { total: tot.n, items: enmascarar(s, r.results.map(filaCita)), offset: off, limit: lim };
+  const u = r.results.at(-1);
+  return { total: tot.n, items: enmascarar(s, r.results.map(filaCita)), offset: off, limit: lim, siguiente: txt.length < 2 && r.results.length === lim ? cursorDe([u.fecha, u.hora, u.id]) : null };
 }
 
 /* Agenda: panel, búsqueda paginada, configuración del negocio, crear/editar/eliminar e importar citas. */
@@ -64,11 +75,12 @@ export async function rutasCitas(c) {
     if (new URL(req.url).searchParams.get('v') === ver) return json({ same: true, v: ver });
     const h = ahoraLocal(env).fecha, desde = addD(h, -VENTANA_ATRAS), hasta = addD(h, VENTANA_ADELANTE);
     const sb = s.perm.verTodas ? '' : ' AND barbero_id = ?', ab = s.perm.verTodas ? [] : [s.barberoId];
-    const [r, vis] = await Promise.all([
+    const [r, pri] = await Promise.all([
       env.DB.prepare(`SELECT * FROM citas WHERE ((fecha BETWEEN ? AND ?) OR estado = 'por_validar')${sb} ORDER BY fecha, hora`).bind(desde, hasta, ...ab).all(),
-      visitasPorCliente(env, s),
+      env.DB.prepare(`SELECT MIN(fecha) AS f FROM citas WHERE 1 = 1${sb}`).bind(...ab).first(),
     ]);
-    return json({ ...vistaPanel(d, r.results.map(filaCita), s), v: ver, ventana: { desde, hasta }, visitas: vis });
+    const vis = await visitasPorCliente(env, s, r.results.map(x => x.tel));
+    return json({ ...vistaPanel(d, r.results.map(filaCita), s), v: ver, ventana: { desde, hasta }, visitas: vis, primeraFecha: pri?.f || null });
   }
   if (path === '/citas/buscar' && m === 'GET') {
     return json(await buscarCitas(env, s, Object.fromEntries(new URL(req.url).searchParams)));
@@ -96,7 +108,7 @@ export async function rutasCitas(c) {
   }
   if ((x = path.match(/^\/citas\/([\w-]+)$/)) && (m === 'PATCH' || m === 'DELETE')) {
     const c = await citaPorId(env, x[1]); if (!c) fail(404, 'La cita ya no existe'); propia(c);
-    if (m === 'DELETE') { exigir('cancelar'); await env.DB.batch([env.DB.prepare('DELETE FROM citas WHERE id = ?').bind(c.id), bumpStmt(env)]); await auditar(env, quienEs(s), 'Eliminó cita', c.codigo, `${c.cliente?.nombre || ''} · ${c.fecha} ${c.hora}`); return json({ ok: true }) }
+    if (m === 'DELETE') { exigir('cancelar'); await env.DB.batch([env.DB.prepare('DELETE FROM citas WHERE id = ?').bind(c.id), bumpStmt(env)]); await actualizarCliente(env, telDe(c)); await auditar(env, quienEs(s), 'Eliminó cita', c.codigo, `${c.cliente?.nombre || ''} · ${c.fecha} ${c.hora}`); return json({ ok: true }) }
     const { id, codigo: _c, creada, ...patch } = await body();
     if (['cancelada', 'no_vino'].includes(patch.estado)) exigir('cancelar');
     else if ('adelantoOk' in patch) { if (!s.perm.yape && !s.perm.crear) fail(403, 'No tienes permiso para validar pagos') }
@@ -123,6 +135,7 @@ export async function rutasCitas(c) {
         else { await insertarCita(env, { estado: 'confirmada', ...raw, id: uid(), creada: raw.creada || Date.now(), codigo: raw.codigo || codigo() }); n++ }
       } catch { err++ }
     }
+    if (n || u) await rehacerClientes(env);
     return json({ n, u, err });
   }
 }

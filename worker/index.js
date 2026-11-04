@@ -21,6 +21,7 @@ import { HttpError, addD, ahoraLocal, fail, json } from './comun.js';
 import { asegurarSchema, datos, expirar, sembrar } from './datos.js';
 import { rutasAcceso, rutasAuth, sesion } from './modulos/auth.js';
 import { rutasCitas } from './modulos/citas.js';
+import { rutasClientes } from './modulos/clientes.js';
 import { rutasConfig } from './modulos/config.js';
 import { rutasDni } from './modulos/dni.js';
 import { rutasMonitoreo } from './modulos/monitoreo.js';
@@ -54,7 +55,7 @@ async function api(req, env, path) {
   const propia = c => { if (!s.perm.verTodas && c.barberoId !== s.barberoId) fail(403, 'No es tu cita') };
 
   Object.assign(c, { d, s, exigir, propia });
-  for (const r of [rutasDni, rutasAcceso, rutasMonitoreo, rutasCitas, rutasConfig]) { const res = await r(c); if (res) return res }
+  for (const r of [rutasDni, rutasAcceso, rutasMonitoreo, rutasClientes, rutasCitas, rutasConfig]) { const res = await r(c); if (res) return res }
   fail(404, 'Ruta no encontrada');
 }
 

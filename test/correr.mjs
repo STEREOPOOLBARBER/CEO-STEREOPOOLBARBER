@@ -26,6 +26,7 @@ const SUITES = [
   { n: 'notif.ui', vars: PIN, sql: ADMIN, ui: true },
   { n: 'paginacion.e2e', vars: PIN, sql: ADMIN, historial: true },
   { n: 'paginacion.ui', vars: PIN, sql: ADMIN, historial: true, ui: true },
+  { n: 'clientes.e2e', vars: PIN, sql: ADMIN },
   { n: 'auditoria.e2e', vars: PIN, sql: ADMIN },
   { n: 'monitoreo.e2e', vars: { ...PIN, ...DNI, RESPALDO_MIN: '0', SIN_LIMITES_CF: 'false' }, sql: ADMIN, extra: ['--test-scheduled'] },
 ];

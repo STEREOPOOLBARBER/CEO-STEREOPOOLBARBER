@@ -5,6 +5,7 @@ const B = process.env.BASE || 'http://127.0.0.1:8787';
 let ok = 0, bad = 0; const check = (n, c, x = '') => { c ? ok++ : bad++; console.log(`${c ? '✅' : '❌'} ${n} ${c ? '' : x}`) };
 const call = async (m, p, b, c) => { const t0 = Date.now(); const r = await fetch(B + '/api' + p, { method: m, headers: { ...(b ? { 'Content-Type': 'application/json' } : {}), ...(c ? { Cookie: c } : {}), Origin: B }, body: b ? JSON.stringify(b) : undefined }); const tx = await r.text(); let j; try { j = JSON.parse(tx) } catch { j = tx } return { s: r.status, j, ms: Date.now() - t0, kb: Math.round(tx.length / 1024), cookie: (r.headers.get('set-cookie') || '').split(';')[0] } };
 const adm = (await call('POST', '/auth/login', { pin: '5821' })).cookie;
+await call('POST', '/clientes/rehacer', {}, adm); // los datos de prueba se sembraron por SQL
 const tot = await call('GET', '/citas/buscar?limit=1', null, adm);
 let r = await call('GET', '/panel', null, adm);
 console.log(`   total en la base: ${tot.j.total} · el panel bajó ${r.j.citas.length} citas (${r.kb} KB, ${r.ms} ms)`);

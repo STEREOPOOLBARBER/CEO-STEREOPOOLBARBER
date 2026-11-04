@@ -121,3 +121,9 @@ Página solo para consultar la cita: `estado.html?c=CODIGO` (o escribir el códi
 ### Monolito modular (Fase 3 de la arquitectura)
 El servidor dejó de ser un solo archivo de 1 100 líneas: ahora son módulos por área de la barbería (`worker/modulos/`: público, acceso, citas, configuración, DNI, seguridad, monitoreo, respaldos) con un enrutador central. Mismo comportamiento (las 15 suites de pruebas pasan igual).
 La estructura de la base de datos ahora es **versionada** (`MIGRACIONES` en `worker/datos.js`, tabla `_migraciones`): cada cambio futuro se aplica una sola vez y en orden. «🔍 Probar nube» muestra las versiones aplicadas.
+
+### Datos de la barbería (Fase 4)
+- **Ficha de cliente** en su propia tabla: visitas, gastado, faltas, cliente desde, última visita, próxima cita, DNI y celular, más **preferencias de corte** y **notas** que escribe la barbería. Se actualiza sola con cada cita. 👥 Clientes → toca un cliente.
+- **Clientes** ya no descarga toda la historia: lista desde la base de datos con orden (recientes, más visitas, más gasto, A–Z, por recuperar), búsqueda **sin tildes** y «Ver más» por cursor. Desde la ficha: WhatsApp, copiar celular y **➕ Cita** con los datos ya llenos.
+- **Dashboard** pide solo el periodo elegido; retención y «por recuperar» salen de las fichas.
+- Migración **v2** (`citas.tel` + tabla `clientes`), se aplica sola y arma las fichas de todas las citas existentes. Botón «🔄 Reconstruir fichas de clientes» en 🛡️ Monitoreo.

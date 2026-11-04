@@ -28,7 +28,7 @@ Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño pru
   - `index.js` — solo entrada: seguridad común (límite público, mismo origen), migraciones, enrutador por módulos, cron.
   - `comun.js` — constantes, utilidades, hora de Lima y reglas de agenda (`slotsDia`, `trabaja`, `reglaReprog`). Sin dependencias.
   - `datos.js` — D1: **migraciones versionadas** (`MIGRACIONES`), kv, citas (insertar/guardar/expirar), fotos y audios en R2.
-  - `modulos/publico.js` (formulario, estado, reprogramar) · `modulos/auth.js` (Google, puerta, perfiles, clave, huella, accesos) · `modulos/citas.js` (panel, búsqueda paginada, configuración, citas) · `modulos/config.js` (links, fotos, exportar/importar) · `modulos/dni.js` · `modulos/seguridad.js` (límites, Turnstile, ficha) · `modulos/monitoreo.js` · `modulos/respaldos.js`.
+  - `modulos/publico.js` (formulario, estado, reprogramar) · `modulos/auth.js` (Google, puerta, perfiles, clave, huella, accesos) · `modulos/citas.js` (panel, búsqueda paginada, configuración, citas) · `modulos/clientes.js` (ficha de cliente, cursor, búsqueda sin acentos) · `modulos/config.js` (links, fotos, exportar/importar) · `modulos/dni.js` · `modulos/seguridad.js` (límites, Turnstile, ficha) · `modulos/monitoreo.js` · `modulos/respaldos.js`.
   - `vista-previa.js` (tarjetas de WhatsApp) · `webauthn.js` (huella sin librerías).
   - Cada módulo exporta `rutasX(c)`: devuelve una respuesta si la ruta es suya, o nada para que siga el siguiente.
 - **Cambiar la base de datos:** agregar una versión nueva al final de `MIGRACIONES` en `worker/datos.js` (nunca editar una ya publicada). Se aplica sola al arrancar y queda en la tabla `_migraciones`.
@@ -52,8 +52,13 @@ Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño pru
 - Fotos `f_*` públicas solo si están en la configuración; respaldos en R2 `respaldos/` solo con sesión.
 - Consultas SQL siempre con `?` (bind). Escapar todo texto en HTML con `esc()`.
 
+## Datos de la barbería
+- **Ficha de cliente** (tabla `clientes`, clave = últimos 9 dígitos del celular; columna generada `citas.tel` indexada). Se recalcula sola en cada alta/edición/borrado de cita (`actualizarCliente`), con SQL por conjuntos (pocas consultas). `notas` y `prefs` las escribe la barbería y nunca se pisan. `POST /api/clientes/rehacer` la reconstruye entera.
+- **Paginación por cursor** (keyset) en `/api/citas/buscar` (sin texto) y `/api/clientes`: `siguiente` → `cursor`. Con texto, la búsqueda de citas usa páginas de 30.
+- **Búsqueda sin acentos**: `nombre_n` y `buscar` guardan el texto sin tildes (se calcula en JS con `sinAcentos`).
+
 ## Rendimiento
-- `GET /api/panel` trae solo la ventana de citas (35 días atrás, 120 adelante, más Yape pendientes). Lo demás: `GET /api/citas/buscar` (filtros y páginas en D1). Clientes/Dashboard/Excel piden la historia completa con `historial()` solo al abrirse.
+- `GET /api/panel` trae solo la ventana de citas (35 días atrás, 120 adelante, más Yape pendientes). Lo demás: `GET /api/citas/buscar` (filtros y páginas en D1). Clientes usa la ficha del servidor; el Dashboard pide solo el periodo elegido (`traerRango`) más retención y «por recuperar» desde `clientes`; solo el Excel de citas baja toda la historia.
 
 ## Comandos
 ```bash

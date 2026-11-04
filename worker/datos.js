@@ -1,5 +1,6 @@
 import { MAX_AUDIO, MAX_FOTO, codigo, fail, uid } from './comun.js';
 import { pinPermitido } from './modulos/auth.js';
+import { actualizarCliente, rehacerClientes, telDe } from './modulos/clientes.js';
 
 /* ---------- migraciones versionadas de la base de datos ----------
    Cada cambio de estructura es una versión nueva al final de MIGRACIONES (nunca se edita una ya publicada).
@@ -33,6 +34,15 @@ export const MIGRACIONES = [
   `CREATE TABLE IF NOT EXISTS dnis(dni TEXT PRIMARY KEY, nombre TEXT NOT NULL, ts INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS accesos(id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, via TEXT NOT NULL, quien TEXT, ok INTEGER NOT NULL, motivo TEXT, ip TEXT)`,
 ] },
+  { v: 2, nombre: 'ficha de clientes', sql: [
+    `ALTER TABLE citas ADD COLUMN tel TEXT GENERATED ALWAYS AS (substr(replace(replace(replace(replace(replace(coalesce(json_extract(data, '$.cliente.tel'), ''), ' ', ''), '+', ''), '-', ''), '(', ''), ')', ''), -9)) VIRTUAL`,
+    `CREATE INDEX IF NOT EXISTS ix_citas_tel ON citas(tel, fecha)`,
+    `CREATE TABLE IF NOT EXISTS clientes(tel TEXT PRIMARY KEY, nombre TEXT NOT NULL DEFAULT '', nombre_n TEXT NOT NULL DEFAULT '', dni TEXT NOT NULL DEFAULT '', ciudad TEXT NOT NULL DEFAULT '', buscar TEXT NOT NULL DEFAULT '', notas TEXT NOT NULL DEFAULT '', prefs TEXT NOT NULL DEFAULT '', visitas INTEGER NOT NULL DEFAULT 0, gasto REAL NOT NULL DEFAULT 0, faltas INTEGER NOT NULL DEFAULT 0, citas INTEGER NOT NULL DEFAULT 0, primera TEXT, ultima TEXT, prox TEXT, upd INTEGER)`,
+    `CREATE INDEX IF NOT EXISTS ix_cli_ultima ON clientes(ultima, tel)`,
+    `CREATE INDEX IF NOT EXISTS ix_cli_visitas ON clientes(visitas, tel)`,
+    `CREATE INDEX IF NOT EXISTS ix_cli_gasto ON clientes(gasto, tel)`,
+    `CREATE INDEX IF NOT EXISTS ix_cli_nombre ON clientes(nombre_n, tel)`,
+  ], despues: rehacerClientes },
 ];
 export let schemaListo = null;
 export function asegurarSchema(env) { return schemaListo ||= aplicarMigraciones(env).catch(e => { schemaListo = null; throw e }) }
@@ -40,7 +50,11 @@ async function aplicarMigraciones(env) {
   await env.DB.prepare('CREATE TABLE IF NOT EXISTS _migraciones(v INTEGER PRIMARY KEY, nombre TEXT NOT NULL, ts INTEGER NOT NULL)').run();
   const hechas = new Set((await env.DB.prepare('SELECT v FROM _migraciones').all()).results.map(r => r.v));
   for (const mg of MIGRACIONES.filter(x => !hechas.has(x.v)).sort((a, b) => a.v - b.v))
-    await env.DB.batch([...mg.sql.map(q => env.DB.prepare(q)), env.DB.prepare('INSERT OR IGNORE INTO _migraciones(v, nombre, ts) VALUES(?, ?, ?)').bind(mg.v, mg.nombre, Date.now())]);
+  {
+    await env.DB.batch(mg.sql.map(q => env.DB.prepare(q)));
+    if (mg.despues) await mg.despues(env);
+    await env.DB.prepare('INSERT OR IGNORE INTO _migraciones(v, nombre, ts) VALUES(?, ?, ?)').bind(mg.v, mg.nombre, Date.now()).run();
+  }
 }
 
 /* ---------- base de datos ---------- */
@@ -98,7 +112,7 @@ export const esCodigoRepetido = e => /UNIQUE/i.test(e.message) && /codigo/i.test
 
 export async function insertarCita(env, c, extra = []) {
   for (let i = 0; i < 4; i++) {
-    try { await env.DB.batch([env.DB.prepare(INSERT_CITA).bind(...paramsCita(c)), ...extra, bumpStmt(env)]); return c }
+    try { await env.DB.batch([env.DB.prepare(INSERT_CITA).bind(...paramsCita(c)), ...extra, bumpStmt(env)]); await actualizarCliente(env, telDe(c)); return c }
     catch (e) {
       if (esCodigoRepetido(e)) { c.codigo = codigo(); continue }
       if (esTurnoOcupado(e)) fail(409, 'Ese horario ya está ocupado');
@@ -108,8 +122,10 @@ export async function insertarCita(env, c, extra = []) {
   fail(500, 'No se pudo crear la cita');
 }
 export async function guardarCita(env, c) {
+  const ant = await env.DB.prepare('SELECT tel FROM citas WHERE id = ?').bind(c.id).first();
   try { await env.DB.batch([env.DB.prepare(UPDATE_CITA).bind(...paramsCita(c)), bumpStmt(env)]) }
   catch (e) { if (esTurnoOcupado(e)) fail(409, 'Ese horario ya está ocupado'); throw e }
+  await actualizarCliente(env, telDe(c)); if (ant?.tel && ant.tel !== telDe(c)) await actualizarCliente(env, ant.tel);
 }
 export async function citaPorId(env, id) { const r = await env.DB.prepare('SELECT * FROM citas WHERE id = ?').bind(id).first(); return r ? filaCita(r) : null }
 

@@ -6,6 +6,7 @@ let ok = 0, bad = 0; const check = (n, c, x = '') => { c ? ok++ : bad++; console
 const br = await chromium.launch(), ctx = await br.newContext({ viewport: { width: 412, height: 900 }, timezoneId: 'America/Lima' }), P = await ctx.newPage();
 P.on('pageerror', e => console.log('PAGEERR', e.message)); P.on('dialog', d => d.accept());
 const lr = await ctx.request.post(B + '/api/auth/login', { data: { pin: '5821' }, headers: { Origin: B } });
+await ctx.request.post(B + '/api/clientes/rehacer', { data: {}, headers: { Origin: B } }); // datos sembrados por SQL
 await P.goto(B + '/index.html'); await P.evaluate(s => localStorage.setItem('brb_ses', JSON.stringify(s)), await lr.json());
 const t0 = Date.now(); await P.reload(); await P.waitForSelector('#login', { state: 'hidden' }); await P.waitForSelector('#lista');
 console.log(`   panel listo en ${Date.now() - t0} ms con ${await P.evaluate(() => S.citas.length)} citas en memoria`);
@@ -21,8 +22,18 @@ await P.waitForFunction(() => S.citas.some(c => c.fecha.startsWith('2025-03')), 
 await P.waitForTimeout(400);
 check('ir a un mes antiguo (marzo 2025) carga sus citas', /marzo 2025/i.test(await P.locator('#t-agenda').innerText()) && (await P.evaluate(() => scope().filter(enRango).length)) === 279, await P.evaluate(() => scope().filter(enRango).length));
 await P.evaluate(() => { S.fecha = hoy(); S.off = 0; S.dp = 'todo'; abrirDash() }); await P.waitForSelector('.sheet', { timeout: 15000 }); await P.waitForTimeout(800);
-check('el dashboard (todo el historial) usa la historia completa', (await P.evaluate(() => S.hist?.length)) === 6300, await P.evaluate(() => S.hist?.length));
+check('el dashboard «Todo» trae todo el periodo por páginas (sin la ficha de cada cita en memoria antes)', (await P.evaluate(() => S.citas.length)) >= 6300 && /6300 citas|63\d\d citas/.test(await P.locator('.sheet').innerText()), await P.evaluate(() => S.citas.length));
 await P.evaluate(() => closeModal());
 await P.evaluate(() => { S.cajaF = '2025-03-10'; abrirCaja() }); await P.waitForTimeout(1500);
 check('la caja de un día antiguo muestra sus atendidos', /9/.test(await P.locator('.sheet').innerText()));
+await P.evaluate(() => closeModal());
+await P.evaluate(() => { S.cliQ = 'zacarias'; abrirClientes() }); await P.waitForSelector('#cliList >> text=Zacarías Antiguo', { timeout: 8000 });
+check('Clientes busca sin acentos en la base de datos («zacarias» → Zacarías)', true);
+await P.click('#cliList >> text=Zacarías Antiguo'); await P.waitForSelector('#ficPref');
+await P.fill('#ficPref', 'Mid fade, raya al lado'); await P.fill('#ficNot', 'Prefiere a Jhon'); await P.click('text=💾 Guardar ficha'); await P.waitForTimeout(600);
+await P.evaluate(() => { S.cliQ = 'zacarias'; abrirClientes() }); await P.waitForSelector('#cliList >> text=Mid fade', { timeout: 8000 });
+check('la ficha guarda preferencias y se ven en la lista', true);
+await P.evaluate(() => { S.cliQ = ''; S.cliO = 'visitas'; abrirClientes() }); await P.waitForSelector('#cliList >> text=Ver más', { timeout: 8000 });
+const c1 = await P.locator('#cliList .li').count(); await P.click('#cliList >> text=Ver más'); await P.waitForTimeout(1200);
+check('la lista de clientes pagina por cursor («Ver más»)', (await P.locator('#cliList .li').count()) > c1);
 console.log(`\n${ok} OK · ${bad} fallos`); await br.close(); process.exit(bad ? 1 : 0);
