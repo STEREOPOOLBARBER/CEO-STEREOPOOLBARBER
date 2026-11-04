@@ -96,3 +96,12 @@ Página solo para consultar la cita: `estado.html?c=CODIGO` (o escribir el códi
 - **Turnstile** (opcional pero recomendado): crear el widget en Cloudflare → Turnstile, y en el Worker agregar `TURNSTILE_SITEKEY` (Text) y `TURNSTILE_SECRET` (Secret). Protege reservar y la ficha de DNI.
 - **Encabezados**: CSP, HSTS, X-Frame-Options, COOP y Permissions-Policy (micrófono y ubicación solo para la propia página: los usa Config).
 - Pruebas: `npm run test:dni`, `npm run test:turnstile` (con verificador simulado).
+
+### Monitoreo y respaldos (Fase 4)
+- **⚙️ Config → Seguridad → 🛡️ Monitoreo y respaldos**: últimos 14 días de reservas web, consultas DNI, bloqueos (por tipo) e ingresos fallidos; estado de Turnstile, DNI y respaldo.
+- Los bloqueos se cuentan en memoria y se escriben como mucho una vez por minuto (tabla `contadores`, se limpia a los 60 días), así un ataque no llena la base de datos.
+- **Avisos en la 🔔** (solo el dueño): DNI al 80 %/agotado, 50+ bloqueos en el día, 10+ ingresos fallidos en 24 h, respaldo atrasado.
+- **Respaldo automático diario** (cron, desde las 3 a. m. de Lima) en R2 `respaldos/AAAA-MM-DD.json`, privado; se guardan 30 días. Se descarga desde el panel y se restaura con «♻️ Restaurar respaldo». Botón «Crear respaldo ahora».
+- **D1 Time Travel**: Cloudflare además guarda puntos de restauración de la base de datos. Para volver a un momento anterior: `npx wrangler d1 time-travel restore stereo-barber-db --timestamp=2026-11-04T08:00:00Z` (consulta antes con `npx wrangler d1 time-travel info stereo-barber-db`).
+- Errores del Worker: Workers & Pages → ceo-stereopoolbarber → **Observability** (logs activados en `wrangler.jsonc`).
+- Prueba: `npm run test:monitoreo` (arranque con `--test-scheduled --var RESPALDO_MIN:0`).

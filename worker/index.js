@@ -386,8 +386,17 @@ async function limitar(env, clave, max, ventanaMs) {
 const ipDe = req => req.headers.get('CF-Connecting-IP') || 'local';
 /* Límite de Cloudflare (binding de Workers): no escribe en la base de datos y corta antes de tocarla.
    Si el binding no está (p. ej. un despliegue viejo), cae al limitador de D1. */
+/* Contador de bloqueos de seguridad por día y tipo. Se acumula en memoria y se escribe como mucho una vez por minuto,
+   para que un ataque no se convierta en miles de escrituras a la base de datos. */
+const SEG = { pend: new Map(), ult: 0 };
+async function anotarSeg(env, tipo, forzar) {
+  const k = 'seg:' + ahoraLocal(env).fecha + ':' + tipo; SEG.pend.set(k, (SEG.pend.get(k) || 0) + 1);
+  if (!forzar && Date.now() - SEG.ult < 60e3) return;
+  SEG.ult = Date.now(); const lote = [...SEG.pend]; SEG.pend.clear();
+  try { await env.DB.batch(lote.map(([k, n]) => env.DB.prepare('INSERT INTO contadores(k, n) VALUES(?, ?) ON CONFLICT(k) DO UPDATE SET n = n + excluded.n').bind(k, n))) } catch { }
+}
 async function frenar(env, binding, clave, respaldo) {
-  if (env[binding]?.limit) { const { success } = await env[binding].limit({ key: clave }); if (!success) fail(429, 'Demasiadas solicitudes. Espera un minuto.'); return }
+  if (env[binding]?.limit) { const { success } = await env[binding].limit({ key: clave }); if (!success) { await anotarSeg(env, 'limite_' + binding.slice(3).toLowerCase()); fail(429, 'Demasiadas solicitudes. Espera un minuto.') } return }
   if (respaldo) await limitar(env, binding + ':' + clave, respaldo[0], respaldo[1]);
 }
 async function turnstileOk(env, token, ip) {
@@ -417,7 +426,7 @@ async function fichaValida(env, f) {
 async function sumarDni(env, tope) {
   const k = 'dni:' + ahoraLocal(env).fecha;
   const r = await env.DB.prepare('INSERT INTO contadores(k, n) VALUES(?, 1) ON CONFLICT(k) DO UPDATE SET n = n + 1 RETURNING n').bind(k).first();
-  if (tope > 0 && r.n > tope) fail(429, 'Hoy ya se usaron todas las consultas de DNI. Escribe tu nombre a mano.');
+  if (tope > 0 && r.n > tope) { await anotarSeg(env, 'tope_dni'); fail(429, 'Hoy ya se usaron todas las consultas de DNI. Escribe tu nombre a mano.') }
 }
 
 /* ---------- vistas según permisos ---------- */
@@ -504,12 +513,12 @@ async function api(req, env, path) {
   let x;
   if ((x = path.match(/^\/publico\/dni\/(\d{8})$/)) && m === 'GET') {
     await frenar(env, 'RL_DNI', ipDe(req), [10, 60e3]);
-    if (!await fichaValida(env, req.headers.get('X-Ficha'))) fail(403, 'Recarga la página para consultar tu DNI.');
+    if (!await fichaValida(env, req.headers.get('X-Ficha'))) { await anotarSeg(env, 'sin_ficha'); fail(403, 'Recarga la página para consultar tu DNI.') }
     return json(await consultarDni(env, x[1]));
   }
   if (path === '/publico/ficha' && m === 'POST') {
     await frenar(env, 'RL_RES', 'f:' + ipDe(req), [10, 60e3]);
-    if (!await turnstileOk(env, (await body()).turnstile, ipDe(req))) fail(403, 'No pudimos verificar que no eres un robot. Inténtalo de nuevo.');
+    if (!await turnstileOk(env, (await body()).turnstile, ipDe(req))) { await anotarSeg(env, 'robot'); fail(403, 'No pudimos verificar que no eres un robot. Inténtalo de nuevo.') }
     return json(await nuevaFicha(env));
   }
   if ((x = path.match(/^\/publico\/link\/([\w-]{6,80})$/)) && m === 'GET') {
@@ -740,6 +749,47 @@ async function api(req, env, path) {
     const r = await env.DB.prepare('SELECT ts, via, quien, ok, motivo, ip FROM accesos ORDER BY id DESC LIMIT 100').all();
     return json(r.results);
   }
+  if (path === '/seguridad' && m === 'GET') {
+    exigir('config'); await anotarSeg(env, '_', true);
+    const hoy = ahoraLocal(env).fecha, desde = addD(hoy, -13), tsDesde = Date.parse(desde + 'T05:00:00Z');
+    const [cont, acc, web, resp] = await Promise.all([
+      env.DB.prepare("SELECT k, n FROM contadores WHERE (k >= ? AND k LIKE 'seg:%') OR (k >= ? AND k LIKE 'dni:%')").bind('seg:' + desde, 'dni:' + desde).all(),
+      env.DB.prepare("SELECT date(ts / 1000 - 18000, 'unixepoch') AS f, SUM(ok = 0) AS fallos, SUM(ok = 1) AS ok FROM accesos WHERE ts >= ? GROUP BY f").bind(tsDesde).all(),
+      env.DB.prepare("SELECT date(creada / 1000 - 18000, 'unixepoch') AS f, COUNT(*) AS n FROM citas WHERE creada >= ? AND json_extract(data, '$.origen') IN ('web', 'link') GROUP BY f").bind(tsDesde).all(),
+      leerKV(env, ['ultimoRespaldo']),
+    ]);
+    const dias = {}; for (let f = desde; f <= hoy; f = addD(f, 1)) dias[f] = { dni: 0, reservas: 0, ingresos: 0, ingresosFallidos: 0, bloqueos: {} };
+    for (const x of cont.results) { const [t, f, tipo] = x.k.split(':'); if (!dias[f]) continue; if (t === 'dni') dias[f].dni = x.n; else if (tipo !== '_') dias[f].bloqueos[tipo] = x.n }
+    for (const x of acc.results) if (dias[x.f]) { dias[x.f].ingresos = x.ok; dias[x.f].ingresosFallidos = x.fallos }
+    for (const x of web.results) if (dias[x.f]) dias[x.f].reservas = x.n;
+    return json({ dias, ultimoRespaldo: resp.ultimoRespaldo || null, topeDni: +({ ...DEF, ...d.cfg }).dniTopeDia || 0, turnstile: !!env.TURNSTILE_SECRET, shalom: !!env.SHALOM_API_KEY });
+  }
+  // Avisos para el dueño (la campana): saldo de DNI, ataques, respaldo atrasado, intentos de ingreso fallidos.
+  if (path === '/alertas' && m === 'GET') {
+    if (!s.perm.config) return json([]);
+    const hoy = ahoraLocal(env).fecha, tope = +({ ...DEF, ...d.cfg }).dniTopeDia || 0;
+    const [cont, acc, resp] = await Promise.all([
+      env.DB.prepare("SELECT k, n FROM contadores WHERE k = ? OR k LIKE ?").bind('dni:' + hoy, 'seg:' + hoy + ':%').all(),
+      env.DB.prepare('SELECT COUNT(*) AS n FROM accesos WHERE ok = 0 AND ts > ?').bind(Date.now() - 864e5).first(),
+      leerKV(env, ['ultimoRespaldo']),
+    ]);
+    const out = [], dni = cont.results.find(x => x.k === 'dni:' + hoy)?.n || 0, bloq = cont.results.filter(x => x.k.startsWith('seg:') && !x.k.endsWith(':_')).reduce((a, x) => a + x.n, 0);
+    if (tope && dni >= tope * .8) out.push({ k: 'dni_' + hoy + (dni >= tope ? '_full' : ''), i: '🪪', t: dni >= tope ? 'Se acabaron las consultas de DNI de hoy' : `Consultas de DNI al ${Math.round(dni / tope * 100)}%`, s: `${dni} de ${tope}. Puedes subir el tope en ⚙️ Config → Seguridad.` });
+    if (bloq >= 50) out.push({ k: 'seg_' + hoy + '_' + (bloq >= 500 ? 500 : bloq >= 200 ? 200 : 50), i: '🛡️', t: `${bloq} solicitudes bloqueadas hoy`, s: 'Alguien está intentando abusar del formulario o de la API. Ya está frenado; revisa ⚙️ Config → Seguridad.' });
+    if (acc.n >= 10) out.push({ k: 'acc_' + hoy + '_' + (acc.n >= 50 ? 50 : 10), i: '🔐', t: `${acc.n} intentos de ingreso fallidos en 24 h`, s: 'Revisa el registro de accesos en ⚙️ Config → Seguridad.' });
+    const u = resp.ultimoRespaldo; if (!u || u.fecha < addD(hoy, -2)) out.push({ k: 'resp_' + hoy, i: '💾', t: u ? 'El respaldo automático está atrasado' : 'Aún no hay respaldo automático', s: u ? `Último: ${u.fecha}. Crea uno en ⚙️ Config → Seguridad.` : 'Se crea solo cada madrugada; también puedes crearlo ahora en ⚙️ Config → Seguridad.' });
+    return json(out);
+  }
+  if (path === '/respaldos' && m === 'GET') {
+    exigir('excel'); if (!env.FOTOS) fail(503, 'Falta conectar el almacén de fotos (R2)');
+    const l = await env.FOTOS.list({ prefix: 'respaldos/', include: ['customMetadata'] });
+    return json(l.objects.map(o => ({ fecha: o.key.slice(10, 20), bytes: o.size, citas: +(o.customMetadata?.citas || 0) })).sort((a, b) => b.fecha.localeCompare(a.fecha)));
+  }
+  if (path === '/respaldos' && m === 'POST') { exigir('config'); return json(await respaldar(env)) }
+  if ((x = path.match(/^\/respaldos\/(\d{4}-\d{2}-\d{2})$/)) && m === 'GET') {
+    exigir('excel'); const o = await env.FOTOS?.get(`respaldos/${x[1]}.json`); if (!o) fail(404, 'Ese respaldo no existe');
+    return new Response(o.body, { headers: { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="respaldo-${x[1]}.json"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
+  }
   if (path === '/diagnostico' && m === 'GET') {
     exigir('config');
     const out = { db: { ok: false }, fotos: { ok: false } };
@@ -863,7 +913,7 @@ async function api(req, env, path) {
 async function reservar(req, env, b) {
   await frenar(env, 'RL_RES', 'r:' + ipDe(req));
   await limitar(env, 'r:' + ipDe(req), 15, 60 * 60e3);
-  if (!await turnstileOk(env, b.turnstile, ipDe(req))) fail(400, 'No pudimos verificar que no eres un robot. Inténtalo de nuevo.');
+  if (!await turnstileOk(env, b.turnstile, ipDe(req))) { await anotarSeg(env, 'robot'); fail(400, 'No pudimos verificar que no eres un robot. Inténtalo de nuevo.') }
   const cliente = { nombre: str(b.cliente?.nombre, 80), tel: String(b.cliente?.tel || '').replace(/\D/g, '').slice(-9), dni: String(b.cliente?.dni || '').replace(/\D/g, ''), ciudad: str(b.cliente?.ciudad, 60) };
   if (cliente.nombre.length < 3) fail(400, 'Escribe tu nombre completo');
   if (!/^9\d{8}$/.test(cliente.tel)) fail(400, 'Escribe un WhatsApp válido (9 dígitos, empieza con 9)');
@@ -919,6 +969,24 @@ async function reservar(req, env, b) {
   fail(409, 'Ese horario se acaba de ocupar 😕');
 }
 
+/* ---------- respaldos automáticos en R2 (privados: solo el panel con permiso los descarga) ---------- */
+const RESP_DIAS = 30;
+async function respaldar(env) {
+  if (!env.FOTOS) throw new Error('Falta conectar el almacén de fotos (R2)');
+  const [d, c, l] = await Promise.all([datos(env), env.DB.prepare('SELECT * FROM citas').all(), env.DB.prepare('SELECT data FROM links').all()]);
+  const fecha = ahoraLocal(env).fecha, cuerpo = JSON.stringify({ v: 4, fecha: new Date().toISOString(), ...d, citas: c.results.map(filaCita), links: l.results.map(r => JSON.parse(r.data)) });
+  await env.FOTOS.put(`respaldos/${fecha}.json`, cuerpo, { httpMetadata: { contentType: 'application/json' }, customMetadata: { citas: String(c.results.length) } });
+  await env.DB.batch([kvStmt(env, 'ultimoRespaldo', { fecha, ts: Date.now(), citas: c.results.length, bytes: cuerpo.length })]);
+  // borrar los que pasaron los 30 días
+  const viejos = (await env.FOTOS.list({ prefix: 'respaldos/' })).objects.filter(o => o.key.slice(10, 20) < addD(fecha, -RESP_DIAS)).map(o => o.key);
+  if (viejos.length) await env.FOTOS.delete(viejos);
+  return { fecha, citas: c.results.length, bytes: cuerpo.length };
+}
+async function respaldoDiario(env) {
+  const a = ahoraLocal(env), u = (await leerKV(env, ['ultimoRespaldo'])).ultimoRespaldo;
+  if (a.min >= (env.RESPALDO_MIN ?? 3 * 60) && u?.fecha !== a.fecha) await respaldar(env);
+}
+
 /* ---------- entrada ---------- */
 /* Vista previa de los links (WhatsApp, Telegram, etc.): título, descripción y logo del negocio.
    Solo usa datos públicos; nunca incluye nombres de clientes ni códigos. */
@@ -965,7 +1033,10 @@ export default {
   async scheduled(_ev, env) {
     await asegurarSchema(env);
     await expirar(env);
+    try { await respaldoDiario(env) } catch (e) { console.error('respaldo', e) }
+    const corte = addD(ahoraLocal(env).fecha, -60);
     await env.DB.batch([
+      env.DB.prepare("DELETE FROM contadores WHERE (k LIKE 'seg:%' AND k < ?) OR (k LIKE 'dni:%' AND k < ?)").bind('seg:' + corte, 'dni:' + corte),
       env.DB.prepare('DELETE FROM sesiones WHERE exp < ?').bind(Date.now()),
       env.DB.prepare('DELETE FROM intentos WHERE ts < ?').bind(Date.now() - 864e5),
       env.DB.prepare('DELETE FROM nonces WHERE exp < ?').bind(Date.now()),

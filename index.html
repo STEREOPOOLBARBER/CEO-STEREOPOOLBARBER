@@ -504,6 +504,7 @@ async function reload(notify){
  if(notify&&S.loaded){const nuevas=S.citas.filter(c=>!S.known.has(c.id)&&mine(c)&&c.origen==='web');if(nuevas.length){toast(`🔔 ${nuevas.length} reserva(s) nueva(s)`);navigator.vibrate?.([120,60,120]);beep()}
   const rep=S.citas.filter(c=>c.reprogTs&&mine(c)&&S.known.has(c.id)&&c.reprogTs>(S.repVisto||0));if(rep.length){toast(`🔁 ${rep.map(c=>c.cliente?.nombre?.split(' ')[0]).join(', ')} reprogramó: ${fLarga(rep[0].fecha)} · ${h12(rep[0].hora)}`);navigator.vibrate?.([120,60,120]);beep()}}
  S.repVisto=Math.max(S.repVisto||0,...S.citas.map(c=>c.reprogTs||0));
+ cargarAlertas();
  S.known=new Set(S.citas.map(c=>c.id));S.loaded=true;if(!S.dirty)applyTheme(S.cfg);renderHeader();renderProx();
  if(S.tab==='agenda'&&document.activeElement?.id==='q')renderLista();else if(S.tab==='agenda')renderTab();
 }
@@ -622,19 +623,21 @@ function notifs(){const now=Date.now(),H=48*3600e3,out=[];
   if(c.reprogTs&&c.reprogTs>now-H&&activa(c))out.push({k:'r_'+c.id+'_'+c.reprogTs,ts:c.reprogTs,i:'🔁',t:'Reprogramó — '+nm,s:`Ahora ${cu}${c.reprogDe?` · antes ${fLarga(c.reprogDe.fecha)} ${h12(c.reprogDe.hora)}`:''}`,c,tipo:'reprog'});
   if(c.estado==='confirmada'&&st>now&&st-now<=60*60e3)out.push({k:'p_'+c.id+'_'+c.fecha+c.hora,ts:st-60*60e3,i:'⏰',t:`Cita ${falta(st)} — ${nm}`,s:`${h12(c.hora)} · ${bn} · ✂️ ${c.servicioNombre||''}`,c,tipo:'prox'});
   if(['cancelada','no_vino'].includes(c.estado)&&(c.upd||0)>now-H&&st>now-24*3600e3)out.push({k:'x_'+c.id+'_'+c.estado,ts:c.upd,i:c.estado==='cancelada'?'🚫':'❌',t:(c.estado==='cancelada'?'Cita cancelada — ':'No vino — ')+nm,s:`${cu} · ${bn}`,c,tipo:'baja'})}
+ if(can('config'))(S.alertas||[]).forEach(a=>out.push({k:'a_'+a.k,ts:Date.now()+1,i:a.i,t:a.t,s:a.s,tipo:'alerta'}));
  return out.sort((a,b)=>b.ts-a.ts)}
+function cargarAlertas(){if(!API.remote||!can('config')||Date.now()-(S.alT||0)<300e3)return;S.alT=Date.now();API.req('GET','/alertas').then(a=>{S.alertas=a;renderHeader()}).catch(()=>{})}
 function togNotif(e){e?.stopPropagation();let el=$('#notif');if(!el){el=document.createElement('div');el.id='notif';el.addEventListener('click',ev=>ev.stopPropagation());document.body.appendChild(el);
   document.addEventListener('pointerdown',ev=>{if(!el.contains(ev.target)&&!ev.target.closest?.('#hBell'))el.classList.remove('on')},true)}
  if(el.classList.contains('on'))return el.classList.remove('on');pintaNotif();el.classList.add('on')}
 function pintaNotif(){const el=$('#notif'),l=notifs(),vis=l.filter(x=>!S.leidas.has(x.k)||x.tipo==='yape'||x.tipo==='prox');
  const wa=(x,key,txt)=>x.c.cliente?.tel&&(can('verTel')||isAdmin())?`<button class="btn sm" style="border-color:#25d366;color:#25d366" onclick="notifWA('${x.c.id}','${key}','${x.k}')">💬 ${txt}</button>`:'';
- const acc=x=>{const v=`<button class="btn sm" onclick="notifVer('${x.c.id}','${x.k}')">👁️ Ver</button>`;
+ const acc=x=>{if(x.tipo==='alerta')return `<button class="btn sm" onclick="notifLeer('${x.k}');$('#notif').classList.remove('on');verSeguridad()">🛡️ Ver seguridad</button>`;const v=`<button class="btn sm" onclick="notifVer('${x.c.id}','${x.k}')">👁️ Ver</button>`;
   if(x.tipo==='yape')return v+(x.c.yapeCaptura&&can('yape')?`<button class="btn sm p" onclick="notifLeer('${x.k}');$('#notif').classList.remove('on');verYape('${x.c.id}')">✅ Validar Yape</button>`:wa(x,'waYape','Pedir Yape'));
   if(x.tipo==='prox')return v+wa(x,'waRecuerda','Recordar');
   if(x.tipo==='baja')return v+wa(x,'waVuelve','Reagendar');
   return v+wa(x,'waConfirma','Confirmar')};
  el.innerHTML=`<div class="nh"><b>🔔 Notificaciones</b>${l.some(x=>!S.leidas.has(x.k))?`<button onclick="notifTodas()">Marcar todo leído</button>`:''}</div>
- <div class="nl">${vis.length?vis.map(x=>`<div class="ni ${S.leidas.has(x.k)?'':'nueva'}"><span class="e">${x.i}</span><div class="x"><b>${esc(x.t)}</b><small>${esc(x.s)}</small><div class="ac">${acc(x)}</div></div><span class="t">${x.tipo==='prox'?'':hace(x.ts)}</span></div>`).join(''):'<div class="vac">✨ Todo al día. Aquí verás reservas nuevas, Yapes por validar, reprogramaciones y citas próximas.</div>'}</div>`}
+ <div class="nl">${vis.length?vis.map(x=>`<div class="ni ${S.leidas.has(x.k)?'':'nueva'}"><span class="e">${x.i}</span><div class="x"><b>${esc(x.t)}</b><small>${esc(x.s)}</small><div class="ac">${acc(x)}</div></div><span class="t">${x.tipo==='prox'||x.tipo==='alerta'?'':hace(x.ts)}</span></div>`).join(''):'<div class="vac">✨ Todo al día. Aquí verás reservas nuevas, Yapes por validar, reprogramaciones y citas próximas.</div>'}</div>`}
 function notifLeer(k){S.leidas.add(k);lsSet('notifLeidas',[...S.leidas].slice(-300));renderHeader()}
 function notifTodas(){notifs().forEach(x=>S.leidas.add(x.k));lsSet('notifLeidas',[...S.leidas].slice(-300));renderHeader();pintaNotif()}
 function notifVer(id,k){notifLeer(k);$('#notif').classList.remove('on');irACita(id)}
@@ -1149,6 +1152,7 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barbero
   <p class="hint">En «Ver estado de cita» el cliente ve solo este texto (escribe ahí tu tolerancia y reglas). El botón <b>📅 Reprogramar</b> solo le aparece si faltan ${c.horasReprog??24} horas o más para su corte.</p>`)}
  ${acc('seguridad','🔐 Seguridad y respaldo',API.remote?'Accesos, respaldo y pruebas':'PIN admin, exportar, ejemplos',()=>`
   ${API.remote?'<p class="hint" style="margin-top:0">🔒 El acceso es solo con Google. Los dueños se definen en Cloudflare (variable OWNER_EMAILS); barberos y personal, por su correo.</p>':`<label class="lb">PIN de administrador</label><input class="in" inputmode="numeric" maxlength="6" value="${esc(c.adminPin)}" onchange="setC('adminPin',this.value.replace(/\\D/g,''))">`}
+  ${API.remote?`<button class="btn p w" style="margin-top:12px;padding:14px" onclick="verSeguridad()">🛡️ Monitoreo y respaldos</button>`:''}
   ${API.remote?`<button class="btn w" style="margin-top:12px" onclick="probarDni()">🪪 Probar consulta de DNI</button><label class="lb">Tope de consultas DNI por día (0 = sin tope)</label><input class="in" type="number" min="0" value="${c.dniTopeDia??300}" onchange="setN('dniTopeDia',this.value)"><p class="hint">Protege tu saldo de Shalom. Las consultas repetidas salen de la memoria y no cuentan.</p>`:''}
   ${API.remote?`<button class="btn w" style="margin-top:12px" onclick="accDueno()">🔑 Mi clave y huella (dueño)</button>`:''}
   ${API.remote?`<div class="g2" style="margin-top:12px"><button class="btn" onclick="probarNube()">🔍 Probar nube</button><button class="btn" onclick="verAccesos()">📜 Registro de accesos</button></div>`:''}
@@ -1239,6 +1243,24 @@ async function buscarDniP(inp){const v=inp.value.replace(/\D/g,'');inp.value=v;c
   if(n&&(!n.value.trim()||n.value===dniAutoP)){n.value=r.nombre;dniAutoP=r.nombre}
   est.textContent='✅ '+r.nombre}
  catch(e){est.textContent='⚠️ '+e.message}}
+/* ---------- Fase 4: monitoreo y respaldos ---------- */
+const BLOQ={limite_pub:'Demasiadas visitas seguidas',limite_dni:'Demasiadas consultas de DNI',limite_res:'Demasiadas reservas seguidas',sin_ficha:'DNI pedido fuera del formulario',robot:'No pasó Turnstile (robot)',tope_dni:'Tope diario de DNI'};
+const kb=n=>n>1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB';
+async function verSeguridad(){openModal(mHead('🛡️ Monitoreo y respaldos')+'<div class="spin"></div>');
+ let r,rs=[];try{[r,rs]=await Promise.all([API.req('GET','/seguridad'),can('excel')?API.req('GET','/respaldos').catch(()=>[]):[]])}catch(e){return $('#mbody').innerHTML=mHead('🛡️ Monitoreo')+`<p class="hint">❌ ${esc(e.message)}</p>`}
+ const ds=Object.entries(r.dias).sort((a,b)=>b[0].localeCompare(a[0])),tot=k=>ds.reduce((a,[,x])=>a+(k==='bloq'?Object.values(x.bloqueos).reduce((p,n)=>p+n,0):x[k]),0),u=r.ultimoRespaldo;
+ const chip=(ok,t)=>`<span class="tag" style="color:${ok?'var(--grn)':'#f0883e'};border-color:${ok?'var(--grn)':'#f0883e'}">${ok?'✅':'⚠️'} ${t}</span>`;
+ const tipos={};ds.forEach(([,x])=>Object.entries(x.bloqueos).forEach(([k,n])=>tipos[k]=(tipos[k]||0)+n));
+ $('#mbody').innerHTML=mHead('🛡️ Monitoreo y respaldos')+`
+ <div class="tags" style="margin-bottom:12px">${chip(r.turnstile,'Turnstile')}${chip(r.shalom,'Consulta DNI')}${chip(u&&u.fecha>=addD(hoy(),-1),'Respaldo '+(u?fLarga(u.fecha).split(' ').slice(0,2).join(' '):'pendiente'))}</div>
+ <p class="lb" style="margin-top:0">Últimos 14 días</p>
+ <div class="stats"><div class="stat"><b style="color:var(--grn)">${tot('reservas')}</b><span>📥 Reservas web</span></div><div class="stat"><b style="color:var(--blue)">${tot('dni')}</b><span>🪪 Consultas DNI${r.topeDni?` (tope ${r.topeDni}/día)`:''}</span></div><div class="stat"><b style="color:var(--red)">${tot('bloq')}</b><span>🛡️ Bloqueos</span></div><div class="stat"><b style="color:#f0883e">${tot('ingresosFallidos')}</b><span>🔐 Ingresos fallidos</span></div></div>
+ ${Object.keys(tipos).length?`<p class="lb">Qué se bloqueó</p>${Object.entries(tipos).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<div class="li"><div class="t"><b>${esc(BLOQ[k]||k)}</b></div><span class="tag">${n}</span></div>`).join('')}`:'<p class="hint">✨ Sin bloqueos: nadie intentó abusar del formulario.</p>'}
+ <p class="lb">Por día</p><div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><tr style="color:var(--mu);text-align:right"><th style="text-align:left">Día</th><th>📥</th><th>🪪</th><th>🛡️</th><th>🔐✗</th></tr>${ds.map(([f,x])=>{const b=Object.values(x.bloqueos).reduce((a,n)=>a+n,0);return `<tr style="text-align:right;border-top:1px solid var(--line)"><td style="text-align:left;padding:6px 0">${fLarga(f).split(' ').slice(0,2).join(' ')}</td><td>${x.reservas||'·'}</td><td>${x.dni||'·'}</td><td style="color:${b?'var(--red)':''}">${b||'·'}</td><td style="color:${x.ingresosFallidos?'#f0883e':''}">${x.ingresosFallidos||'·'}</td></tr>`}).join('')}</table></div>
+ <p class="lb">💾 Respaldos automáticos</p><p class="hint" style="margin-top:0">Cada madrugada se guarda una copia completa (citas, clientes, configuración) en tu almacén privado de Cloudflare. Se guardan los últimos 30 días. Para restaurar: descarga uno y usa «♻️ Restaurar respaldo».</p>
+ ${can('config')?`<button class="btn w" onclick="respaldarAhora(this)">💾 Crear respaldo ahora</button>`:''}
+ <div style="margin-top:8px">${rs.length?rs.slice(0,30).map(x=>`<div class="li"><div class="t"><b>${fLarga(x.fecha)}</b><small>${x.citas} citas · ${kb(x.bytes)}</small></div><a class="btn sm" href="${CONFIG.API_URL}/respaldos/${x.fecha}" download>⬇️ Descargar</a></div>`).join(''):'<p class="hint">Todavía no hay respaldos.</p>'}</div>`}
+async function respaldarAhora(b){b.disabled=true;b.textContent='⏳ Creando…';try{const r=await API.req('POST','/respaldos');toast(`✅ Respaldo creado: ${r.citas} citas`);S.alT=0;cargarAlertas();verSeguridad()}catch(e){toast('❌ '+e.message);b.disabled=false;b.textContent='💾 Crear respaldo ahora'}}
 async function probarDni(){const d=prompt('DNI de 8 dígitos para probar la conexión con RENIEC:');if(!d)return;
  try{const r=await API.req('GET','/dni/'+d.replace(/\D/g,'')+'?crudo=1');alert(`Consultas de DNI hoy: ${r.usoHoy}${r.tope?' de '+r.tope:''}\n\n`+'Nombre que usará el sistema: '+(r.nombre||'(no se pudo armar)')+'\n\nRespuesta del servicio:\n'+JSON.stringify(r.crudo,null,1).slice(0,1200))}catch(e){alert('❌ '+e.message)}}
 function togUser(id){const u=D().usuarios.find(x=>x.id===id);u.activo=u.activo===false;dirty();renderConfig()}
