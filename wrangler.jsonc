@@ -49,7 +49,8 @@
         { "name": "RL_RES", "namespace_id": "4203", "simple": { "limit": 6, "period": 60 } }
       ],
       "vars": {
-        "GOOGLE_CLIENT_ID": "186206646457-tu114jpn4uqdtpe2sb6v6l7g17shfq8b.apps.googleusercontent.com"
+        "GOOGLE_CLIENT_ID": "186206646457-tu114jpn4uqdtpe2sb6v6l7g17shfq8b.apps.googleusercontent.com",
+        "OWNER_EMAILS": "stereophysique15@gmail.com"
       }
     }
   }
