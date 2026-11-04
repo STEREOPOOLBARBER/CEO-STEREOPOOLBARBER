@@ -15,8 +15,10 @@ const lr = await ctx.request.post(B + '/api/auth/login', { data: { pin: '5821' }
 await P.goto(B + '/index.html'); await P.evaluate(s => localStorage.setItem('brb_ses', JSON.stringify(s)), await lr.json()); await P.reload(); await P.waitForSelector('#login', { state: 'hidden' });
 check('el panel carga con la CSP estricta', await P.evaluate(() => typeof ACC === 'object' && typeof renderAgenda === 'function'));
 await revisar(P, 'Agenda');
-await P.click('[data-on-click] >> text=Semana'); await P.waitForTimeout(300); check('botón Semana responde', await P.evaluate(() => S.fecha === 'semana'));
-await P.evaluate(() => { S.fecha = hoy(); renderAgenda() });
+await P.click('[data-on-click="fMes"]'); await P.waitForTimeout(300); check('botón Mes responde', await P.evaluate(() => S.vista.per.t === 'mes'));
+await P.click('[data-on-click="abrirAvanzada"]'); await P.waitForSelector('#mbody .fbar'); await revisar(P, 'Búsqueda avanzada'); await P.evaluate(() => closeModal());
+await P.click('[data-on-click="fEtq"][data-p0="todos"]'); await P.click('[data-on-click="fEtq"][data-p0="todos"]'); await P.waitForSelector('#mbody .et'); await revisar(P, 'Etiqueta Todos'); await P.evaluate(() => closeModal());
+await P.evaluate(() => { S.vista = VISTA_DEF(); renderAgenda() });
 await P.click('button[title="Nueva cita"]'); await P.waitForSelector('#pegaTxt'); await revisar(P, 'Nueva cita'); await P.evaluate(() => closeModal());
 await P.click('#hBell'); await P.waitForSelector('#notif.on'); await revisar(P, 'Notificaciones'); await P.mouse.click(30, 600);
 await P.click('text=🔗 Compartir'); await P.waitForTimeout(400); await revisar(P, 'Compartir');

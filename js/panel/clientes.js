@@ -60,7 +60,6 @@ ACC.anonimizarFicha=async function(){const k=this.dataset.p0,n=S.fic?.cliente?.n
  try{const r=await API.req('POST','/clientes/'+k+'/anonimizar',{confirmar:'ANONIMIZAR',motivo});closeModal();S.cliR=null;await reload();toast(`✅ Cliente anonimizado (${r.citas} cita(s), ${r.fotos} foto(s) borrada(s))`)}catch(e){toast('❌ '+e.message)}};
 
 /* ---------- 📊 reporte semanal de caja (lunes a domingo, se arma solo cada lunes) ---------- */
-const lunesDe=f=>addD(f,-((pYmd(f).getDay()+6)%7));
 const varPct=(a,b)=>b?Math.round((a-b)/b*100):null;
 const flecha=(a,b,menosEsMejor)=>{const v=varPct(a,b);if(v===null||!isFinite(v))return'';const bien=menosEsMejor?v<=0:v>=0;return `<small style="color:${bien?'#3fb950':'var(--red)'};display:block">${v>=0?'↑':'↓'} ${Math.abs(v)}% vs. sem. ant.</small>`};
 async function abrirReporte(semana){const h=hoy(),esta=lunesDe(h);semana=semana||addD(esta,-7);

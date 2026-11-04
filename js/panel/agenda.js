@@ -10,39 +10,37 @@ async function traerRango(d,h){const k=d+'|'+h;S.trayendo=S.trayendo||new Set();
 /* Historial completo: solo para Clientes, Dashboard y Excel (se pide una vez y se guarda hasta que algo cambie). */
 async function historial(){if(!nube())return S.citas;if(S.hist)return S.hist;toast('⏳ Cargando historial…');S.hist=await paginas('');mezclar([]);return S.hist}
 const todas=()=>(S.hist||S.citas).filter(mine);
-async function buscarServidor(key,off){const [q,f,b]=key.split('|'),est=f==='todos'?'':f==='cancelada'?'cancelada,expirada':f;
- try{const r=await API.req('GET',`/citas/buscar?q=${encodeURIComponent(q)}${est?'&estado='+est:''}${b?'&barbero='+b:''}&limit=30&offset=${off}`);mezclar(r.items);
-  if([S.q.trim().toLowerCase(),S.filtro,S.barbF].join('|')!==key)return;S.busq=off&&S.busq?.key===key?{key,items:S.busq.items.concat(r.items),total:r.total}:{key,items:r.items,total:r.total};renderLista()}catch(e){toast('⚠️ '+e.message)}}
-function renderAgenda(){
- {const r=esRango()?rangoAg():{desde:S.fecha,hasta:S.fecha};if(!cubre(r.desde,r.hasta))traerRango(r.desde,r.hasta).then(ok=>{if(ok&&S.tab==='agenda')renderAgenda()})}
- const all=scope(),dia=esRango()?all.filter(enRango):all.filter(c=>c.fecha===S.fecha),pv=all.filter(c=>c.estado==='por_validar').length,demo=S.citas.some(c=>c.demo);
- const dias=[];for(let i=-1;i<7;i++)dias.push(addD(hoy(),i));if(!esRango()&&!dias.includes(S.fecha))dias.push(S.fecha);
- const cuenta=f=>all.filter(c=>c.fecha===f&&activa(c)).length;
- const filtros=[];if(S.barbF)filtros.push(`<span class="fchip" data-on-click="a0f7565b8">💈 ${esc(barb(S.barbF)?.nombre||'')} ✕</span>`);if(S.filtro!=='todos')filtros.push(`<span class="fchip">${est(S.filtro).i} ${esc(est(S.filtro).t)}</span>`);
- if(filtros.length||S.q)filtros.push(`<span class="fchip x" data-on-click="a288921b1">✕ Limpiar</span>`);
+/* La agenda se pinta en partes: la cabecera (buscador, filtros, días), los números (#agStats y #agChips) y la lista (#lista).
+   Escribir en el buscador solo vuelve a pintar los números y la lista, para no perder el cursor. */
+function renderAgenda(){const v=S.vista,chx=$('#agChips')?.scrollLeft;
+ if(!usaServidor(v)&&!todasLasFechas(v)){const r=rangoPer(v.per);if(!cubre(r.d,r.h))traerRango(r.d,r.h).then(ok=>{if(ok&&S.tab==='agenda')renderAgenda()})}
+ const demo=S.citas.some(c=>c.demo),pas=pastillas(v),hay=pas.length>0; // la fila aparece solo al aplicar filtros: así un toque en un día o una etiqueta no mueve la pantalla
+ const dias=[];for(let i=-1;i<7;i++)dias.push(addD(hoy(),i));if(v.per.t==='dia'&&!dias.includes(v.per.f))dias.push(v.per.f);
+ const cuenta=f=>scope().filter(c=>c.fecha===f&&activa(c)).length,mesTira=(v.per.t==='mes'?v.per.m:(v.per.t==='dia'?v.per.f:v.per.d).slice(0,7));
  $('#t-agenda').innerHTML=`
  ${demo&&can('config')?`<div class="banner pu">🧪 <b>Estás viendo datos de ejemplo.</b> Prueba todo libremente; cuando estés listo pon tus datos en ⚙️ Config y borra los ejemplos.<div class="row"><button class="btn sm" data-on-click="aa8fc6a26">⚙️ Ir a Config</button><button class="btn sm r" data-on-click="aac281993">🧹 Quitar ejemplos</button></div></div>`:''}
  ${can('config')&&pagoOn()&&!S.cfg.yapeNum?`<div class="banner">⚠️ Falta tu número de Yape. Sin él, el formulario no cobra el adelanto. <span style="text-decoration:underline;cursor:pointer" data-on-click="aa7c933c5">Configurar</span></div>`:''}
- <div class="stats">
-  <div class="stat" data-on-click="ae8344bc8"><b style="color:var(--grn)">${dia.filter(c=>activa(c)).length}</b><span>📅 Citas ${S.fecha==='semana'?'de la semana':S.fecha==='mes'?'del mes':S.fecha===hoy()?'de hoy':'del día'}</span></div>
-  <div class="stat" data-on-click="a60584dd9"><b style="color:var(--red)">${pv}</b><span>🟡 Yape por validar</span></div>
-  <div class="stat" data-on-click="a0241ca29"><b style="color:var(--blue)">${dia.filter(c=>c.estado==='confirmada'||c.estado==='en_silla').length}</b><span>🔵 Por atender</span></div>
-  <div class="stat" data-on-click="aecac7f70"><b style="color:var(--pur)">${dia.filter(c=>c.estado==='atendida').length}</b><span>✅ Atendidos</span></div>
- </div>
+ <div class="stats" id="agStats"></div>
  <div class="card">
-  <div class="row"><div class="search">🔍<input id="q" placeholder="Buscar nombre, DNI, celular, código…" value="${esc(S.q)}" data-on-input="aceafc09c">${isAdmin()?`<button class="ibtn bare" data-on-click="aa169ac47">⚙️</button>`:''}</div></div>
-  ${S.showF&&isAdmin()?`<select class="in" style="margin-top:10px" data-on-change="a723f4fa0"><option value="">💈 Todos los barberos</option>${S.barberos.map(b=>`<option value="${b.id}" ${S.barbF===b.id?'selected':''}>${esc(b.nombre)}</option>`).join('')}</select>`:''}
-  <p class="hint" id="qHint" style="margin:8px 0 0;${S.q.trim()?'':'display:none'}">🔎 Buscando en <b style="color:var(--tx)">todas las fechas</b></p>
-  ${filtros.length?`<div class="row" style="margin-top:10px;flex-wrap:wrap">${filtros.join('')}</div>`:''}
-  <div class="days">${[['semana','Semana','🗓️'],['mes','Mes','📆']].map(([k,l,i])=>{const n=all.filter(c=>c.fecha>=hoy()&&activa(c)&&(k==='semana'?c.fecha<=addD(hoy(),6):c.fecha.slice(0,7)===hoy().slice(0,7))).length;return `<button class="day ${S.fecha===k?'on':''}" data-on-click="a18a90d39" data-p0="${k}">${n?`<i>${n}</i>`:''}<small>${l}</small><b>${i}</b><small>${k==='semana'?'lun–dom':'completo'}</small></button>`}).join('')}${dias.map(f=>{const d=pYmd(f),n=cuenta(f);return `<button class="day ${f===S.fecha?'on':''}" data-on-click="a9eb70928" data-p0="${f}">${n?`<i>${n}</i>`:''}<small>${f===hoy()?'Hoy':f===addD(hoy(),1)?'Mañ':DIAS[d.getDay()]}</small><b>${d.getDate()}</b><small>${MESC[d.getMonth()]}</small></button>`}).join('')}<label class="day cal">📅<input type="date" data-on-change="a045aa24d"></label></div>
-  ${esRango()?`<div class="row" style="margin-top:10px;justify-content:space-between"><button class="btn sm" data-on-click="a16064d4b">‹</button><b style="text-transform:capitalize;text-align:center;flex:1">${S.fecha==='semana'?'Semana':'Mes'} · ${rangoAg().t}${(+S.off||0)?` <button class="btn sm" data-on-click="a7e972fb6">Hoy</button>`:''}</b><button class="btn sm" data-on-click="afb485eea">›</button></div>`:''}
-  <div class="chiprow"><button class="chip ${S.filtro==='todos'?'on':''}" data-on-click="ac1bc02aa">Todos<i class="cc">${dia.filter(c=>c.estado!=='expirada').length}</i></button><div class="chips">${FILTROS.slice(1).map(k=>{const n=['por_validar'].includes(k)?all.filter(c=>c.estado===k).length:dia.filter(c=>k==='cancelada'?['cancelada','expirada'].includes(c.estado):c.estado===k).length;return `<button class="chip ${S.filtro===k?'on':''}" data-on-click="a180b68a0" data-p0="${k}">${est(k).i} ${esc(est(k).t)}${n?`<i class="cc">${n}</i>`:''}</button>`}).join('')}</div></div>
-  <p class="hint" style="margin-top:4px;font-size:11px">Toca 2 veces "Todos" para ver todas las etiquetas</p>
+  <div class="row"><div class="search">🔍<input id="q" placeholder="Buscar nombre, DNI, celular, código…" value="${esc(v.q)}" data-on-input="fBuscar"><button class="ibtn bare" title="Búsqueda avanzada" data-on-click="abrirAvanzada">⚙️${pas.length?`<span class="dot">${pas.length}</span>`:''}</button></div></div>
+  <p class="hint" id="qHint" style="margin:8px 0 0;${conTexto(v)?'':'display:none'}">🔎 Buscando en <b style="color:var(--tx)">todas las fechas</b></p>
+  ${hay?`<div class="row" style="margin-top:10px;flex-wrap:wrap">${pas.map(x=>`<span class="fchip" data-on-click="fQuitar" data-p0="${x.k}" data-p1="${esc(x.x||'')}">${esc(x.t)} ✕</span>`).join('')}<span class="fchip lim" data-on-click="fLimpiar">✕ Limpiar</span></div>`:''}
+  <div class="days"><button class="day ${v.per.t==='mes'?'on':''}" data-on-click="fMes"><small>Mes</small><b>📆</b><small>${MESC[+mesTira.slice(5)-1]}</small></button>${dias.map(f=>{const d=pYmd(f),n=cuenta(f);return `<button class="day ${v.per.t==='dia'&&f===v.per.f?'on':''}" data-on-click="fDia" data-p0="${f}">${n?`<i>${n}</i>`:''}<small>${f===hoy()?'Hoy':f===addD(hoy(),1)?'Mañ':DIAS[d.getDay()]}</small><b>${d.getDate()}</b><small>${MESC[d.getMonth()]}</small></button>`}).join('')}</div>
+  ${v.per.t==='mes'?`<div class="row" style="margin-top:10px;justify-content:space-between"><button class="btn sm" data-on-click="fMesMover" data-p0="-1">‹</button><b style="text-transform:capitalize;text-align:center;flex:1">${textoPer(v.per)}${v.per.m!==hoy().slice(0,7)?` <button class="btn sm" data-on-click="fMesMover" data-p0="0">Este mes</button>`:''}</b><button class="btn sm" data-on-click="fMesMover" data-p0="1">›</button></div>`:''}
+  <div class="chips" id="agChips"></div>
+  <p class="hint" style="margin-top:4px;font-size:11px">Toca 2 veces una etiqueta para ver su orden y sus filtros${v.per.t==='dia'?' · toca otra vez el día para ver todo el mes':''}</p>
   <div class="tools"><button class="tool" title="Recordatorios por WhatsApp" data-on-click="abrirRecordatorios">⏰${(()=>{const n=citasARecordar().filter(c=>!recordada(c)&&!c.asistencia).length;return n?`<i class="cc" style="position:absolute;margin:-18px 0 0 18px">${n}</i>`:''})()}</button>${can('dash')?`<button class="tool" title="Clientes" data-on-click="a9f1c1a7e">👥</button>`:''}${can('verMontos')?`<button class="tool" title="Caja" data-on-click="a0211b28c">📊</button>`:''}<button class="tool" title="Actualizar" data-on-click="a1d5ed7f2">🔄</button><button class="tool" title="Ayuda" data-on-click="a6f742281">📖</button>${isAdmin()&&can('crear')?`<button class="tool" title="Mover citas a otro día" data-on-click="a9080fa1d">📅</button>`:''}${can('crear')?`<button class="tool p" title="Nueva cita" data-on-click="ab17bc635">➕</button>`:''}${S.cfg.modWalkin&&can('crear')?`<button class="tool pu" title="Cliente sin cita" data-on-click="adb1da1e1">⚡</button>`:''}</div>
  </div>
  <div id="lista"></div>`;
- $('#t-agenda').insertAdjacentHTML('afterbegin','<div id="nextBox"></div>');renderNext();renderLista();
+ $('#t-agenda').insertAdjacentHTML('afterbegin','<div id="nextBox"></div>');renderNext();renderConteos(chx);renderLista();
 }
+/* x: desplazamiento previo de las etiquetas (se conserva para que un segundo toque caiga en la misma etiqueta). */
+function renderConteos(x){const v=S.vista,cnt=conteos(v),st=$('#agStats'),ch=$('#agChips');if(!st||!ch)return;const prev=x??ch.scrollLeft;
+ const n=ests=>cnt?sumaEst(cnt,ests).n:'…',per=conTexto(v)?'encontradas':v.per.t==='mes'?'del mes':v.per.t==='rango'?'del rango':v.per.f===hoy()?'de hoy':'del día';
+ st.innerHTML=[['todos','var(--grn)',n(['por_validar','pendiente_pago','confirmada','en_silla','atendida']),'📅 Citas '+per],['por_validar','var(--red)',cnt?cnt.porValidar.n:'…','🟡 Yape por validar'],['confirmada','var(--blue)',n(['confirmada','en_silla']),'🔵 Por atender'],['atendida','var(--pur)',n(['atendida']),'✅ Atendidos']]
+  .map(([k,c,x,t])=>`<div class="stat" data-on-click="fStat" data-p0="${k}"><b style="color:${c}">${x}</b><span>${t}</span></div>`).join('');
+ ch.innerHTML=ETIQUETAS.map(k=>{const e=k==='todos'?{i:'',t:'Todos'}:est(k),x=numEtq(cnt,k);return `<button class="chip ${v.etq===k?'on':''}" data-on-click="fEtq" data-p0="${k}">${e.i?e.i+' ':''}${esc(e.t)}${x==null?'<i class="cc">…</i>':x.n||k==='todos'?`<i class="cc">${x.n}</i>`:''}</button>`}).join('');
+ ch.scrollLeft=prev;const on=ch.querySelector('.on');if(on){const l=on.offsetLeft-ch.offsetLeft;if(l<ch.scrollLeft||l+on.offsetWidth>ch.scrollLeft+ch.clientWidth)ch.scrollLeft=l-16}}
 /* ---- tiempo para la próxima cita ---- */
 const startTs=c=>{const[y,m,d]=c.fecha.split('-').map(Number),[H,M]=(c.hora||'00:00').split(':').map(Number);return new Date(y,m-1,d,H,M).getTime()};
 function falta(ts){const m=Math.round((ts-Date.now())/60000);if(m>=0){if(m<1)return'ahora';if(m<60)return`en ${m} min`;const h=Math.floor(m/60),r=m%60;if(h<24)return`en ${h} h${r?' '+r+' min':''}`;const d=Math.round(m/1440);return d===1?'mañana':`en ${d} días`}const a=-m;return a<60?`hace ${a} min`:`hace ${Math.floor(a/60)} h`}
@@ -78,17 +76,9 @@ function renderProx(){const el=$('#proxBar');if(!el)return;if(!S.loaded||!S.ses)
  if(!cs.length){el.innerHTML='';return}
  el.innerHTML=`<div class="prox"><div class="pxh">⏳ Próximos 3 horas <b>${cs.length}</b></div><div class="pxl">${cs.map(c=>{const ts=startTs(c),b=barb(c.barberoId),late=ts<=now;
   return `<div class="pc ${late?'late':''}" data-on-click="a8b4735fa" data-p0="${c.id}"><div class="pt"><b>${esc((c.cliente?.nombre||'').split(' ').slice(0,2).join(' '))}</b><span>${h12(c.hora)}</span></div><div class="ps"><span data-cdt="${ts}">${late?'es su hora':falta(ts)}</span> · 💈 <b>${esc(b?.nombre||'')}</b><br>${esc(c.servicioNombre||'')}</div>${c.cliente?.tel?`<button class="rb al ${c.avisado?'ok':''}" title="${c.avisado?'Ya se le avisó':'Avisarle por WhatsApp'}" data-on-click="acda53179" data-p0="${c.id}">⏰</button>`:''}</div>`}).join('')}</div></div>`}
-function irACita(id){const c=cita(id);if(!c)return;S.q='';S.filtro='todos';S.fecha=c.fecha;S.off=0;if(S.tab==='agenda')renderAgenda();else goTab('agenda');
+function irACita(id){const c=cita(id);if(!c)return;S.vista={...VISTA_DEF(),per:{t:'dia',f:c.fecha}};if(S.tab==='agenda')renderAgenda();else goTab('agenda');
  setTimeout(()=>{const e=document.getElementById('c_'+id);e?.scrollIntoView({behavior:'smooth',block:'center'});e?.animate([{boxShadow:'0 0 0 3px var(--pur)'},{boxShadow:'0 0 0 0 transparent'}],{duration:1600})},120)}
 function tickCD(){$$('[data-cd]').forEach(e=>{const ts=+e.dataset.cd;e.textContent=cdLabel(ts);e.classList.toggle('late',ts<=Date.now())});$$('[data-cdt]').forEach(e=>e.textContent=faltaHasta(+e.dataset.cdt));if(S.tab==='agenda')renderNext();renderProx()}
-function tapTodos(){const n=Date.now();if(n-(S._tt||0)<380){S._tt=0;abrirEtiquetas();return}S._tt=n;if(S.filtro!=='todos')setFiltro('todos')}
-function abrirEtiquetas(){const all=scope(),dia=esRango()?all.filter(enRango):all.filter(c=>c.fecha===S.fecha);
- const rows=FILTROS.map(k=>{const src=k==='todos'?dia.filter(c=>c.estado!=='expirada'):['por_validar'].includes(k)?all.filter(c=>c.estado===k):dia.filter(c=>k==='cancelada'?['cancelada','expirada'].includes(c.estado):c.estado===k);
-  const e=k==='todos'?{i:'📋',t:'Todos',c:'#8a3ffc'}:est(k),tot=src.reduce((a,c)=>a+(c.gratis?0:+c.precio||0),0);
-  return `<button class="et" style="color:${e.c};border-color:${e.c};background:color-mix(in srgb,${e.c} 10%,var(--card))" data-on-click="aed63da19" data-p0="${k}"><span>${e.i} ${esc(e.t)}</span><em>${can('verMontos')?'S/ '+tot.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2}):''}</em><b>${src.length}</b></button>`}).join('');
- openModal(`<div class="grab"></div>${mHead('🏷️ Todas las etiquetas')}<p class="hint" style="margin:0 0 14px">${esRango()?`Cuentan las citas de la <b style="color:var(--tx)">${S.fecha==='semana'?'semana':'mes'} · ${rangoAg().t}</b>. «Yape por validar» cuenta todos los días.`:`Cuentan las citas del <b style="color:var(--tx)">${fLarga(S.fecha)}</b>. «Yape por validar» cuenta todos los días.`} Toca una para filtrar.</p>${rows}`)}
-function limpiar(){S.q='';S.barbF='';S.filtro='todos';renderAgenda()}
-function setFiltro(f){S.filtro=f;renderAgenda()}
 /* ---------- notificaciones (campana) ---------- */
 S.leidas=new Set(lsGet('notifLeidas',[]));
 function notifs(){const now=Date.now(),H=48*3600e3,out=[];
@@ -118,37 +108,31 @@ function notifLeer(k){S.leidas.add(k);lsSet('notifLeidas',[...S.leidas].slice(-3
 function notifTodas(){notifs().forEach(x=>S.leidas.add(x.k));lsSet('notifLeidas',[...S.leidas].slice(-300));renderHeader();pintaNotif()}
 function notifVer(id,k){notifLeer(k);$('#notif').classList.remove('on');irACita(id)}
 function notifWA(id,key,k){const c=cita(id);if(!c)return;window.open(waUrl(waNum(c.cliente.tel),tpl(S.cfg[key]||'',c)),'_blank');notifLeer(k)}
-function verPorValidar(){if(S.tab!=='agenda')goTab('agenda');S.filtro='por_validar';S.q='';renderAgenda()}
-function renderLista(){
- let cs=scope();const q=S.q.trim().toLowerCase(),global=!!q||esRango()||['por_validar'].includes(S.filtro);
- const srv=q.length>=2&&nube(),key=[q,S.filtro,S.barbF].join('|');
- if(srv){if(S.busq?.key!==key){clearTimeout(S._bt);const el0=$('#lista');if(el0)el0.innerHTML='<div class="empty">🔎 Buscando en todas las fechas…</div>';const qh0=$('#qHint');if(qh0)qh0.style.display='';S._bt=setTimeout(()=>buscarServidor(key,0),300);return}
-  const ids=new Set(S.busq.items.map(c=>c.id));cs=S.citas.filter(c=>ids.has(c.id)&&mine(c))}
- if(srv||q||['por_validar'].includes(S.filtro)){}else if(esRango())cs=cs.filter(enRango);else cs=cs.filter(c=>c.fecha===S.fecha);
- if(S.barbF)cs=cs.filter(c=>c.barberoId===S.barbF);
- if(S.filtro==='cancelada')cs=cs.filter(c=>c.estado==='cancelada'||c.estado==='expirada');
- else if(S.filtro!=='todos')cs=cs.filter(c=>c.estado===S.filtro);
- else if(!q)cs=cs.filter(c=>c.estado!=='expirada');
- if(q&&!srv){const qd=q.replace(/\D/g,'');cs=cs.filter(c=>[c.cliente?.nombre,c.cliente?.tel,c.cliente?.dni,c.cliente?.ciudad,c.codigo,c.servicioNombre].join(' ').toLowerCase().includes(q)||(qd.length>=3&&[c.cliente?.tel,c.cliente?.dni].some(x=>String(x||'').replace(/\D/g,'').includes(qd))))}
- const h0=hoy();cs.sort((a,b)=>{if(!q)return (a.fecha+a.hora).localeCompare(b.fecha+b.hora);const pa=a.fecha>=h0,pb=b.fecha>=h0;if(pa!==pb)return pa?-1:1;const k=(a.fecha+a.hora).localeCompare(b.fecha+b.hora);return pa?k:-k});
- const el=$('#lista');if(!el)return;
- const qh=$('#qHint');if(qh)qh.style.display=q?'':'none';
- if(!cs.length){el.innerHTML=`<div class="empty"><b>✂️</b>No hay citas${global?'':' para '+fLarga(S.fecha)}<br><br><button class="btn p" data-on-click="ab17bc635">➕ Agendar una cita</button></div>`;return}
- const vis=contarVisitas(),grupos={};cs.forEach(c=>(grupos[c.barberoId]=grupos[c.barberoId]||[]).push(c));
- const orden=Object.keys(grupos).sort((a,b)=>S.barberos.findIndex(x=>x.id===a)-S.barberos.findIndex(x=>x.id===b));
- el.innerHTML=orden.map(bid=>{const b=barb(bid),arr=grupos[bid],cl=S.colap.has(bid);return `<div class="grp"><div class="grp-h"><span class="bar" style="background:${b?.color||'var(--pur)'}"></span>${avatar(b)}<h3>${esc(b?.nombre||'Sin asignar')}${S.fecha===hoy()?gNext(bid):''}</h3><button class="ibtn bare" data-on-click="a1ea7c1f6" data-p0="${bid}">${cl?'▼':'▲'}</button><span class="cnt">${arr.length}</span></div>${cl?'':arr.map(c=>cardCita(c,global,vis)).join('')}</div>`}).join('');
- if(srv&&S.busq.items.length<S.busq.total)el.insertAdjacentHTML('beforeend',`<button class="btn w" style="margin-top:10px" data-on-click="a80e5e8ff">Ver más (${S.busq.total-S.busq.items.length} más)</button>`);
- hydrate(el);
-}
+/* La lista: en un día, agrupada por barbero; en un mes, un rango, una búsqueda o «Yape por validar», agrupada por día
+   (o seguida si se ordenó por nombre, monto, etc.), con «Ver más» cuando viene por páginas del servidor. */
+function renderLista(){const el=$('#lista');if(!el)return;const v=S.vista,qh=$('#qHint');if(qh)qh.style.display=conTexto(v)?'':'none';
+ const r=resultado(v),cs=r.items;
+ if(!cs.length){el.innerHTML=r.cargando?'<div class="empty">🔎 Buscando…</div>':pastillas(v).length||v.etq!=='todos'||conTexto(v)
+  ?`<div class="empty"><b>🔎</b>No hay citas con estos filtros<br><br><button class="btn" data-on-click="fLimpiar">✕ Limpiar filtros</button></div>`
+  :`<div class="empty"><b>✂️</b>No hay citas ${v.per.t==='dia'?'para '+fLarga(v.per.f):'en '+textoPer(v.per)}<br><br><button class="btn p" data-on-click="ab17bc635">➕ Agendar una cita</button></div>`;return}
+ const vis=contarVisitas(),grupo=(id,color,cabeza,arr)=>{const cl=S.colap.has(id);return `<div class="grp"><div class="grp-h"><span class="bar" style="background:${color}"></span>${cabeza}<button class="ibtn bare" data-on-click="a1ea7c1f6" data-p0="${id}">${cl?'▼':'▲'}</button><span class="cnt">${arr.length}</span></div>${cl?'':arr.map(c=>cardCita(c,vis)).join('')}</div>`};
+ let html;
+ if(v.per.t==='dia'&&!todasLasFechas(v)){const g={};cs.forEach(c=>(g[c.barberoId]=g[c.barberoId]||[]).push(c));
+  html=Object.keys(g).sort((a,b)=>S.barberos.findIndex(x=>x.id===a)-S.barberos.findIndex(x=>x.id===b)).map(bid=>{const b=barb(bid);return grupo(bid,b?.color||'var(--pur)',`${avatar(b)}<h3>${esc(b?.nombre||'Sin asignar')}${v.per.f===hoy()?gNext(bid):''}</h3>`,g[bid])}).join('')}
+ else if(['hora','hora_desc'].includes(v.orden)&&!(conTexto(v)&&v.orden==='hora')){const g=new Map();cs.forEach(c=>{if(!g.has(c.fecha))g.set(c.fecha,[]);g.get(c.fecha).push(c)});
+  html=[...g].map(([f,arr])=>grupo('d'+f,f===hoy()?'var(--grn)':'var(--pur)',`<h3>${f===hoy()?'Hoy · ':''}${esc(fLarga(f))}</h3>`,arr)).join('')}
+ else html=`<div class="grp">${cs.map(c=>cardCita(c,vis)).join('')}</div>`;
+ el.innerHTML=html+(r.mas?`<button class="btn w" style="margin-top:10px" data-on-click="verMas" ${r.cargando?'disabled':''}>Ver más (${r.total-cs.length} más)</button>`:'');
+ hydrate(el)}
 function togGrp(id){S.colap.has(id)?S.colap.delete(id):S.colap.add(id);renderLista()}
-function cardCita(c,global,vis){
+function cardCita(c,vis){
  const cl=c.cliente||{},n=S.cfg.modFidelidad?+S.cfg.fidelidad||0:0,v=vis[telKey(cl.tel)]||0,gratis=n>1&&c.estado!=='atendida'&&(v+1)%n===0;
  const e=est(c.estado),ac=accion(c);
  let pagoBox='';
  if(c.adelanto>0&&c.estado==='por_validar'){
   pagoBox=`<div class="box"><h5>💸 <span>Adelanto Yape</span>${!c.yapeCaptura&&c.expira?`<b style="color:var(--yel)">⏳ ${Math.max(0,Math.ceil((c.expira-Date.now())/60000))} min para enviar el comprobante</b>`:''}</h5>
   <div class="row"><b class="syne" style="font-size:22px;flex:1">${soles(c.adelanto)}</b>${c.yapeCaptura?`<button class="btn sm" data-on-click="ac88d927c" data-p0="${c.id}">🧾 Ver captura</button>`:'<span class="hint" style="margin:0">Sin captura</span>'}${c.estado==='por_validar'&&!c.yapeCaptura&&cl.tel?`<button class="btn sm" data-on-click="a072b4d07" data-p0="${c.id}" data-p1="${c.id}">💬 Pedir</button>`:''}</div></div>`}
- const fotosBox=S.cfg.modFotos&&['confirmada','en_silla','atendida'].includes(c.estado)?`<div class="box"><h5>📷 <span>Antes y después</span>${c.adelantoOk?`<span class="pill" style="color:var(--grn);border-color:var(--grn)">✔ Adelanto ${soles(c.adelanto)}</span>`:''}</h5><div class="phs">${ph(c,'antes')}${ph(c,'despues')}</div></div>`:'';
+
  return `<div class="cita" id="c_${c.id}">
   <div class="row"><div class="cn">${esc(cl.nombre||'Cliente')}${chrono(c)?`<div style="margin-top:6px">${chrono(c)}</div>`:''}</div>${cl.tel?`<button class="rb" data-on-click="a75bbbc50" data-p0="${telKey(cl.tel)}">📋</button><button class="rb" data-on-click="a77e36977" data-p0="${c.id}">💬</button>`:''}</div>
   <div class="meta">
@@ -204,7 +188,7 @@ function menuWA(id){const c=cita(id);if(!c)return;
 
 /* ---- crear / editar cita ---- */
 function formCita(id){const c=id?cita(id):null,cl=c?.cliente||{};
- const bid=c?.barberoId||(isAdmin()?(S.barbF||S.barberos.find(b=>b.activo!==false)?.id||''):S.ses.barberoId);
+ const bid=c?.barberoId||(isAdmin()?(S.vista.barb[0]||S.barberos.find(b=>b.activo!==false)?.id||''):S.ses.barberoId);
  const bOpts=(isAdmin()?S.barberos:S.barberos.filter(b=>b.id===S.ses.barberoId)).map(b=>`<option value="${b.id}" ${b.id===bid?'selected':''}>${esc(b.nombre)}</option>`).join('');
  S._ed={fotoAntes:c?.fotoAntes||'',fotoDespues:c?.fotoDespues||'',refFoto:c?.refFoto||'',links:[...(c?.links||[])],precio:c?.precio};
  const estSel=c?.estado||'confirmada';
@@ -213,9 +197,9 @@ function formCita(id){const c=id?cita(id):null,cl=c?.cliente||{};
  <div class="g2"><div><label class="lb">DNI (opcional)</label><input class="in" id="fDni" inputmode="numeric" maxlength="8" placeholder="8 dígitos" value="${esc(cl.dni||'')}" data-on-input="a2e87e5f0"><small id="fDniEst" style="color:var(--mu);display:block;min-height:16px;margin-top:4px"></small></div><div><label class="lb">Teléfono</label><input class="in" id="fTel" inputmode="tel" placeholder="9XXXXXXXX" value="${esc(cl.tel||'')}"></div></div>
  <div class="g2"><div><label class="lb">Nombre *</label><input class="in" id="fNom" placeholder="Nombre y apellido" value="${esc(cl.nombre||'')}"></div><div><label class="lb">Ciudad / distrito</label><input class="in" id="fCiu" placeholder="Ej: Puente Piedra" value="${esc(cl.ciudad||'')}"></div></div>
  <div class="g2"><div><label class="lb">Barbero</label><select class="in" id="fBarb" data-on-change="abcce00c9">${bOpts}</select></div><div><label class="lb">Servicio</label><select class="in" id="fServ" data-on-change="a52e1df12">${S.servicios.map(s=>`<option value="${s.id}" ${s.id===c?.servicioId?'selected':''}>${s.emoji} ${esc(s.nombre)}</option>`).join('')}</select></div></div>
- <div class="g2"><div><label class="lb">Fecha</label><input type="date" class="in" id="fFecha" value="${c?.fecha||(esRango()?hoy():S.fecha)}" data-on-change="abcce00c9"></div><div><label class="lb">Hora</label><select class="in" id="fHora"></select></div></div>
+ <div class="g2"><div><label class="lb">Fecha</label><input type="date" class="in" id="fFecha" value="${c?.fecha||(S.vista.per.t==='dia'?S.vista.per.f:hoy())}" data-on-change="abcce00c9"></div><div><label class="lb">Hora</label><select class="in" id="fHora"></select></div></div>
  <p class="hint" id="fWarn" style="color:var(--yel);margin-top:4px"></p>
- <div class="g2"><div><label class="lb">Estado</label><select class="in" id="fEst" style="text-transform:uppercase;font-weight:600">${['por_validar',...FILTROS.slice(2),'expirada'].filter(k=>c||['confirmada','en_silla','atendida','por_validar'].includes(k)).map(k=>`<option value="${k}" ${estSel===k?'selected':''}>${est(k).t.toUpperCase()}</option>`).join('')}</select></div>
+ <div class="g2"><div><label class="lb">Estado</label><select class="in" id="fEst" style="text-transform:uppercase;font-weight:600">${['por_validar',...ETIQUETAS.slice(2),'expirada'].filter(k=>c||['confirmada','en_silla','atendida','por_validar'].includes(k)).map(k=>`<option value="${k}" ${estSel===k?'selected':''}>${est(k).t.toUpperCase()}</option>`).join('')}</select></div>
   <div><label class="lb">💰 Precio S/</label>${can('verMontos')?`<input class="in" id="fPre" type="number" min="0" step="0.5" value="${c?.precio??(S.servicios.find(s=>s.id===c?.servicioId)||S.servicios[0])?.precio??''}">`:`<input class="in" disabled value="S/ •••">`}</div></div>
  <label class="lb">Notas</label><textarea class="in" id="fNota" rows="2" placeholder="Ej: mid fade, sin tocar la barba">${esc(c?.nota||'')}</textarea>
  <details class="dsec2" open><summary>📎 Fotos y adjuntos de la cita <span>▴</span></summary><div class="dsb">
@@ -250,10 +234,10 @@ async function guardarCita(id){const s=S.servicios.find(x=>x.id===$('#fServ').va
   if(estN==='en_silla'&&!c.enSillaTs)d.enSillaTs=Date.now();if(estN==='atendida'&&!c.atendidaTs)d.atendidaTs=Date.now();if(estN==='confirmada'&&c.adelanto>0&&c.estado==='por_validar')d.adelantoOk=true}
  try{const vaActiva=ACTIVOS.includes(estN);if(vaActiva&&ocupado(S.citas,d.barberoId,d.fecha,d.hora,id||undefined))throw new Error('Ese horario está ocupado');
   if(id)await API.updateCita(id,d);else await API.crearCita({...d,enSillaTs:estN==='en_silla'?Date.now():undefined,adelanto:0,adelantoOk:false,origen:'panel',creadoPor:S.ses.uid||S.ses.barberoId||'dueno'});
-  closeModal();S.fecha=d.fecha;await reload();toast('✅ Cita guardada')}catch(e){toast('❌ '+e.message)}}
+  closeModal();fijarDia(d.fecha);await reload();toast('✅ Cita guardada')}catch(e){toast('❌ '+e.message)}}
 async function cambiarEstado(id,k){const c=cita(id);if(ACTIVOS.includes(k)&&!activa(c)&&ocupado(S.citas,c.barberoId,c.fecha,c.hora,id))return toast('❌ Ese horario ya lo tomó otra cita');closeModal();await setEstado(id,k,k==='confirmada'&&c.adelanto>0?{adelantoOk:true}:{})}
 async function eliminar(id){if(!confirm('¿Eliminar la cita para siempre?'))return;closeModal();try{await API.borrarCita(id);await reload();toast('🗑️ Eliminada')}catch(e){toast('❌ '+e.message)}}
-function walkIn(){const bid=isAdmin()?(S.barbF||S.barberos.find(b=>b.activo!==false)?.id||''):S.ses.barberoId;
+function walkIn(){const bid=isAdmin()?(S.vista.barb[0]||S.barberos.find(b=>b.activo!==false)?.id||''):S.ses.barberoId;
  const bOpts=(isAdmin()?S.barberos.filter(b=>b.activo!==false):S.barberos.filter(b=>b.id===S.ses.barberoId)).map(b=>`<option value="${b.id}" ${b.id===bid?'selected':''}>${esc(b.nombre)}</option>`).join('');
  openModal(mHead('⚡ Cliente sin cita')+`<p class="hint" style="margin-top:0">Llegó sin reservar: entra directo a la silla.</p>
  <label class="lb">Barbero</label><select class="in" id="wBarb">${bOpts}</select>
@@ -264,14 +248,14 @@ function walkIn(){const bid=isAdmin()?(S.barbF||S.barberos.find(b=>b.activo!==fa
 async function guardarWalk(){const s=S.servicios.find(x=>x.id===$('#wServ').value),bid=$('#wBarb').value,now=new Date(),m=now.getHours()*60+now.getMinutes();
  let hora=slotsDia(S.cfg).find(h=>toMin(h)<=m&&m<toMin(h)+CONFIG.DUR)||fromMin(m);if(ocupado(S.citas,bid,hoy(),hora))hora=fromMin(m);
  try{await API.crearCita({fecha:hoy(),hora,barberoId:bid,servicioId:s?.id,servicioNombre:s?.nombre||'',precio:+s?.precio||0,cliente:{nombre:$('#wNom').value.trim()||'Cliente sin cita',tel:$('#wTel').value.replace(/[^\d+ ]/g,'').trim(),ciudad:$('#wCiu').value.trim()},nota:'',estado:'en_silla',enSillaTs:Date.now(),adelanto:0,adelantoOk:false,origen:'walkin',creadoPor:S.ses.uid||S.ses.barberoId||'dueno'});
-  closeModal();S.fecha=hoy();await reload();toast('💺 En silla')}catch(e){toast('❌ '+e.message)}}
+  closeModal();fijarDia(hoy());await reload();toast('💺 En silla')}catch(e){toast('❌ '+e.message)}}
 async function quitarDemo(){if(!confirm('¿Borrar todas las citas de ejemplo?'))return;lsSet('citas',lsGet('citas',[]).filter(c=>!c.demo));await reload();toast('🧹 Ejemplos borrados')}
 function ayuda(){openModal(mHead('📖 Cómo funciona')+[
  ['El cliente reserva','Desde el link de 🔗 Compartir elige corte, barbero, día y hora, y paga el adelanto por Yape.'],
  ['Te llega aquí','Aparece con 🔔 y en "Yape por validar". Toca <b>Validar Yape</b>, mira la captura y confirma.'],
  ['Llega a la barbería','Toca <b>Pasar a silla</b> y toma la foto 📷 ANTES.'],
  ['Termina el corte','Toma la foto DESPUÉS y toca <b>Terminar corte</b>. Puedes mandarle el agradecimiento por WhatsApp.'],
- ['Fin del día','En 📊 Caja ves lo cobrado y la comisión de cada barbero.']].map((s,i)=>`<div class="stp"><b>${i+1}</b><div><b>${s[0]}</b><p class="hint" style="margin-top:2px">${s[1]}</p></div></div>`).join('')+`<p class="hint">👆👆 Doble toque en el nombre → Dashboard · Toca el logo → Excel y respaldo · ☰ → menú y cerrar sesión · 👆👆 Doble toque en "Todos" → ver todas las etiquetas.</p><p class="hint">✏️ edita la cita o cambia su estado · 🗑️ la cancela · 📋 historial del cliente · 💬 mensajes listos.</p>`)}
+ ['Fin del día','En 📊 Caja ves lo cobrado y la comisión de cada barbero.']].map((s,i)=>`<div class="stp"><b>${i+1}</b><div><b>${s[0]}</b><p class="hint" style="margin-top:2px">${s[1]}</p></div></div>`).join('')+`<p class="hint">👆👆 Doble toque en el nombre → Dashboard · Toca el logo → Excel y respaldo · ☰ → menú y cerrar sesión · 👆👆 Doble toque en una etiqueta → su orden y sus filtros · ⚙️ junto al buscador → búsqueda avanzada (fecha, barbero, servicio, pago…) · toca otra vez el día → todo el mes.</p><p class="hint">✏️ edita la cita o cambia su estado · 🗑️ la cancela · 📋 historial del cliente · 💬 mensajes listos.</p>`)}
 
 
 /* ---------- recordatorios por WhatsApp (manual con un toque, o automático con la API oficial) ---------- */

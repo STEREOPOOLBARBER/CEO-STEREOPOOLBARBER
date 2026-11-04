@@ -21,7 +21,7 @@ Sistema de reservas de una barbería en Puente Piedra (Lima, Perú). El dueño n
 Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño prueba en staging → se pasa a `main` (merge) → Cloudflare despliega producción. GitHub Actions (`.github/workflows/pruebas.yml`) corre las pruebas en cada push.
 
 ## Estructura
-- `index.html` — panel (dueño, barberos, personal): solo HTML y estilos. Su JS está en `js/panel/` por pantalla (`base`, `agenda`, `clientes`, `compartir`, `dashboard`, `config`, `acceso`, `inicio`), cargados en ese orden como scripts clásicos (comparten el ámbito global). Modo nube (`/api`) o local (localStorage, solo demo).
+- `index.html` — panel (dueño, barberos, personal): solo HTML y estilos. Su JS está en `js/panel/` por pantalla (`base`, `agenda`, `filtros`, `clientes`, `compartir`, `dashboard`, `config`, `acceso`, `inicio`), cargados en ese orden como scripts clásicos (comparten el ámbito global). Modo nube (`/api`) o local (localStorage, solo demo).
 - `js/reservar.js`, `js/estado.js` — JS del formulario y de la página de estado.
 - `js/eventos.js` — **despachador de eventos** y registro `ACC` de acciones (generado a partir de los antiguos `onclick`).
 - **CSP estricta: prohibido el JavaScript en línea** (`script-src 'self'`, `script-src-attr 'none'`). Nunca escribir `onclick="…"`, `onchange="…"` ni `<script>` dentro del HTML. Para un botón nuevo: `data-on-click="nombreAccion"` (también `data-on-change`, `data-on-input`, `data-on-keydown`) y, junto al código de esa pantalla, `ACC.nombreAccion = function (event) { … }` (`this` = el elemento). Los datos van en `data-p0`, `data-p1`… (`this.dataset.p0`). Si `test/csp.ui.mjs` encuentra una acción sin registrar o una violación de CSP, falla.
@@ -31,6 +31,7 @@ Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño pru
   - `index.js` — solo entrada: seguridad común (límite público, mismo origen), migraciones, enrutador por módulos, cron.
   - `comun.js` — constantes, utilidades, hora de Lima y reglas de agenda (`slotsDia`, `trabaja`, `reglaReprog`). Sin dependencias.
   - `datos.js` — D1: **migraciones versionadas** (`MIGRACIONES`), kv, citas (insertar/guardar/expirar), fotos y audios en R2.
+  - `modulos/filtros.js` — filtros y órdenes de la agenda (los usan `/citas/buscar` y `/citas/conteo`).
   - `modulos/publico.js` (formulario, estado, reprogramar) · `modulos/auth.js` (Google, puerta, perfiles, clave, huella, accesos) · `modulos/citas.js` (panel, búsqueda paginada, configuración, citas) · `modulos/clientes.js` (ficha de cliente, cursor, búsqueda sin acentos) · `modulos/config.js` (links, fotos, exportar/importar) · `modulos/dni.js` · `modulos/seguridad.js` (límites, Turnstile, ficha) · `modulos/monitoreo.js` · `modulos/respaldos.js`.
   - `vista-previa.js` (tarjetas de WhatsApp) · `webauthn.js` (huella sin librerías).
   - `modulos/tiempo-real.js` — Durable Object `Avisos` (binding `AVISOS`, SQLite, hibernación): WebSocket `/api/tiempo-real` con los paneles. Tras cada escritura exitosa (no GET, salvo auth/ficha) el Worker llama `avisar(env)` y todos reciben `{"tipo":"cambio"}` **sin datos**; cada panel vuelve a pedir `/api/panel` con sus permisos. El panel cae a consulta cada 20 s si no hay conexión y se reconecta solo.
@@ -76,6 +77,11 @@ Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño pru
 ## Reporte semanal de caja
 - `modulos/reportes.js`: semana lunes–domingo (Lima). Cron: los lunes desde las 8 a. m. guarda el de la semana anterior en `reportes` (migración v4) y avisa en la 🔔 (`/api/alertas` con `accion: 'reporte'`). Montos con la misma regla que la Caja (`ingreso()`), comisiones si `modComision`, comparación con la semana previa. Solo `verMontos` + `verTodas`. `GET /api/reportes/:fecha` (en curso = al momento, sin guardar), `POST …/rehacer` (config).
 - Panel: 📊 en el menú, en la Caja y en la 🔔; WhatsApp (resumen de texto) y Excel (4 hojas).
+
+## Filtros de la agenda
+- Una sola vista `S.vista` (`js/panel/filtros.js`): periodo (`dia` | `mes` | `rango`), etiqueta, texto, filtros (`barb`, `serv`, `pago`, `origen`, `cli`, `wa` y los propios de una etiqueta: `captura`, `foto`, `tipo`) y `orden`. `VISTA_DEF()` es lo predeterminado y «Limpiar» vuelve a eso.
+- El día elegido se filtra en el navegador (`filtroLocal`); el mes, el rango, el texto y el filtro de cliente van al servidor (`paramsVista` → `worker/modulos/filtros.js`). **Si se cambia una regla, cambiarla en los dos lados**: `test/filtros.ui.mjs` compara navegador y servidor.
+- `/citas/buscar` pagina por cursor con cualquier orden (la clave del orden + id); `/citas/conteo` da `{estados, porValidar}` («Yape por validar» cuenta todos los días). Pago y monto solo con `verMontos`; cliente solo con `dash`.
 
 ## Rendimiento
 - `GET /api/panel` trae solo la ventana de citas (35 días atrás, 120 adelante, más Yape pendientes). Lo demás: `GET /api/citas/buscar` (filtros y páginas en D1). Clientes usa la ficha del servidor; el Dashboard pide solo el periodo elegido (`traerRango`) más retención y «por recuperar» desde `clientes`; solo el Excel de citas baja toda la historia.

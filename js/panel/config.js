@@ -224,7 +224,7 @@ function agMarca(){const l=S._ag,vistos=new Set();let n=0;l.forEach((e,i)=>{cons
 async function agendaCrear(){const est=$('#agEst').value,l=S._ag.filter(e=>e.ok&&!e._bad&&e.nombre.trim());let n=0,err=[];$('#agBtn').disabled=true;
  for(const e of l){const s=S.servicios.find(x=>x.id===e.servicioId);
   try{await API.crearCita({fecha:e.fecha,hora:e.hora,barberoId:e.barberoId,servicioId:s?.id,servicioNombre:s?.nombre||'',precio:+s?.precio||0,cliente:{nombre:e.nombre.trim(),tel:e.tel||'',ciudad:'',dni:e.dni||''},nota:'',estado:est,...(est==='atendida'?{atendidaTs:new Date(e.fecha+'T'+e.hora).getTime()}:{}),adelanto:0,adelantoOk:false,origen:'panel',creadoPor:S.ses.uid||S.ses.barberoId||'dueno'});n++}catch(x){err.push(e.nombre)}}
- closeModal();if(l[0])S.fecha=l[0].fecha;await reload();toast(`✅ ${n} cita${n!==1?'s':''} creada${n!==1?'s':''}${err.length?` · ❌ fallaron: ${err.join(', ')}`:''}`)}
+ closeModal();if(l[0])fijarDia(l[0].fecha);await reload();toast(`✅ ${n} cita${n!==1?'s':''} creada${n!==1?'s':''}${err.length?` · ❌ fallaron: ${err.join(', ')}`:''}`)}
 
 /* Mover varias citas a otro día (p. ej. una carga masiva que quedó con la fecha equivocada) */
 function moverCitas(){const now=Date.now(),dom=(()=>{const t=hoy(),w=pYmd(t).getDay();return addD(t,w?-w:-7)})();
@@ -244,7 +244,7 @@ async function mvAplicar(){const f=$('#mvF').value,at=$('#mvAt').checked;if(!f)r
  $('#mvBtn').disabled=true;let n=0;const err=[];
  for(const id of ids){const c=cita(id);if(!c)continue;
   try{await API.updateCita(id,{fecha:f,...(at?{estado:'atendida',atendidaTs:c.atendidaTs||new Date(f+'T'+(c.hora||'12:00')).getTime()}:{})});n++}catch(e){err.push(`${c.cliente?.nombre} (${e.message})`)}}
- closeModal();S.fecha=f;await reload();toast(`✅ ${n} cita${n!==1?'s':''} movida${n!==1?'s':''} al ${fLarga(f)}`);if(err.length)alert('No se pudieron mover:\n'+err.join('\n'))}
+ closeModal();fijarDia(f);await reload();toast(`✅ ${n} cita${n!==1?'s':''} movida${n!==1?'s':''} al ${fLarga(f)}`);if(err.length)alert('No se pudieron mover:\n'+err.join('\n'))}
 let dniAutoP='';
 async function buscarDniP(inp){const v=inp.value.replace(/\D/g,'');inp.value=v;const est=$('#fDniEst');if(!est)return;
  if(v.length!==8||!API.remote){est.textContent='';return}

@@ -58,7 +58,7 @@ main{padding:14px;max-width:760px;margin:0 auto;padding-bottom:120px}
 .chip{flex:none;padding:9px 16px;border-radius:99px;border:1px solid var(--line);background:var(--bg);font-weight:700;font-size:13px;white-space:nowrap;text-transform:uppercase}
 .chip.on{background:var(--blue);border-color:var(--blue);color:#fff}
 .fchip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;font-size:13px;font-weight:700;border:1px solid var(--blue);color:var(--blue);background:rgba(138,63,252,.08)}
-.fchip.x{border-color:var(--red);color:var(--red);background:rgba(248,81,73,.08)}
+.fchip.lim{border-color:var(--red);color:var(--red);background:rgba(248,81,73,.08)}
 .days{display:flex;gap:8px;overflow-x:auto;padding:12px 0 2px;scrollbar-width:none}
 .days::-webkit-scrollbar{display:none}
 .day{flex:none;width:58px;padding:8px 0;border-radius:14px;border:1px solid var(--line);background:var(--bg);text-align:center;position:relative}
@@ -66,8 +66,6 @@ main{padding:14px;max-width:760px;margin:0 auto;padding-bottom:120px}
 .day small{font-size:10px;color:var(--mu);text-transform:uppercase;font-weight:700}
 .day.on{background:var(--blue);border-color:var(--blue)}.day.on small{color:#fff}
 .day i{position:absolute;top:-6px;right:-4px;background:var(--pur);color:#fff;font-style:normal;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:99px;display:grid;place-items:center;padding:0 4px}
-.day.cal{display:grid;place-items:center;font-size:22px;overflow:hidden}
-.day.cal input{position:absolute;inset:0;opacity:0}
 .tools{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
 .tool{width:54px;height:54px;border-radius:14px;border:1px solid var(--line);background:var(--bg);font-size:24px;display:grid;place-items:center}
 .tool.p{background:var(--blue);border-color:var(--blue)}
@@ -213,10 +211,11 @@ th{color:var(--mu);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
 .lnk .row b{flex:1;font-size:17px}
 .st{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:99px;font-size:13px;font-weight:700;border:1px solid}
 /* próximas / chips / usuarios */
-.chiprow{display:flex;gap:8px;align-items:flex-start;padding-top:12px}
-.chiprow>.chip{flex:none;position:relative;z-index:1;box-shadow:8px 0 10px -2px var(--card)}
-.chiprow .chips{padding-top:0;flex:1;min-width:0}
-.chiprow.all{flex-wrap:wrap}.chips.wrap{display:contents}
+/* filtros de la agenda (js/panel/filtros.js) */
+.fchips{display:flex;flex-wrap:wrap;gap:8px}
+.chip.f{text-transform:none;font-size:14px;white-space:normal;text-align:left}
+.fbar{position:sticky;bottom:-22px;display:flex;flex-direction:column;gap:10px;margin-top:18px;padding:12px 0 6px;background:var(--card);border-top:1px solid var(--line)}
+.limpia{font:600 14px 'DM Sans',system-ui,sans-serif;color:var(--mu);text-decoration:underline;cursor:pointer;white-space:nowrap}
 .chip .cc{font-style:normal;margin-left:6px;background:rgba(255,255,255,.12);border-radius:99px;padding:1px 7px;font-size:11px}
 .rb.al{background:var(--card2);border-color:var(--line);color:var(--tx)}
 .rb.al.ok{background:#238636;border-color:#3fb950;box-shadow:0 0 0 3px #3fb95033}
@@ -318,6 +317,7 @@ th{color:var(--mu);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
 <script src="js/eventos.js"></script>
 <script src="js/panel/base.js"></script>
 <script src="js/panel/agenda.js"></script>
+<script src="js/panel/filtros.js"></script>
 <script src="js/panel/clientes.js"></script>
 <script src="js/panel/compartir.js"></script>
 <script src="js/panel/dashboard.js"></script>

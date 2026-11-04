@@ -50,6 +50,15 @@ export const MIGRACIONES = [
   { v: 4, nombre: 'reportes semanales', sql: [
     `CREATE TABLE IF NOT EXISTS reportes(semana TEXT PRIMARY KEY, datos TEXT NOT NULL, creado INTEGER NOT NULL)`,
   ] },
+  // Filtros de la agenda (worker/modulos/filtros.js): servicio, origen y pago como columnas indexadas.
+  { v: 5, nombre: 'filtros de la agenda', sql: [
+    `ALTER TABLE citas ADD COLUMN servicio_id TEXT GENERATED ALWAYS AS (IFNULL(json_extract(data, '$.servicioId'), '')) VIRTUAL`,
+    `ALTER TABLE citas ADD COLUMN origen TEXT GENERATED ALWAYS AS (CASE WHEN json_extract(data, '$.origen') IN ('web', 'link') THEN 'web' WHEN json_extract(data, '$.origen') = 'walkin' THEN 'walkin' ELSE 'panel' END) VIRTUAL`,
+    `ALTER TABLE citas ADD COLUMN pago TEXT GENERATED ALWAYS AS (CASE WHEN IFNULL(json_extract(data, '$.gratis'), 0) NOT IN (0, '') THEN 'gratis' WHEN IFNULL(CAST(json_extract(data, '$.adelanto') AS REAL), 0) > 0 THEN (CASE WHEN IFNULL(json_extract(data, '$.adelantoOk'), 0) NOT IN (0, '') THEN 'yape_ok' ELSE 'yape_pend' END) ELSE 'sin' END) VIRTUAL`,
+    `CREATE INDEX IF NOT EXISTS ix_citas_serv ON citas(servicio_id, fecha)`,
+    `CREATE INDEX IF NOT EXISTS ix_citas_origen ON citas(origen, fecha)`,
+    `CREATE INDEX IF NOT EXISTS ix_citas_pago ON citas(pago, fecha)`,
+  ] },
 ];
 export let schemaListo = null;
 export function asegurarSchema(env) { return schemaListo ||= aplicarMigraciones(env).catch(e => { schemaListo = null; throw e }) }

@@ -1,7 +1,8 @@
-import { actualizarCliente, cursorDe, leerCursor, rehacerClientes, sinAcentos, telDe } from './clientes.js';
-import { addD, ahoraLocal, codigo, fail, json, str, uid } from '../comun.js';
+import { actualizarCliente, cursorDe, leerCursor, rehacerClientes, telDe } from './clientes.js';
+import { addD, ahoraLocal, codigo, fail, json, uid } from '../comun.js';
 import { bumpStmt, citaPorId, datos, expirar, filaCita, guardarCita, insertarCita, kvStmt, leerKV } from '../datos.js';
 import { auditar, pinPermitido, quienEs } from './auth.js';
+import { filtrosCitas, MONTO, ordenCitas } from './filtros.js';
 
 /* ---------- vistas según permisos ---------- */
 export function vistaPanel(d, citas, s) {
@@ -34,35 +35,34 @@ export async function visitasPorCliente(env, s, tels) {
   const m = {}; for (const x of r.results) { const k = String(x.t || '').replace(/\D/g, '').slice(-9); if (k) m[k] = (m[k] || 0) + x.n }
   return m;
 }
+/* Lista de citas con filtros (worker/modulos/filtros.js), orden y páginas.
+   Sin texto: paginación por cursor (la clave del orden + id): no se repiten ni saltan citas si alguien agenda mientras se pagina.
+   Con texto: páginas por offset; en el orden por hora salen primero las próximas (de la más cercana a la más lejana) y luego las pasadas. */
 export async function buscarCitas(env, s, q) {
-  const w = [], a = [], hoy = ahoraLocal(env).fecha;
-  if (!s.perm.verTodas) { w.push('barbero_id = ?'); a.push(s.barberoId) }
-  else if (q.barbero) { w.push('barbero_id = ?'); a.push(str(q.barbero, 40)) }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(q.desde || '')) { w.push('fecha >= ?'); a.push(q.desde) }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(q.hasta || '')) { w.push('fecha <= ?'); a.push(q.hasta) }
-  const est = String(q.estado || '').split(',').filter(e => /^[a-z_]{3,20}$/.test(e)).slice(0, 8);
-  if (est.length) { w.push(`estado IN (${est.map(() => '?').join(',')})`); a.push(...est) }
-  const txt = String(q.q || '').trim().toLowerCase().slice(0, 60);
-  if (txt.length >= 2) {
-    const esc = t => '%' + t.replace(/[\\%_]/g, m => '\\' + m) + '%', like = esc(txt), sa = esc(sinAcentos(txt));
-    // Sin acentos: «jose» encuentra «José» (vía la ficha de clientes, que guarda el nombre normalizado).
-    if (s.perm.verTel) { w.push(`(lower(data) LIKE ? ESCAPE '\\' OR lower(codigo) LIKE ? ESCAPE '\\' OR tel IN (SELECT tel FROM clientes WHERE buscar LIKE ? ESCAPE '\\'))`); a.push(like, like, sa) }
-    else { w.push(`(lower(json_extract(data, '$.cliente.nombre')) LIKE ? ESCAPE '\\' OR lower(codigo) LIKE ? ESCAPE '\\' OR tel IN (SELECT tel FROM clientes WHERE nombre_n LIKE ? ESCAPE '\\'))`); a.push(like, like, sa) }
-  }
-  // Paginación por cursor (sin búsqueda): (fecha, hora, id) > último visto. No se repiten ni saltan citas si alguien agenda mientras se pagina.
-  const cur = txt.length < 2 && q.cursor ? leerCursor(q.cursor) : null;
-  const cw = cur && cur.length === 3 ? ' AND (fecha, hora, id) > (?, ?, ?)' : '';
-  const donde = w.length ? ' WHERE ' + w.join(' AND ') : '';
+  const hoy = ahoraLocal(env).fecha, { donde, a, txt } = filtrosCitas(s, q), o = ordenCitas(s, q.orden);
   const lim = Math.min(500, Math.max(1, +q.limit || 50)), off = Math.max(0, +q.offset || 0);
-  // Con búsqueda: primero las próximas (de la más cercana a la más lejana) y luego las pasadas (de la más reciente a la más antigua).
-  const orden = txt.length >= 2 ? ` ORDER BY (fecha < ?) , CASE WHEN fecha >= ? THEN fecha || hora END ASC, fecha DESC, hora DESC` : ' ORDER BY fecha, hora, id';
-  const ordArgs = txt.length >= 2 ? [hoy, hoy] : [];
+  const proximas = txt.length >= 2 && o === ordenCitas(s, 'hora');
+  const sel = o.k.map((e, i) => `${e} AS _k${i}`).join(', '), dir = o.desc ? ' DESC' : '';
+  const orden = proximas ? ' ORDER BY (fecha < ?), CASE WHEN fecha >= ? THEN fecha || hora END ASC, fecha DESC, hora DESC, id' : ' ORDER BY ' + o.k.map(e => e + dir).join(', ');
+  const cur = txt.length < 2 && q.cursor ? leerCursor(q.cursor) : null, conCursor = Array.isArray(cur) && cur.length === o.k.length;
+  const cw = conCursor ? ` AND (${o.k.join(', ')}) ${o.desc ? '<' : '>'} (${o.k.map(() => '?').join(', ')})` : '';
   const [tot, r] = await Promise.all([
     env.DB.prepare('SELECT COUNT(*) AS n FROM citas' + donde).bind(...a).first(),
-    env.DB.prepare('SELECT * FROM citas' + (donde || ' WHERE 1 = 1') + cw + orden + ' LIMIT ? OFFSET ?').bind(...a, ...(cw ? cur : []), ...ordArgs, lim, cw ? 0 : off).all(),
+    env.DB.prepare(`SELECT *, ${sel} FROM citas${donde}${cw}${orden} LIMIT ? OFFSET ?`).bind(...a, ...(conCursor ? cur : []), ...(proximas ? [hoy, hoy] : []), lim, conCursor ? 0 : off).all(),
   ]);
   const u = r.results.at(-1);
-  return { total: tot.n, items: enmascarar(s, r.results.map(filaCita)), offset: off, limit: lim, siguiente: txt.length < 2 && r.results.length === lim ? cursorDe([u.fecha, u.hora, u.id]) : null };
+  return { total: tot.n, items: enmascarar(s, r.results.map(filaCita)), offset: off, limit: lim, siguiente: txt.length < 2 && r.results.length === lim ? cursorDe(o.k.map((_, i) => u['_k' + i])) : null };
+}
+/* Números de las etiquetas: cuántas citas (y cuánto suman) hay por estado con los mismos filtros.
+   «Yape por validar» se cuenta en todos los días: es trabajo pendiente que no debe esconderse. */
+export async function conteoCitas(env, s, q) {
+  const f = filtrosCitas(s, q, { sinEstado: true }), p = filtrosCitas(s, q, { sinEstado: true, sinPeriodo: true });
+  const [r, pv] = await Promise.all([
+    env.DB.prepare(`SELECT estado, COUNT(*) AS n, SUM(${MONTO}) AS m FROM citas${f.donde} GROUP BY estado`).bind(...f.a).all(),
+    env.DB.prepare(`SELECT COUNT(*) AS n, SUM(${MONTO}) AS m FROM citas${p.donde} AND estado IN ('por_validar', 'pendiente_pago')`).bind(...p.a).first(),
+  ]);
+  const m = x => s.perm.verMontos ? Math.round((x || 0) * 100) / 100 : null;
+  return { estados: Object.fromEntries(r.results.map(x => [x.estado, { n: x.n, m: m(x.m) }])), porValidar: { n: pv.n, m: m(pv.m) } };
 }
 
 /* Agenda: panel, búsqueda paginada, configuración del negocio, crear/editar/eliminar e importar citas. */
@@ -82,6 +82,7 @@ export async function rutasCitas(c) {
     const vis = await visitasPorCliente(env, s, r.results.map(x => x.tel)), wa = (await leerKV(env, ['whatsappApi'])).whatsappApi || {};
     return json({ ...vistaPanel(d, r.results.map(filaCita), s), v: ver, ventana: { desde, hasta }, visitas: vis, primeraFecha: pri?.f || null, wa: { ok: !!wa.conectado?.ok, diaAntes: !!wa.auto?.diaAntes } });
   }
+  if (path === '/citas/conteo' && m === 'GET') return json(await conteoCitas(env, s, Object.fromEntries(new URL(req.url).searchParams)));
   if (path === '/citas/buscar' && m === 'GET') {
     return json(await buscarCitas(env, s, Object.fromEntries(new URL(req.url).searchParams)));
   }

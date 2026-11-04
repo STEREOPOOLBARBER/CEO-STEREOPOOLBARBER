@@ -155,3 +155,10 @@ La estructura de la base de datos ahora es **versionada** (`MIGRACIONES` en `wor
 - Cada **lunes desde las 8 a. m.** se arma solo el reporte de la semana anterior (lunes a domingo) y llega a la 🔔. También desde ☰ Menú → **📊 Reporte semanal de caja** o desde la Caja.
 - Incluye ingresos (↑↓ vs. semana anterior), cortes, ticket, % no vino, por barbero con **comisión** y lo que queda al local, por día, servicios top, Yape, reservas web, clientes nuevos, confirmaciones y por recuperar. Botones **💬 WhatsApp** y **📥 Excel**.
 - El reporte guardado es la «foto» del lunes; si corriges citas viejas, usa **rehacer**.
+
+### Filtros de la agenda
+- **⚙️ junto al buscador → Búsqueda avanzada:** fecha (Hoy, Mañana, Esta semana, Este mes o Desde/Hasta), barbero, servicio, pago, origen, cliente (nuevo, frecuente, con notas), WhatsApp y orden. Se eligen y se toca **🔍 Aplicar filtros**; afuera aparecen como pastillas con ✕ y **✕ Limpiar** vuelve a lo de siempre (Hoy · Todos · por hora).
+- **Días:** al elegir un día, las etiquetas cuentan y muestran solo ese día. **📆 Mes** (o tocar otra vez el día elegido) muestra todo el mes agrupado por día, con ‹ › para cambiar de mes y **Ver más** de 30 en 30. «Yape por validar» siempre cuenta todos los días.
+- **Doble toque en una etiqueta:** su orden y sus filtros (p. ej. Yape por validar → más antiguo / por vencer / con o sin captura; Confirmada → confirmó que viene; Atendido → mayor monto / sin foto después; Cancelada → canceladas o expiradas). Cada etiqueta recuerda su orden en ese celular.
+- El barbero ve el ⚙️ sin barbero, pago ni cliente; el servidor lo vuelve a comprobar.
+- Técnico: `GET /api/citas/buscar` (filtros, `orden`, cursor) y `GET /api/citas/conteo` (números por estado). Migración v5 agrega `servicio_id`, `origen` y `pago` indexados. No hay que hacer nada en Cloudflare.

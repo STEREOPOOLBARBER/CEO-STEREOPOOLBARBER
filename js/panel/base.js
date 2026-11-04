@@ -125,16 +125,12 @@ const API={
 };
 
 /* ---------- estado ---------- */
-const S={usuarios:[],perm:{},ses:lsGet('ses',null),cfg:mergeCfg({}),barberos:[],servicios:[],citas:[],tab:'agenda',fecha:hoy(),filtro:'todos',barbF:'',q:'',showF:false,colap:new Set(),cliQ:'',cajaF:hoy(),draft:null,dirty:false,open:'',known:new Set(),loaded:false};
+const S={usuarios:[],perm:{},ses:lsGet('ses',null),cfg:mergeCfg({}),barberos:[],servicios:[],citas:[],tab:'agenda',colap:new Set(),cliQ:'',cajaF:hoy(),draft:null,dirty:false,open:'',known:new Set(),loaded:false};
 const est=k=>({...DEF_EST[k]||DEF_EST.confirmada,...(S.cfg.est||{})[k]});
-/* Vistas por rango: 'semana' (lunes a domingo) y 'mes'. S.off mueve el rango (-1 anterior, +1 siguiente). */
-const esRango=()=>S.fecha==='semana'||S.fecha==='mes';
 const fCortaD=s=>{const d=pYmd(s);return `${d.getDate()} ${MESC[d.getMonth()]}`};
-function rangoAg(){const o=+S.off||0,h=hoy();
- if(S.fecha==='semana'){const d=pYmd(addD(h,7*o)),desde=addD(ymd(d),-((d.getDay()+6)%7)),hasta=addD(desde,6);return{desde,hasta,t:`${fCortaD(desde)} – ${fCortaD(hasta)}`}}
- const b=pYmd(h),m=new Date(b.getFullYear(),b.getMonth()+o,1);return{desde:ymd(m),hasta:ymd(new Date(m.getFullYear(),m.getMonth()+1,0)),t:`${MES[m.getMonth()]} ${m.getFullYear()}`}}
-const enRango=c=>{const r=rangoAg();return c.fecha>=r.desde&&c.fecha<=r.hasta};
-const FILTROS=['todos','por_validar','confirmada','en_silla','atendida','no_vino','cancelada'];
+const lunesDe=f=>addD(f,-((pYmd(f).getDay()+6)%7)); // semana de lunes a domingo
+/* Etiquetas de la agenda (los filtros están en js/panel/filtros.js). */
+const ETIQUETAS=['todos','por_validar','confirmada','en_silla','atendida','no_vino','cancelada'];
 const barb=id=>S.barberos.find(b=>b.id===id);
 const cita=id=>S.citas.find(c=>c.id===id);
 const PERMS=[['verTodas','📅 Ver la agenda de todos los barberos'],['verTel','📞 Ver celular de clientes'],['verMontos','💰 Ver precios y caja'],['crear','➕ Crear y editar citas'],['cancelar','🚫 Cancelar, "No vino" y eliminar'],['yape','💸 Validar pagos Yape'],['links','🔗 Generar links para clientes'],['dash','📈 Ver dashboard y clientes'],['excel','📊 Excel y respaldos'],['config','⚙️ Configuración y usuarios']];
@@ -195,7 +191,7 @@ async function boot(){
 }
 async function reload(notify){
  try{const d=await API.load();Object.assign(S,{cfg:mergeCfg(d.cfg),barberos:d.barberos||[],servicios:d.servicios||[],usuarios:d.usuarios||[],citas:(d.citas||[]).map(c=>c.estado==='pendiente_pago'?{...c,estado:'por_validar'}:c)})}catch(e){toast('⚠️ '+e.message);return}
- if(API.remote){const v=API._v;if(v!==S._vPrev){S._vPrev=v;S.extra=new Map();S.rangosOk=new Set();S.hist=null;S.busq=null}S.ventana=API._d?.ventana||null;S.visitas=API._d?.visitas||null;S.primeraFecha=API._d?.primeraFecha||null;S.waOk=!!API._d?.wa?.ok;S.waDiaAntes=!!API._d?.wa?.diaAntes;mezclar([])}
+ if(API.remote){const v=API._v;if(v!==S._vPrev){S._vPrev=v;S.extra=new Map();S.rangosOk=new Set();S.hist=null}S.ventana=API._d?.ventana||null;S.visitas=API._d?.visitas||null;S.primeraFecha=API._d?.primeraFecha||null;S.waOk=!!API._d?.wa?.ok;S.waDiaAntes=!!API._d?.wa?.diaAntes;mezclar([])}
  const pm=permsFor(S.ses);if(pm===null){toast('Tu usuario fue desactivado');localStorage.removeItem('brb_ses');return setTimeout(()=>location.reload(),900)}S.perm=pm;
  if(notify&&S.loaded){const nuevas=S.citas.filter(c=>!S.known.has(c.id)&&mine(c)&&c.origen==='web');if(nuevas.length){toast(`🔔 ${nuevas.length} reserva(s) nueva(s)`);navigator.vibrate?.([120,60,120]);beep()}
   const rep=S.citas.filter(c=>c.reprogTs&&mine(c)&&S.known.has(c.id)&&c.reprogTs>(S.repVisto||0));if(rep.length){toast(`🔁 ${rep.map(c=>c.cliente?.nombre?.split(' ')[0]).join(', ')} reprogramó: ${fLarga(rep[0].fecha)} · ${h12(rep[0].hora)}`);navigator.vibrate?.([120,60,120]);beep()}}
@@ -203,7 +199,7 @@ async function reload(notify){
  cargarAlertas();
  S.ultCarga=Date.now();
  S.known=new Set(S.citas.map(c=>c.id));S.loaded=true;if(!S.dirty)applyTheme(S.cfg);renderHeader();renderProx();
- if(S.tab==='agenda'&&document.activeElement?.id==='q')renderLista();else if(S.tab==='agenda')renderTab();
+ if(S.tab==='agenda'&&document.activeElement?.id==='q'){renderConteos();renderLista()}else if(S.tab==='agenda')renderTab();
 }
 function renderHeader(){
  $('#hNombre').textContent=S.cfg.nombre;document.title=S.cfg.nombre+' · Panel';logoHTML($('#hLogo'),S.cfg);
