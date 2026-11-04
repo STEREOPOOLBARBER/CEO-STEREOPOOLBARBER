@@ -499,6 +499,7 @@ async function boot(){
 }
 async function reload(notify){
  try{const d=await API.load();Object.assign(S,{cfg:mergeCfg(d.cfg),barberos:d.barberos||[],servicios:d.servicios||[],usuarios:d.usuarios||[],citas:(d.citas||[]).map(c=>c.estado==='pendiente_pago'?{...c,estado:'por_validar'}:c)})}catch(e){toast('⚠️ '+e.message);return}
+ if(API.remote){const v=API._v;if(v!==S._vPrev){S._vPrev=v;S.extra=new Map();S.rangosOk=new Set();S.hist=null;S.busq=null}S.ventana=API._d?.ventana||null;S.visitas=API._d?.visitas||null;mezclar([])}
  const pm=permsFor(S.ses);if(pm===null){toast('Tu usuario fue desactivado');localStorage.removeItem('brb_ses');return setTimeout(()=>location.reload(),900)}S.perm=pm;
  if(notify&&S.loaded){const nuevas=S.citas.filter(c=>!S.known.has(c.id)&&mine(c)&&c.origen==='web');if(nuevas.length){toast(`🔔 ${nuevas.length} reserva(s) nueva(s)`);navigator.vibrate?.([120,60,120]);beep()}
   const rep=S.citas.filter(c=>c.reprogTs&&mine(c)&&S.known.has(c.id)&&c.reprogTs>(S.repVisto||0));if(rep.length){toast(`🔁 ${rep.map(c=>c.cliente?.nombre?.split(' ')[0]).join(', ')} reprogramó: ${fLarga(rep[0].fecha)} · ${h12(rep[0].hora)}`);navigator.vibrate?.([120,60,120]);beep()}}
@@ -522,8 +523,22 @@ const mHead=t=>`<h3>${t}<button class="x" onclick="closeModal()">✕</button></h
 async function verFoto(k){const v=$('#viewer');v.innerHTML='<img alt=""><button class="x">✕</button>';v.classList.add('on');v.querySelector('img').src=await API.foto(k)}
 
 /* =================== AGENDA =================== */
-function contarVisitas(){const m={};S.citas.forEach(c=>{if(c.estado==='atendida'){const k=telKey(c.cliente?.tel);if(k)m[k]=(m[k]||0)+1}});return m}
+function contarVisitas(){if(nube()&&S.visitas)return S.visitas;const m={};S.citas.forEach(c=>{if(c.estado==='atendida'){const k=telKey(c.cliente?.tel);if(k)m[k]=(m[k]||0)+1}});return m}
+/* ---------- citas bajo demanda (la base de datos solo entrega lo que se ve) ---------- */
+const nube=()=>API.remote&&!!S.ventana;
+function mezclar(items){S.extra=S.extra||new Map();items.forEach(c=>{S.extra.set(c.id,c);S.known?.add(c.id)});if(!S.extra.size)return;const ids=new Set(S.citas.map(c=>c.id));S.citas=S.citas.concat([...S.extra.values()].filter(c=>!ids.has(c.id)))}
+const cubre=(d,h)=>!nube()||(d>=S.ventana.desde&&h<=S.ventana.hasta)||S.rangosOk?.has(d+'|'+h);
+async function paginas(qs,tope=20000){let off=0,tot=1,all=[];while(off<tot&&off<tope){const r=await API.req('GET',`/citas/buscar?${qs}&limit=500&offset=${off}`);all=all.concat(r.items);tot=r.total;if(!r.items.length)break;off+=r.items.length}return all}
+async function traerRango(d,h){const k=d+'|'+h;S.trayendo=S.trayendo||new Set();if(cubre(d,h)||S.trayendo.has(k))return false;S.trayendo.add(k);
+ try{mezclar(await paginas(`desde=${d}&hasta=${h}`,5000));S.rangosOk.add(k);return true}catch(e){toast('⚠️ '+e.message);return false}finally{S.trayendo.delete(k)}}
+/* Historial completo: solo para Clientes, Dashboard y Excel (se pide una vez y se guarda hasta que algo cambie). */
+async function historial(){if(!nube())return S.citas;if(S.hist)return S.hist;toast('⏳ Cargando historial…');S.hist=await paginas('');mezclar([]);return S.hist}
+const todas=()=>(S.hist||S.citas).filter(mine);
+async function buscarServidor(key,off){const [q,f,b]=key.split('|'),est=f==='todos'?'':f==='cancelada'?'cancelada,expirada':f;
+ try{const r=await API.req('GET',`/citas/buscar?q=${encodeURIComponent(q)}${est?'&estado='+est:''}${b?'&barbero='+b:''}&limit=30&offset=${off}`);mezclar(r.items);
+  if([S.q.trim().toLowerCase(),S.filtro,S.barbF].join('|')!==key)return;S.busq=off&&S.busq?.key===key?{key,items:S.busq.items.concat(r.items),total:r.total}:{key,items:r.items,total:r.total};renderLista()}catch(e){toast('⚠️ '+e.message)}}
 function renderAgenda(){
+ {const r=esRango()?rangoAg():{desde:S.fecha,hasta:S.fecha};if(!cubre(r.desde,r.hasta))traerRango(r.desde,r.hasta).then(ok=>{if(ok&&S.tab==='agenda')renderAgenda()})}
  const all=scope(),dia=esRango()?all.filter(enRango):all.filter(c=>c.fecha===S.fecha),pv=all.filter(c=>c.estado==='por_validar').length,demo=S.citas.some(c=>c.demo);
  const dias=[];for(let i=-1;i<7;i++)dias.push(addD(hoy(),i));if(!esRango()&&!dias.includes(S.fecha))dias.push(S.fecha);
  const cuenta=f=>all.filter(c=>c.fecha===f&&activa(c)).length;
@@ -627,12 +642,15 @@ function notifWA(id,key,k){const c=cita(id);if(!c)return;window.open(waUrl(waNum
 function verPorValidar(){if(S.tab!=='agenda')goTab('agenda');S.filtro='por_validar';S.q='';renderAgenda()}
 function renderLista(){
  let cs=scope();const q=S.q.trim().toLowerCase(),global=!!q||esRango()||['por_validar'].includes(S.filtro);
- if(q||['por_validar'].includes(S.filtro)){}else if(esRango())cs=cs.filter(enRango);else cs=cs.filter(c=>c.fecha===S.fecha);
+ const srv=q.length>=2&&nube(),key=[q,S.filtro,S.barbF].join('|');
+ if(srv){if(S.busq?.key!==key){clearTimeout(S._bt);const el0=$('#lista');if(el0)el0.innerHTML='<div class="empty">🔎 Buscando en todas las fechas…</div>';const qh0=$('#qHint');if(qh0)qh0.style.display='';S._bt=setTimeout(()=>buscarServidor(key,0),300);return}
+  const ids=new Set(S.busq.items.map(c=>c.id));cs=S.citas.filter(c=>ids.has(c.id)&&mine(c))}
+ if(srv||q||['por_validar'].includes(S.filtro)){}else if(esRango())cs=cs.filter(enRango);else cs=cs.filter(c=>c.fecha===S.fecha);
  if(S.barbF)cs=cs.filter(c=>c.barberoId===S.barbF);
  if(S.filtro==='cancelada')cs=cs.filter(c=>c.estado==='cancelada'||c.estado==='expirada');
  else if(S.filtro!=='todos')cs=cs.filter(c=>c.estado===S.filtro);
  else if(!q)cs=cs.filter(c=>c.estado!=='expirada');
- if(q){const qd=q.replace(/\D/g,'');cs=cs.filter(c=>[c.cliente?.nombre,c.cliente?.tel,c.cliente?.dni,c.cliente?.ciudad,c.codigo,c.servicioNombre].join(' ').toLowerCase().includes(q)||(qd.length>=3&&[c.cliente?.tel,c.cliente?.dni].some(x=>String(x||'').replace(/\D/g,'').includes(qd))))}
+ if(q&&!srv){const qd=q.replace(/\D/g,'');cs=cs.filter(c=>[c.cliente?.nombre,c.cliente?.tel,c.cliente?.dni,c.cliente?.ciudad,c.codigo,c.servicioNombre].join(' ').toLowerCase().includes(q)||(qd.length>=3&&[c.cliente?.tel,c.cliente?.dni].some(x=>String(x||'').replace(/\D/g,'').includes(qd))))}
  const h0=hoy();cs.sort((a,b)=>{if(!q)return (a.fecha+a.hora).localeCompare(b.fecha+b.hora);const pa=a.fecha>=h0,pb=b.fecha>=h0;if(pa!==pb)return pa?-1:1;const k=(a.fecha+a.hora).localeCompare(b.fecha+b.hora);return pa?k:-k});
  const el=$('#lista');if(!el)return;
  const qh=$('#qHint');if(qh)qh.style.display=q?'':'none';
@@ -640,6 +658,7 @@ function renderLista(){
  const vis=contarVisitas(),grupos={};cs.forEach(c=>(grupos[c.barberoId]=grupos[c.barberoId]||[]).push(c));
  const orden=Object.keys(grupos).sort((a,b)=>S.barberos.findIndex(x=>x.id===a)-S.barberos.findIndex(x=>x.id===b));
  el.innerHTML=orden.map(bid=>{const b=barb(bid),arr=grupos[bid],cl=S.colap.has(bid);return `<div class="grp"><div class="grp-h"><span class="bar" style="background:${b?.color||'var(--pur)'}"></span>${avatar(b)}<h3>${esc(b?.nombre||'Sin asignar')}${S.fecha===hoy()?gNext(bid):''}</h3><button class="ibtn bare" onclick="togGrp('${bid}')">${cl?'▼':'▲'}</button><span class="cnt">${arr.length}</span></div>${cl?'':arr.map(c=>cardCita(c,global,vis)).join('')}</div>`}).join('');
+ if(srv&&S.busq.items.length<S.busq.total)el.insertAdjacentHTML('beforeend',`<button class="btn w" style="margin-top:10px" onclick="this.disabled=true;buscarServidor(S.busq.key,S.busq.items.length)">Ver más (${S.busq.total-S.busq.items.length} más)</button>`);
  hydrate(el);
 }
 function togGrp(id){S.colap.has(id)?S.colap.delete(id):S.colap.add(id);renderLista()}
@@ -737,7 +756,7 @@ async function edFoto(k,inp){const f=inp.files[0];if(!f)return;toast('⏳ Subien
   else if(se&&k==='fotoDespues'&&['confirmada','en_silla'].includes(se.value)){se.value='atendida';m='✅ Foto lista · pasa a Atendido · toca Guardar'}
   toast(m)}catch(e){toast('❌ '+e.message)}}
 function edAddLink(){let u=$('#edLink').value.trim();if(!u)return;if(!/^https?:\/\//i.test(u))u='https://'+u;S._ed.links.push({url:u,t:Date.now()});$('#edLink').value='';$('#edLinks').innerHTML=edLinks()}
-function fillHoras(){const f=$('#fFecha').value,bid=$('#fBarb').value,b=barb(bid);const sl=slotsDia(S.cfg);if(S._eh&&!sl.includes(S._eh))sl.push(S._eh);sl.sort();
+function fillHoras(){const f=$('#fFecha').value,bid=$('#fBarb').value,b=barb(bid);if(f&&!cubre(f,f))traerRango(f,f).then(ok=>{if(ok&&$('#fHora'))fillHoras()});const sl=slotsDia(S.cfg);if(S._eh&&!sl.includes(S._eh))sl.push(S._eh);sl.sort();
  let first=true;$('#fHora').innerHTML=sl.map(h=>{const oc=ocupado(S.citas,bid,f,h,S._eid);const sel=h===S._eh||(!S._eh&&!oc&&first);if(sel&&!oc)first=false;return `<option value="${h}" ${sel?'selected':''} ${oc?'disabled':''}>${h12(h)}${oc?' · ocupado':''}</option>`}).join('')||'<option value="">Sin horarios</option>';
  $('#fWarn').textContent=b&&!trabaja(S.cfg,b,f)?'⚠️ Ese barbero no atiende ese día (puedes guardarla igual).':''}
 async function guardarCita(id){const s=S.servicios.find(x=>x.id===$('#fServ').value),c=id?cita(id):null,estN=$('#fEst').value;
@@ -772,10 +791,10 @@ function ayuda(){openModal(mHead('📖 Cómo funciona')+[
  ['Fin del día','En 📊 Caja ves lo cobrado y la comisión de cada barbero.']].map((s,i)=>`<div class="stp"><b>${i+1}</b><div><b>${s[0]}</b><p class="hint" style="margin-top:2px">${s[1]}</p></div></div>`).join('')+`<p class="hint">👆👆 Doble toque en el nombre → Dashboard · Toca el logo → Excel y respaldo · ☰ → menú y cerrar sesión · 👆👆 Doble toque en "Todos" → ver todas las etiquetas.</p><p class="hint">✏️ edita la cita o cambia su estado · 🗑️ la cancela · 📋 historial del cliente · 💬 mensajes listos.</p>`)}
 
 /* =================== CLIENTES (ventana) =================== */
-function clientes(){const m={};scope().forEach(c=>{const k=telKey(c.cliente?.tel);if(!k)return;const o=m[k]||(m[k]={k,citas:[],ult:''});o.citas.push(c);if(c.fecha+c.hora>o.ult){o.ult=c.fecha+c.hora;o.nombre=c.cliente.nombre;o.tel=c.cliente.tel;o.ciudad=c.cliente.ciudad}});
+function clientes(){const m={};todas().forEach(c=>{const k=telKey(c.cliente?.tel);if(!k)return;const o=m[k]||(m[k]={k,citas:[],ult:''});o.citas.push(c);if(c.fecha+c.hora>o.ult){o.ult=c.fecha+c.hora;o.nombre=c.cliente.nombre;o.tel=c.cliente.tel;o.ciudad=c.cliente.ciudad}});
  return Object.values(m).map(o=>{const at=o.citas.filter(c=>c.estado==='atendida');return{...o,vis:at.length,gasto:at.reduce((a,c)=>a+(c.gratis?0:+c.precio||0),0),nov:o.citas.filter(c=>c.estado==='no_vino').length,ultAt:at.map(c=>c.fecha).sort().pop()||''}}).sort((a,b)=>b.ult.localeCompare(a.ult))}
 function stamps(v){const n=S.cfg.modFidelidad?+S.cfg.fidelidad||0:0;if(n<2)return'';const f=v%n;return `<div class="stamps">${Array.from({length:n},(_,i)=>`<i class="${i<f?'on':''}">${i===n-1?'🎁':''}</i>`).join('')}</div>`}
-function abrirClientes(){openModal(mHead('👥 Clientes')+`<input class="in" placeholder="🔍 Buscar cliente o celular…" value="${esc(S.cliQ)}" oninput="S.cliQ=this.value;listaClientes()"><p class="hint" id="cliCount"></p><div id="cliList"></div>`);listaClientes()}
+async function abrirClientes(){if(nube()&&!S.hist){try{await historial()}catch(e){return toast('⚠️ '+e.message)}}openModal(mHead('👥 Clientes')+`<input class="in" placeholder="🔍 Buscar cliente o celular…" value="${esc(S.cliQ)}" oninput="S.cliQ=this.value;listaClientes()"><p class="hint" id="cliCount"></p><div id="cliList"></div>`);listaClientes()}
 function listaClientes(){const q=S.cliQ.toLowerCase().trim();let cs=clientes();const tot=cs.length;if(q)cs=cs.filter(c=>(c.nombre+' '+c.tel+' '+c.ciudad).toLowerCase().includes(q));
  $('#cliCount').textContent=`${tot} cliente(s)`;
  $('#cliList').innerHTML=cs.length?cs.map(c=>`<div class="li" style="cursor:pointer" onclick="histCliente('${c.k}')"><span class="av lg">👤</span><div class="t"><b>${esc(c.nombre)}</b><small>📞 ${esc(telV(c.tel))}${c.ciudad?' · 📍 '+esc(c.ciudad):''}<br>⭐ ${c.vis} visita(s) · ${soles(c.gasto)}${c.nov?` · <span style="color:var(--red)">❌ ${c.nov} falta(s)</span>`:''}</small>${stamps(c.vis)}</div><span style="color:var(--mu)">›</span></div>`).join(''):'<div class="empty"><b>👥</b>Aún no hay clientes</div>'}
@@ -789,7 +808,7 @@ function waCli(k){const c=clientes().find(x=>x.k===k);if(c)abrirWA(c.tel,`Hola $
 
 /* =================== CAJA (ventana) =================== */
 function ingresoCita(c){if(c.estado==='atendida')return c.gratis?(c.adelantoOk?+c.adelanto||0:0):+c.precio||0;if(c.estado==='no_vino')return c.adelantoOk?+c.adelanto||0:0;return 0}
-function abrirCaja(){const f=S.cajaF,cs=scope().filter(c=>c.fecha===f),at=cs.filter(c=>c.estado==='atendida'),nv=cs.filter(c=>c.estado==='no_vino'),com=S.cfg.modComision;
+function abrirCaja(){if(!cubre(S.cajaF,S.cajaF)){traerRango(S.cajaF,S.cajaF).then(ok=>ok&&abrirCaja());}const f=S.cajaF,cs=scope().filter(c=>c.fecha===f),at=cs.filter(c=>c.estado==='atendida'),nv=cs.filter(c=>c.estado==='no_vino'),com=S.cfg.modComision;
  const total=cs.reduce((a,c)=>a+ingresoCita(c),0),yape=[...at,...nv].filter(c=>c.adelantoOk).reduce((a,c)=>a+(+c.adelanto||0),0),local=Math.max(0,total-yape),ret=nv.filter(c=>c.adelantoOk).reduce((a,c)=>a+(+c.adelanto||0),0);
  const filas=S.barberos.filter(b=>isAdmin()||b.id===S.ses.barberoId).map(b=>{const mc=cs.filter(c=>c.barberoId===b.id);const g=mc.reduce((a,c)=>a+ingresoCita(c),0),pago=com?Math.round(g*(+b.comision||0))/100:0;return{b,cortes:mc.filter(c=>c.estado==='atendida').length,g,pago,neto:g-pago}}).filter(r=>r.cortes||r.g);
  S._cajaTxt=`💈 *${S.cfg.nombre}* — Caja ${fLarga(f)}\n\n✔️ Cortes: ${at.length}\n💰 Total: ${soles(total)}\n💸 Yape (adelantos): ${soles(yape)}\n💵 Cobrado en local: ${soles(local)}\n❌ No vinieron: ${nv.length} (retenido ${soles(ret)})\n\n`+filas.map(r=>`• ${r.b.nombre}: ${r.cortes} cortes · ${soles(r.g)}${com?` · comisión ${soles(r.pago)}`:''}`).join('\n');
@@ -905,10 +924,10 @@ function abrirDatos(){openModal(`<div class="grab"></div><div class="mn"><h3 sty
   <p class="hint" style="margin-top:0">Guarda o recupera <b style="color:var(--tx)">todo</b> el sistema (citas, clientes, links, barberos, servicios, usuarios y configuración) en un archivo .json. Más completo que Excel.</p>
   <button class="btn g w" style="margin-top:12px;padding:16px;font-size:16px" onclick="exportar()">🛡️ Crear y descargar respaldo</button>
   <label class="btn w" style="margin-top:10px;padding:14px">♻️ Restaurar respaldo<input type="file" accept=".json" style="display:none" onchange="importar(this)"></label></div></div>`)}
-async function exportarClientes(){try{toast('⏳ Preparando…');await loadScript(XLSX_SRC);const rows=clientes().map(c=>({'Nombre':c.nombre,'Teléfono':c.tel,'Ciudad':c.ciudad||'','Visitas':c.vis,'Gastado':c.gasto,'Faltas':c.nov,'Última visita':c.ultAt}));const ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Clientes');XLSX.writeFile(wb,`clientes-${hoy()}.xlsx`);toast('✅ Clientes descargados')}catch(e){toast('❌ '+e.message)}}
+async function exportarClientes(){try{toast('⏳ Preparando…');await historial();await loadScript(XLSX_SRC);const rows=clientes().map(c=>({'Nombre':c.nombre,'Teléfono':c.tel,'Ciudad':c.ciudad||'','Visitas':c.vis,'Gastado':c.gasto,'Faltas':c.nov,'Última visita':c.ultAt}));const ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Clientes');XLSX.writeFile(wb,`clientes-${hoy()}.xlsx`);toast('✅ Clientes descargados')}catch(e){toast('❌ '+e.message)}}
 function ayudaExcel(){openModal(mHead('📖 Excel')+`<div class="stp"><b>1</b><div><b>Exportar</b><p class="hint" style="margin-top:2px">Descarga todas las citas con sus datos. Ideal para tu control mensual.</p></div></div><div class="stp"><b>2</b><div><b>Importar</b><p class="hint" style="margin-top:2px">Si una fila tiene un Código que ya existe, se actualiza; si no, se agrega como nueva. Barbero, servicio y estado se reconocen por su nombre.</p></div></div><div class="stp"><b>3</b><div><b>Respaldo completo</b><p class="hint" style="margin-top:2px">Úsalo antes de cambiar de celular. Las fotos quedan en el equipo.</p></div></div>`)}
 async function exportarExcel(){try{toast('⏳ Preparando Excel…');await loadScript(XLSX_SRC);
- const rows=S.citas.slice().sort((a,b)=>(a.fecha+a.hora).localeCompare(b.fecha+b.hora)).map(c=>({'Código':c.codigo,'Fecha':c.fecha,'Hora':c.hora,'Cliente':c.cliente?.nombre||'','Teléfono':c.cliente?.tel||'','DNI':c.cliente?.dni||'','Ciudad':c.cliente?.ciudad||'','Barbero':barb(c.barberoId)?.nombre||'','Servicio':c.servicioNombre||'','Precio':+c.precio||0,'Adelanto':+c.adelanto||0,'Adelanto validado':c.adelantoOk?'Sí':'No','Estado':est(c.estado).t,'Nota':c.nota||'','Origen':c.origen||'','Gratis':c.gratis?'Sí':'No','Creado':c.creada?new Date(c.creada).toLocaleString('es-PE'):''}));
+ const rows=(await historial()).slice().sort((a,b)=>(a.fecha+a.hora).localeCompare(b.fecha+b.hora)).map(c=>({'Código':c.codigo,'Fecha':c.fecha,'Hora':c.hora,'Cliente':c.cliente?.nombre||'','Teléfono':c.cliente?.tel||'','DNI':c.cliente?.dni||'','Ciudad':c.cliente?.ciudad||'','Barbero':barb(c.barberoId)?.nombre||'','Servicio':c.servicioNombre||'','Precio':+c.precio||0,'Adelanto':+c.adelanto||0,'Adelanto validado':c.adelantoOk?'Sí':'No','Estado':est(c.estado).t,'Nota':c.nota||'','Origen':c.origen||'','Gratis':c.gratis?'Sí':'No','Creado':c.creada?new Date(c.creada).toLocaleString('es-PE'):''}));
  const ws=XLSX.utils.json_to_sheet(rows,{header:COLS});ws['!cols']=COLS.map(h=>({wch:Math.max(10,h.length+2)}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Citas');XLSX.writeFile(wb,`citas-${S.cfg.nombre.replace(/\W+/g,'-')}-${hoy()}.xlsx`);toast('✅ Excel descargado')}catch(e){toast('❌ '+e.message)}}
 async function importarExcel(inp){const f=inp.files[0];if(!f)return;try{await loadScript(XLSX_SRC);const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
  const norm=t=>String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
@@ -921,20 +940,20 @@ async function importarExcel(inp){const f=inp.files[0];if(!f)return;try{await lo
 
 /* =================== DASHBOARD (doble toque en el nombre) =================== */
 const PER=[['hoy','Hoy'],['7','7 días'],['30','30 días'],['mes','Este mes'],['todo','Todo']];
-function rango(p){const h=hoy();if(p==='hoy')return[h,h];if(p==='7')return[addD(h,-6),h];if(p==='30')return[addD(h,-29),h];if(p==='mes')return[h.slice(0,8)+'01',h];const f=S.citas.map(c=>c.fecha).sort()[0]||h;return[f<h?f:h,h]}
+function rango(p){const h=hoy();if(p==='hoy')return[h,h];if(p==='7')return[addD(h,-6),h];if(p==='30')return[addD(h,-29),h];if(p==='mes')return[h.slice(0,8)+'01',h];const f=(S.hist||S.citas).map(c=>c.fecha).sort()[0]||h;return[f<h?f:h,h]}
 function dTog(k){S.dx=S.dx||new Set();S.dx.has(k)?S.dx.delete(k):S.dx.add(k);const sc=$('.sheet').scrollTop;abrirDash(true);$('.sheet').scrollTop=sc}
 function bars(id,rows,color){const max=Math.max(1,...rows.map(r=>r.v));S.dx=S.dx||new Set();
  return `<div class="bars">${rows.map(r=>{const k=id+':'+r.k,open=S.dx.has(k);return `<div class="br" onclick="dTog('${k}')"><span>${open?'▾':'▸'} ${esc(r.l)}</span><i><b style="width:${Math.max(2,r.v/max*100)}%;background:${r.c||color}"></b></i><em>${r.t??r.v}</em></div>${open&&r.d?`<div class="dt">${r.d()}</div>`:''}`}).join('')||'<p class="hint">Sin datos en este periodo</p>'}</div>`}
 const dl=(a,b)=>`<div class="r"><span>${a}</span><b>${b}</b></div>`;
 const citaLn=c=>dl(`${c.fecha.slice(5)} ${h12(c.hora)} · ${esc(c.cliente?.nombre||'')}`,`${esc(barb(c.barberoId)?.nombre||'')}`);
-function abrirDash(keep){const p=S.dp||(S.dp='30'),[d1,d2]=rango(p),all=scope(),cs=all.filter(c=>c.fecha>=d1&&c.fecha<=d2);
+async function abrirDash(keep){if(nube()&&!S.hist){try{await historial()}catch(e){return toast('⚠️ '+e.message)}}const p=S.dp||(S.dp='30'),[d1,d2]=rango(p),all=todas(),cs=all.filter(c=>c.fecha>=d1&&c.fecha<=d2);
  const at=cs.filter(c=>c.estado==='atendida'),nv=cs.filter(c=>c.estado==='no_vino'),canc=cs.filter(c=>c.estado==='cancelada');
  const ing=cs.reduce((a,c)=>a+ingresoCita(c),0),ticket=at.length?ing/at.length:0;
  const bs=S.barberos.filter(b=>isAdmin()||b.id===S.ses.barberoId);
  let cap=0;for(let f=d1,i=0;f<=d2&&i<400;f=addD(f,1),i++){const n=slotsDia(S.cfg).length;bs.forEach(b=>{if(trabaja(S.cfg,b,f))cap+=n})}
  const ocup=cs.filter(c=>['confirmada','en_silla','atendida','por_validar'].includes(c.estado)).length,ocP=cap?Math.round(ocup/cap*100):0;
  const nsP=(at.length+nv.length)?Math.round(nv.length/(at.length+nv.length)*100):0;
- const visTot={},primera={};S.citas.forEach(c=>{const k=telKey(c.cliente?.tel);if(!k)return;if(c.estado==='atendida')visTot[k]=(visTot[k]||0)+1;if(!primera[k]||c.fecha<primera[k])primera[k]=c.fecha});
+ const visTot={},primera={};(S.hist||S.citas).forEach(c=>{const k=telKey(c.cliente?.tel);if(!k)return;if(c.estado==='atendida')visTot[k]=(visTot[k]||0)+1;if(!primera[k]||c.fecha<primera[k])primera[k]=c.fecha});
  const cliPer=[...new Set(at.map(c=>telKey(c.cliente?.tel)).filter(Boolean))],ret=cliPer.length?Math.round(cliPer.filter(k=>visTot[k]>1).length/cliPer.length*100):0,nuevos=cliPer.filter(k=>primera[k]>=d1).length;
  const web=cs.filter(c=>c.origen==='web'||c.origen==='link').length,webP=cs.length?Math.round(web/cs.length*100):0;
  const kp=(v,l,c,sub)=>`<div class="stat kp"><b style="color:${c};font-size:30px">${v}</b><span>${l}</span>${sub?`<small>${sub}</small>`:''}</div>`;
@@ -957,8 +976,8 @@ function abrirDash(keep){const p=S.dp||(S.dp='30'),[d1,d2]=rango(p),all=scope(),
  const cm={};at.forEach(c=>{const k=telKey(c.cliente?.tel);if(!k)return;const o=cm[k]||(cm[k]={k,n:c.cliente.nombre,tel:c.cliente.tel,a:[],g:0});o.a.push(c);o.g+=ingresoCita(c)});
  const top=Object.values(cm).sort((a,b)=>b.a.length-a.a.length||b.g-a.g).slice(0,10);
  // por recuperar
- const ult={};S.citas.filter(mine).forEach(c=>{if(c.estado!=='atendida')return;const k=telKey(c.cliente?.tel);if(!k)return;if(!ult[k]||c.fecha>ult[k].fecha)ult[k]=c});
- const futuro=new Set(S.citas.filter(c=>c.fecha>=hoy()&&activa(c)).map(c=>telKey(c.cliente?.tel)));
+ const ult={};todas().forEach(c=>{if(c.estado!=='atendida')return;const k=telKey(c.cliente?.tel);if(!k)return;if(!ult[k]||c.fecha>ult[k].fecha)ult[k]=c});
+ const futuro=new Set((S.hist||S.citas).filter(c=>c.fecha>=hoy()&&activa(c)).map(c=>telKey(c.cliente?.tel)));
  const lapsed=Object.entries(ult).filter(([k,c])=>c.fecha<addD(hoy(),-35)&&!futuro.has(k)).map(([k,c])=>({k,c,dias:Math.round((pYmd(hoy())-pYmd(c.fecha))/864e5)})).sort((a,b)=>b.dias-a.dias).slice(0,15);
  // distritos
  const zm={};cs.forEach(c=>{const z=(c.cliente?.ciudad||'').trim();if(z)zm[z]=(zm[z]||0)+1});

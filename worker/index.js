@@ -35,6 +35,7 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS citas(id TEXT PRIMARY KEY, codigo TEXT NOT NULL, fecha TEXT NOT NULL, hora TEXT NOT NULL DEFAULT '', barbero_id TEXT NOT NULL DEFAULT '', estado TEXT NOT NULL, expira INTEGER, creada INTEGER NOT NULL, upd INTEGER, data TEXT NOT NULL)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS ux_citas_codigo ON citas(codigo)`,
   `CREATE INDEX IF NOT EXISTS ix_citas_fecha ON citas(fecha)`,
+  `CREATE INDEX IF NOT EXISTS ix_citas_barb ON citas(barbero_id, fecha, hora)`,
   `CREATE INDEX IF NOT EXISTS ix_citas_estado ON citas(estado, expira)`,
   // Un barbero no puede tener dos citas activas a la misma hora: lo garantiza la base de datos.
   `CREATE UNIQUE INDEX IF NOT EXISTS ux_citas_turno ON citas(barbero_id, fecha, hora) WHERE hora <> '' AND estado IN ('pendiente_pago','por_validar','confirmada','en_silla','atendida')`,
@@ -391,9 +392,47 @@ function vistaPanel(d, citas, s) {
     barberos = barberos.map(({ pin, email, ...b }) => b);
     usuarios = usuarios.filter(u => u.id === s.uid).map(({ pin, email, ...u }) => u);
   }
+  return { cfg, barberos, servicios: d.servicios, usuarios, citas: enmascarar(s, citas) };
+}
+// Lo que cada persona puede ver de las citas: solo las suyas si no ve todas, y el teléfono oculto si no tiene permiso.
+function enmascarar(s, citas) {
   if (!s.perm.verTodas) citas = citas.filter(c => c.barberoId === s.barberoId);
   if (!s.perm.verTel) citas = citas.map(c => c.cliente?.tel ? { ...c, cliente: { ...c.cliente, tel: '••• ••• ' + String(c.cliente.tel).slice(-3), dni: undefined } } : c);
-  return { cfg, barberos, servicios: d.servicios, usuarios, citas };
+  return citas;
+}
+/* El panel no descarga toda la historia: solo una ventana de días alrededor de hoy (y los Yape pendientes).
+   Lo demás se pide por rango, búsqueda o páginas con /citas/buscar. */
+const VENTANA_ATRAS = 35, VENTANA_ADELANTE = 120;
+async function visitasPorCliente(env, s) {
+  if (!s.perm.verTel) return {};
+  const r = await env.DB.prepare(`SELECT json_extract(data, '$.cliente.tel') AS t, COUNT(*) AS n FROM citas WHERE estado = 'atendida'${s.perm.verTodas ? '' : ' AND barbero_id = ?'} GROUP BY t`).bind(...(s.perm.verTodas ? [] : [s.barberoId])).all();
+  const m = {}; for (const x of r.results) { const k = String(x.t || '').replace(/\D/g, '').slice(-9); if (k) m[k] = (m[k] || 0) + x.n }
+  return m;
+}
+async function buscarCitas(env, s, q) {
+  const w = [], a = [], hoy = ahoraLocal(env).fecha;
+  if (!s.perm.verTodas) { w.push('barbero_id = ?'); a.push(s.barberoId) }
+  else if (q.barbero) { w.push('barbero_id = ?'); a.push(str(q.barbero, 40)) }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(q.desde || '')) { w.push('fecha >= ?'); a.push(q.desde) }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(q.hasta || '')) { w.push('fecha <= ?'); a.push(q.hasta) }
+  const est = String(q.estado || '').split(',').filter(e => /^[a-z_]{3,20}$/.test(e)).slice(0, 8);
+  if (est.length) { w.push(`estado IN (${est.map(() => '?').join(',')})`); a.push(...est) }
+  const txt = String(q.q || '').trim().toLowerCase().slice(0, 60);
+  if (txt.length >= 2) {
+    const like = '%' + txt.replace(/[\\%_]/g, m => '\\' + m) + '%';
+    if (s.perm.verTel) { w.push(`(lower(data) LIKE ? ESCAPE '\\' OR lower(codigo) LIKE ? ESCAPE '\\')`); a.push(like, like) }
+    else { w.push(`(lower(json_extract(data, '$.cliente.nombre')) LIKE ? ESCAPE '\\' OR lower(codigo) LIKE ? ESCAPE '\\')`); a.push(like, like) }
+  }
+  const donde = w.length ? ' WHERE ' + w.join(' AND ') : '';
+  const lim = Math.min(500, Math.max(1, +q.limit || 50)), off = Math.max(0, +q.offset || 0);
+  // Con búsqueda: primero las próximas (de la más cercana a la más lejana) y luego las pasadas (de la más reciente a la más antigua).
+  const orden = txt.length >= 2 ? ` ORDER BY (fecha < ?) , CASE WHEN fecha >= ? THEN fecha || hora END ASC, fecha DESC, hora DESC` : ' ORDER BY fecha, hora';
+  const ordArgs = txt.length >= 2 ? [hoy, hoy] : [];
+  const [tot, r] = await Promise.all([
+    env.DB.prepare('SELECT COUNT(*) AS n FROM citas' + donde).bind(...a).first(),
+    env.DB.prepare('SELECT * FROM citas' + donde + orden + ' LIMIT ? OFFSET ?').bind(...a, ...ordArgs, lim, off).all(),
+  ]);
+  return { total: tot.n, items: enmascarar(s, r.results.map(filaCita)), offset: off, limit: lim };
 }
 function vistaPublica(d) {
   const { adminPin, permBarbero, ...cfg } = d.cfg;
@@ -678,8 +717,16 @@ async function api(req, env, path) {
     await expirar(env);
     const ver = String((await leerKV(env, ['ver'])).ver || 0);
     if (new URL(req.url).searchParams.get('v') === ver) return json({ same: true, v: ver });
-    const r = await env.DB.prepare('SELECT * FROM citas ORDER BY fecha, hora').all();
-    return json({ ...vistaPanel(d, r.results.map(filaCita), s), v: ver });
+    const h = ahoraLocal(env).fecha, desde = addD(h, -VENTANA_ATRAS), hasta = addD(h, VENTANA_ADELANTE);
+    const sb = s.perm.verTodas ? '' : ' AND barbero_id = ?', ab = s.perm.verTodas ? [] : [s.barberoId];
+    const [r, vis] = await Promise.all([
+      env.DB.prepare(`SELECT * FROM citas WHERE ((fecha BETWEEN ? AND ?) OR estado = 'por_validar')${sb} ORDER BY fecha, hora`).bind(desde, hasta, ...ab).all(),
+      visitasPorCliente(env, s),
+    ]);
+    return json({ ...vistaPanel(d, r.results.map(filaCita), s), v: ver, ventana: { desde, hasta }, visitas: vis });
+  }
+  if (path === '/citas/buscar' && m === 'GET') {
+    return json(await buscarCitas(env, s, Object.fromEntries(new URL(req.url).searchParams)));
   }
   if (path === '/config' && m === 'PUT') {
     exigir('config'); const b = await body();

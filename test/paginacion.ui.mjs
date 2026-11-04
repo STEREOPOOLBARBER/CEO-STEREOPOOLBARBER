@@ -1,0 +1,28 @@
+// Prueba de pantalla de la Fase 1 (mismos datos que paginacion.e2e.mjs).
+import { createRequire } from 'node:module';
+const { chromium } = createRequire(import.meta.url)(process.env.PW_PATH || 'playwright');
+const B = process.env.BASE || 'http://localhost:8787';
+let ok = 0, bad = 0; const check = (n, c, x = '') => { c ? ok++ : bad++; console.log(`${c ? '✅' : '❌'} ${n} ${c ? '' : x}`) };
+const br = await chromium.launch(), ctx = await br.newContext({ viewport: { width: 412, height: 900 }, timezoneId: 'America/Lima' }), P = await ctx.newPage();
+P.on('pageerror', e => console.log('PAGEERR', e.message)); P.on('dialog', d => d.accept());
+const lr = await ctx.request.post(B + '/api/auth/login', { data: { pin: '5821' }, headers: { Origin: B } });
+await P.goto(B + '/index.html'); await P.evaluate(s => localStorage.setItem('brb_ses', JSON.stringify(s)), await lr.json());
+const t0 = Date.now(); await P.reload(); await P.waitForSelector('#login', { state: 'hidden' }); await P.waitForSelector('#lista');
+console.log(`   panel listo en ${Date.now() - t0} ms con ${await P.evaluate(() => S.citas.length)} citas en memoria`);
+await P.fill('#q', 'zacar'); await P.waitForSelector('#lista >> text=Zacarías Antiguo', { timeout: 8000 });
+check('buscar un cliente de hace 2 años lo encuentra (en la base de datos)', true);
+await P.fill('#q', 'rojas'); await P.waitForSelector('text=Ver más', { timeout: 8000 });
+const n1 = await P.locator('#lista .cita, #lista [class*="cita"]').count();
+await P.click('text=Ver más'); await P.waitForTimeout(1200);
+const n2 = await P.locator('#lista .cita, #lista [class*="cita"]').count();
+check('«Ver más» trae la siguiente página', n2 > n1, `${n1} → ${n2}`);
+await P.fill('#q', ''); await P.evaluate(() => { S.q = ''; S.fecha = 'mes'; S.off = -20; renderAgenda() });
+await P.waitForFunction(() => S.citas.some(c => c.fecha.startsWith('2025-03')), null, { timeout: 8000 });
+await P.waitForTimeout(400);
+check('ir a un mes antiguo (marzo 2025) carga sus citas', /marzo 2025/i.test(await P.locator('#t-agenda').innerText()) && (await P.evaluate(() => scope().filter(enRango).length)) === 279, await P.evaluate(() => scope().filter(enRango).length));
+await P.evaluate(() => { S.fecha = hoy(); S.off = 0; S.dp = 'todo'; abrirDash() }); await P.waitForSelector('.sheet', { timeout: 15000 }); await P.waitForTimeout(800);
+check('el dashboard (todo el historial) usa la historia completa', (await P.evaluate(() => S.hist?.length)) === 6300, await P.evaluate(() => S.hist?.length));
+await P.evaluate(() => closeModal());
+await P.evaluate(() => { S.cajaF = '2025-03-10'; abrirCaja() }); await P.waitForTimeout(1500);
+check('la caja de un día antiguo muestra sus atendidos', /9/.test(await P.locator('.sheet').innerText()));
+console.log(`\n${ok} OK · ${bad} fallos`); await br.close(); process.exit(bad ? 1 : 0);

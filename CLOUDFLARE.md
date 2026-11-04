@@ -81,3 +81,10 @@ La caja verde de **Nueva cita** acepta (1) el mensaje de un cliente (rellena DNI
 
 ### Página de estado de cita (`estado.html`)
 Página solo para consultar la cita: `estado.html?c=CODIGO` (o escribir el código). Muestra estado, cuenta regresiva, datos, política, mapa, botón de WhatsApp y **Reprogramar** (si faltan ≥ 24 h). Los mensajes de WhatsApp (`{seguimiento}`) ya apuntan aquí; los links viejos `reservar.html?c=` siguen funcionando. Tiene su propia vista previa en WhatsApp («Tu cita en …»).
+
+### Rendimiento: el panel ya no descarga toda la historia (Fase 1)
+- `GET /api/panel` trae solo la **ventana** de citas: 35 días atrás → 120 días adelante (más los Yape pendientes) y un conteo de visitas por cliente para la fidelidad.
+- `GET /api/citas/buscar?desde&hasta&estado&barbero&q&limit&offset` filtra y pagina **en la base de datos** (máx. 500 por página; la búsqueda del panel pide de 30 en 30 con «Ver más»). Respeta permisos: el barbero solo ve lo suyo y sin teléfono si no tiene permiso.
+- La agenda pide sola los días/semanas/meses fuera de la ventana; Clientes, Dashboard y Excel piden la historia completa solo cuando se abren.
+- Índices: `citas(fecha)`, `citas(estado, expira)`, `citas(barbero_id, fecha, hora)`.
+- Pruebas: `npm run test:paginacion` y `test/paginacion.ui.mjs` (siembran ~6300 citas; una se llama «Zacarías Antiguo»).
