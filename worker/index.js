@@ -28,7 +28,7 @@ const SES_MS = 14 * 864e5;
 const COOKIE = 'brb_s', COOKIE_P = 'brb_g';
 const MAX_FOTO = 3 * 1024 * 1024;
 const MAX_AUDIO = 2.5 * 1024 * 1024;
-const DEF = { dias: [1, 2, 3, 4, 5, 6], apertura: '09:00', cierre: '20:00', refIni: '13:00', refFin: '14:00', anticipacion: 0, ventana: 14, modAdelanto: true, yapeNum: '', adelanto: 10, holdMin: 20, bloqueos: [], tolerancia: 10, horasReprog: 24, maxReprog: 1, politicaTxt: '' };
+const DEF = { dias: [1, 2, 3, 4, 5, 6], apertura: '09:00', cierre: '20:00', refIni: '13:00', refFin: '14:00', anticipacion: 0, ventana: 14, modAdelanto: true, yapeNum: '', adelanto: 10, holdMin: 20, bloqueos: [], tolerancia: 10, horasReprog: 24, maxReprog: 1, politicaTxt: '', dniTopeDia: 300 };
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT NOT NULL)`,
@@ -50,6 +50,7 @@ const SCHEMA = [
   `CREATE INDEX IF NOT EXISTS ix_passkeys_sujeto ON passkeys(sujeto)`,
   `CREATE TABLE IF NOT EXISTS invitaciones(h TEXT PRIMARY KEY, sujeto TEXT NOT NULL, exp INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS retos(h TEXT PRIMARY KEY, tipo TEXT NOT NULL, sujeto TEXT, exp INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS contadores(k TEXT PRIMARY KEY, n INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS dnis(dni TEXT PRIMARY KEY, nombre TEXT NOT NULL, ts INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS accesos(id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, via TEXT NOT NULL, quien TEXT, ok INTEGER NOT NULL, motivo TEXT, ip TEXT)`,
 ];
@@ -224,6 +225,7 @@ function nombreDeReniec(j) {
 async function consultarDni(env, dni, crudo = false) {
   if (!env.SHALOM_API_KEY) fail(503, 'La consulta de DNI no está configurada (falta el secreto SHALOM_API_KEY).');
   if (!crudo) { const c = await env.DB.prepare('SELECT nombre FROM dnis WHERE dni = ? AND ts > ?').bind(dni, Date.now() - 30 * 864e5).first(); if (c) return { nombre: c.nombre } }
+  const d0 = await datos(env); await sumarDni(env, +({ ...DEF, ...d0.cfg }).dniTopeDia || 0);
   let r; try { r = await fetch(`${env.DNI_API_URL || 'https://api.shalom-api.lat'}/account/dni/${dni}`, { headers: { 'x-api-key': env.SHALOM_API_KEY }, signal: AbortSignal.timeout(8000) }) } catch { fail(502, 'No se pudo consultar el DNI ahora. Escribe el nombre a mano.') }
   if (r.status === 404) fail(404, 'No encontramos ese DNI');
   if (r.status === 401 || r.status === 403) { console.error('Shalom API: clave rechazada'); fail(502, 'La consulta de DNI no está disponible') }
@@ -382,6 +384,41 @@ async function limitar(env, clave, max, ventanaMs) {
   await env.DB.prepare('INSERT INTO intentos(ip, ts) VALUES(?, ?)').bind(clave, Date.now()).run();
 }
 const ipDe = req => req.headers.get('CF-Connecting-IP') || 'local';
+/* Límite de Cloudflare (binding de Workers): no escribe en la base de datos y corta antes de tocarla.
+   Si el binding no está (p. ej. un despliegue viejo), cae al limitador de D1. */
+async function frenar(env, binding, clave, respaldo) {
+  if (env[binding]?.limit) { const { success } = await env[binding].limit({ key: clave }); if (!success) fail(429, 'Demasiadas solicitudes. Espera un minuto.'); return }
+  if (respaldo) await limitar(env, binding + ':' + clave, respaldo[0], respaldo[1]);
+}
+async function turnstileOk(env, token, ip) {
+  if (!env.TURNSTILE_SECRET) return true;
+  if (!token) return false;
+  try {
+    const r = await fetch(env.TURNSTILE_VERIFY_URL || 'https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: String(token), remoteip: ip }), signal: AbortSignal.timeout(8000) });
+    return !!(await r.json().catch(() => ({}))).success;
+  } catch { return false }
+}
+/* Ficha del formulario: token firmado de corta vida que solo entrega la página de reservas
+   (tras pasar Turnstile si está activo). Sin ficha no se puede consultar DNI desde la consola. */
+const FICHA_MS = 30 * 60e3;
+async function claveFicha(env) {
+  let k = (await leerKV(env, ['secretoFicha'])).secretoFicha;
+  if (!k) { k = rnd(32); await env.DB.prepare('INSERT OR IGNORE INTO kv(k, v) VALUES(?, ?)').bind('secretoFicha', JSON.stringify(k)).run(); k = (await leerKV(env, ['secretoFicha'])).secretoFicha }
+  return crypto.subtle.importKey('raw', new TextEncoder().encode(env.FICHA_SECRET || k), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+}
+const firmarFicha = async (env, exp) => b64uEnc(await crypto.subtle.sign('HMAC', await claveFicha(env), new TextEncoder().encode('ficha|' + exp)));
+async function nuevaFicha(env) { const exp = Date.now() + FICHA_MS; return { ficha: `${exp}.${await firmarFicha(env, exp)}`, exp } }
+async function fichaValida(env, f) {
+  const [e, firma] = String(f || '').split('.'), exp = +e;
+  if (!exp || !firma || exp < Date.now() || exp > Date.now() + FICHA_MS + 60e3) return false;
+  return igualTxt(await firmarFicha(env, exp), firma);
+}
+// Tope diario de consultas a RENIEC para no gastar el saldo de Shalom (configurable en ⚙️ Config → Seguridad).
+async function sumarDni(env, tope) {
+  const k = 'dni:' + ahoraLocal(env).fecha;
+  const r = await env.DB.prepare('INSERT INTO contadores(k, n) VALUES(?, 1) ON CONFLICT(k) DO UPDATE SET n = n + 1 RETURNING n').bind(k).first();
+  if (tope > 0 && r.n > tope) fail(429, 'Hoy ya se usaron todas las consultas de DNI. Escribe tu nombre a mano.');
+}
 
 /* ---------- vistas según permisos ---------- */
 function vistaPanel(d, citas, s) {
@@ -448,6 +485,7 @@ async function api(req, env, path) {
   const m = req.method;
   const body = async () => { try { return await req.json() } catch { fail(400, 'Datos no válidos') } };
 
+  if (/^\/(publico|auth|passkey)\b/.test(path)) await frenar(env, 'RL_PUB', ipDe(req));
   if (m !== 'GET' && m !== 'HEAD') {
     const o = req.headers.get('Origin');
     let ok = true; try { ok = !o || new URL(o).host === new URL(req.url).host } catch { ok = false }
@@ -465,8 +503,14 @@ async function api(req, env, path) {
   }
   let x;
   if ((x = path.match(/^\/publico\/dni\/(\d{8})$/)) && m === 'GET') {
-    await limitar(env, 'dni:' + ipDe(req), 12, 15 * 60e3);
+    await frenar(env, 'RL_DNI', ipDe(req), [10, 60e3]);
+    if (!await fichaValida(env, req.headers.get('X-Ficha'))) fail(403, 'Recarga la página para consultar tu DNI.');
     return json(await consultarDni(env, x[1]));
+  }
+  if (path === '/publico/ficha' && m === 'POST') {
+    await frenar(env, 'RL_RES', 'f:' + ipDe(req), [10, 60e3]);
+    if (!await turnstileOk(env, (await body()).turnstile, ipDe(req))) fail(403, 'No pudimos verificar que no eres un robot. Inténtalo de nuevo.');
+    return json(await nuevaFicha(env));
   }
   if ((x = path.match(/^\/publico\/link\/([\w-]{6,80})$/)) && m === 'GET') {
     const r = await env.DB.prepare('SELECT data FROM links WHERE token = ?').bind(x[1]).first();
@@ -485,6 +529,7 @@ async function api(req, env, path) {
     return json({ barberoId: c.barberoId, reprog: c.reprog || 0, puedeReprog: rg.ok, tolerancia: +cfg.tolerancia || 0, horasReprog: +cfg.horasReprog || 24, codigo: c.codigo, estado: c.estado, fecha: c.fecha, hora: c.hora, servicio: c.servicioNombre || '', precio: +c.precio || 0, adelanto: +c.adelanto || 0, adelantoOk: !!c.adelantoOk, barbero: b?.nombre || '', cliente: { nombre: c.cliente?.nombre || '', tel: '••• ••• ' + String(c.cliente?.tel || '').slice(-3) }, sinComprobante: c.estado === 'por_validar' && !c.yapeCaptura && !!c.expira, expira: c.expira ?? null });
   }
   if ((x = path.match(/^\/publico\/cita\/([A-Za-z0-9]{6})\/reprogramar$/)) && m === 'POST') {
+    await frenar(env, 'RL_RES', 'rp:' + ipDe(req));
     await limitar(env, 'rp:' + ipDe(req), 10, 60 * 60e3);
     await expirar(env);
     const r = await env.DB.prepare('SELECT * FROM citas WHERE codigo = ?').bind(x[1].toUpperCase()).first();
@@ -659,9 +704,9 @@ async function api(req, env, path) {
   const propia = c => { if (!s.perm.verTodas && c.barberoId !== s.barberoId) fail(403, 'No es tu cita') };
 
   if ((x = path.match(/^\/dni\/(\d{8})$/)) && m === 'GET') {
-    await limitar(env, 'dnip:' + s.nombre, 120, 15 * 60e3);
+    await frenar(env, 'RL_DNI', 'p:' + (s.email || s.sujeto || s.nombre), [30, 60e3]);
     // Con ?crudo=1 el dueño ve la respuesta completa del servicio para comprobar los campos.
-    if (new URL(req.url).searchParams.get('crudo') === '1') { exigir('config'); return json(await consultarDni(env, x[1], true)) }
+    if (new URL(req.url).searchParams.get('crudo') === '1') { exigir('config'); const u = await env.DB.prepare('SELECT n FROM contadores WHERE k = ?').bind('dni:' + ahoraLocal(env).fecha).first(); return json({ ...(await consultarDni(env, x[1], true)), usoHoy: (u?.n || 0) + 1, tope: +({ ...DEF, ...d.cfg }).dniTopeDia || 0 }) }
     return json(await consultarDni(env, x[1]));
   }
   if (path === '/acceso' && m === 'GET') {
@@ -816,11 +861,9 @@ async function api(req, env, path) {
 
 /* ---------- reserva pública ---------- */
 async function reservar(req, env, b) {
+  await frenar(env, 'RL_RES', 'r:' + ipDe(req));
   await limitar(env, 'r:' + ipDe(req), 15, 60 * 60e3);
-  if (env.TURNSTILE_SECRET) {
-    const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: String(b.turnstile || ''), remoteip: ipDe(req) }) });
-    if (!(await r.json()).success) fail(400, 'No pudimos verificar que no eres un robot. Inténtalo de nuevo.');
-  }
+  if (!await turnstileOk(env, b.turnstile, ipDe(req))) fail(400, 'No pudimos verificar que no eres un robot. Inténtalo de nuevo.');
   const cliente = { nombre: str(b.cliente?.nombre, 80), tel: String(b.cliente?.tel || '').replace(/\D/g, '').slice(-9), dni: String(b.cliente?.dni || '').replace(/\D/g, ''), ciudad: str(b.cliente?.ciudad, 60) };
   if (cliente.nombre.length < 3) fail(400, 'Escribe tu nombre completo');
   if (!/^9\d{8}$/.test(cliente.tel)) fail(400, 'Escribe un WhatsApp válido (9 dígitos, empieza con 9)');

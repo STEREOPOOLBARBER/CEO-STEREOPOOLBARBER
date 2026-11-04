@@ -88,3 +88,11 @@ Página solo para consultar la cita: `estado.html?c=CODIGO` (o escribir el códi
 - La agenda pide sola los días/semanas/meses fuera de la ventana; Clientes, Dashboard y Excel piden la historia completa solo cuando se abren.
 - Índices: `citas(fecha)`, `citas(estado, expira)`, `citas(barbero_id, fecha, hora)`.
 - Pruebas: `npm run test:paginacion` y `test/paginacion.ui.mjs` (siembran ~6300 citas; una se llama «Zacarías Antiguo»).
+
+### Seguridad del link de reserva y de la API de DNI (Fase 2)
+- **Límites de Cloudflare** (`ratelimits` en `wrangler.jsonc`, no tocan la base de datos): `RL_PUB` 120/min por IP para todo lo público, `RL_DNI` 10/min por IP para DNI, `RL_RES` 6/min para reservar, reprogramar y pedir ficha. Se suman a los límites por hora que ya existían.
+- **Ficha del formulario**: la consulta pública de DNI exige el encabezado `X-Ficha` (token firmado HMAC de 30 min) que entrega `POST /api/publico/ficha`; si Turnstile está activo, la ficha solo se entrega tras pasarlo. Desde la consola, sin ficha → 403.
+- **Tope diario de consultas a RENIEC** (⚙️ Config → Seguridad, 300 por defecto; 0 = sin tope). Las consultas en memoria (30 días) no cuentan.
+- **Turnstile** (opcional pero recomendado): crear el widget en Cloudflare → Turnstile, y en el Worker agregar `TURNSTILE_SITEKEY` (Text) y `TURNSTILE_SECRET` (Secret). Protege reservar y la ficha de DNI.
+- **Encabezados**: CSP, HSTS, X-Frame-Options, COOP y Permissions-Policy (micrófono y ubicación solo para la propia página: los usa Config).
+- Pruebas: `npm run test:dni`, `npm run test:turnstile` (con verificador simulado).

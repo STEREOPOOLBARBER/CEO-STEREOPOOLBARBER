@@ -10,8 +10,17 @@ const srv = http.createServer((q, r) => {
   r.end(JSON.stringify({ data: { nombres: 'JUAN CARLOS', apellidoPaterno: 'PÉREZ', apellidoMaterno: 'DE LA CRUZ', direccion: 'Av. Secreta 123' } }));
 }).listen(8798);
 let ok = 0, bad = 0; const check = (n, c, x = '') => { c ? ok++ : bad++; console.log(`${c ? '✅' : '❌'} ${n} ${c ? '' : x}`) };
-const call = async (m, p, b, c) => { const r = await fetch(BASE + '/api' + p, { method: m, headers: { ...(b ? { 'Content-Type': 'application/json' } : {}), ...(c ? { Cookie: c } : {}), Origin: BASE }, body: b ? JSON.stringify(b) : undefined }); const t = await r.text(); let j; try { j = JSON.parse(t) } catch { j = t } return { s: r.status, j, cookie: (r.headers.get('set-cookie') || '').split(';')[0] } };
+let FICHA = '';
+const call = async (m, p, b, c, h = {}) => { const r = await fetch(BASE + '/api' + p, { method: m, headers: { ...(b ? { 'Content-Type': 'application/json' } : {}), ...(c ? { Cookie: c } : {}), Origin: BASE, ...(FICHA && p.startsWith('/publico/dni') ? { 'X-Ficha': FICHA } : {}), ...h }, body: b ? JSON.stringify(b) : undefined }); const t = await r.text(); let j; try { j = JSON.parse(t) } catch { j = t } return { s: r.status, j, cookie: (r.headers.get('set-cookie') || '').split(';')[0] } };
 let r = await call('GET', '/publico/dni/44273815');
+check('sin la ficha del formulario no se puede consultar (consola) → 403', r.s === 403, JSON.stringify(r));
+r = await call('GET', '/publico/dni/44273815', null, null, { 'X-Ficha': `${Date.now() + 600000}.firmaFalsa` });
+check('ficha falsificada → 403', r.s === 403);
+r = await call('GET', '/publico/dni/44273815', null, null, { 'X-Ficha': `${Date.now() - 1000}.x` });
+check('ficha vencida → 403', r.s === 403);
+FICHA = (await call('POST', '/publico/ficha', {})).j.ficha;
+check('la página obtiene su ficha', /^\d+\.[\w-]+$/.test(FICHA), FICHA);
+r = await call('GET', '/publico/dni/44273815');
 check('formulario público devuelve el nombre armado', r.s === 200 && r.j.nombre === 'Juan Carlos Pérez De La Cruz', JSON.stringify(r));
 check('solo devuelve el nombre (nada de dirección)', Object.keys(r.j).join() === 'nombre' && !JSON.stringify(r.j).includes('Secreta'));
 const antes = llamadas; r = await call('GET', '/publico/dni/44273815');
@@ -23,8 +32,14 @@ r = await call('GET', '/dni/44273815'); check('el panel sin sesión → 401', r.
 const adm = await call('POST', '/auth/login', { pin: '5821' });
 r = await call('GET', '/dni/44273815', null, adm.cookie); check('el panel con sesión consulta', r.s === 200 && r.j.nombre.startsWith('Juan'));
 r = await call('GET', '/dni/44273815?crudo=1', null, adm.cookie); check('el dueño ve la respuesta cruda para diagnosticar', r.s === 200 && r.j.crudo?.data?.nombres === 'JUAN CARLOS');
-const barb = (await call('GET', '/panel', null, adm.cookie)).j.barberos[0];
+const pnl = (await call('GET', '/panel', null, adm.cookie)).j, barbs = pnl.barberos, servs = pnl.servicios, usus = pnl.usuarios;
 check('la clave nunca aparece en el panel ni en lo público', !JSON.stringify((await call('GET', '/panel', null, adm.cookie)).j).includes('sk_test') && !JSON.stringify((await call('GET', '/publico')).j).includes('sk_test'));
-let lim = 0; for (let i = 0; i < 15; i++) { const x = await call('GET', '/publico/dni/1000000' + (i % 10)); if (x.s === 429) { lim = 429; break } }
-check('demasiadas consultas desde una IP → 429', lim === 429);
+let lim = 0, n429 = 0; for (let i = 0; i < 14; i++) { const x = await call('GET', '/publico/dni/2000000' + (i % 10)); if (x.s === 429) { lim = 429; n429 = i; break } }
+check('más de 10 consultas por minuto desde una IP → 429 (límite de Cloudflare)', lim === 429 && n429 <= 10, `corte en ${n429}`);
+// tope diario
+await call('PUT', '/config', { cfg: { ...(await call('GET', '/panel', null, adm.cookie)).j.cfg, dniTopeDia: 3 }, barberos: barbs, servicios: servs, usuarios: usus }, adm.cookie);
+r = await call('GET', '/dni/31000001', null, adm.cookie);
+check('al pasar el tope diario se corta (protege el saldo)', r.s === 429 && /todas las consultas/.test(r.j.error), JSON.stringify(r));
+r = await call('GET', '/dni/44273815', null, adm.cookie);
+check('las consultas ya guardadas siguen funcionando', r.s === 200);
 console.log(`\n${ok} OK · ${bad} fallos`); srv.close(); process.exit(bad ? 1 : 0);

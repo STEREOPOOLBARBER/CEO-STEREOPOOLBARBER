@@ -220,7 +220,12 @@ function tpl(s,v){return String(s||'').split('\n').map(l=>{let had=false,full=fa
 const API={
  get remote(){return !!CONFIG.API_URL},
  async req(m,p,b){const r=await fetch(CONFIG.API_URL+p,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||('Error '+r.status));return j},
- async dni(d){return this.req('GET','/publico/dni/'+d)},
+ /* La consulta de DNI necesita la «ficha» del formulario (token firmado de 30 min que el Worker entrega tras Turnstile). */
+ async ficha(){if(F.ficha&&F.fichaExp>Date.now()+60e3)return F.ficha;
+  if(CONFIG.TURNSTILE_SITEKEY){for(let i=0;i<40&&!F.ts;i++)await new Promise(r=>setTimeout(r,250));if(!F.ts)throw new Error('Completa la verificación')}
+  const r=await this.req('POST','/publico/ficha',{turnstile:F.ts||''});if(CONFIG.TURNSTILE_SITEKEY){F.ts='';window.turnstile?.reset?.('#ts')}F.ficha=r.ficha;F.fichaExp=r.exp;return r.ficha},
+ async dni(d,otra){const f=await this.ficha(),r=await fetch(CONFIG.API_URL+'/publico/dni/'+d,{headers:{'X-Ficha':f}}),j=await r.json().catch(()=>({}));
+  if(r.status===403&&!otra){F.ficha=null;return this.dni(d,true)}if(!r.ok)throw new Error(j.error||('Error '+r.status));return j},
  async publico(){if(this.remote){const d=await this.req('GET','/publico');d.cfg=mergeCfg(d.cfg);return d}seed();const cs=expirarLocal();const cfg=mergeCfg(lsGet('cfg',{}));delete cfg.adminPin;
   return{cfg,barberos:lsGet('barberos',[]).filter(b=>b.activo!==false).map(({pin,comision,...b})=>b),servicios:lsGet('servicios',[]).filter(s=>s.activo!==false),ocupados:cs.filter(c=>activa(c)).map(c=>({b:c.barberoId,f:c.fecha,h:c.hora}))}},
  async crear(d){if(this.remote)return this.req('POST','/publico/reservas',d);
@@ -314,7 +319,7 @@ async function buscarDni(inp){const v=inp.value.replace(/\D/g,'');inp.value=v;co
  try{const r=await API.dni(v);if($('#cDni')?.value!==v)return;const n=$('#cNom');
   if(n&&(!n.value.trim()||n.value===dniAuto)){n.value=r.nombre;dniAuto=r.nombre;n.dispatchEvent(new Event('input'))}
   est.textContent='✅ Datos encontrados. Revísalos antes de continuar.'}
- catch(e){est.textContent=/No encontramos/.test(e.message)?'No encontramos ese DNI. Escribe tu nombre a mano.':''}}
+ catch(e){est.textContent=/No encontramos/.test(e.message)?'No encontramos ese DNI. Escribe tu nombre a mano.':/consultas de DNI|Demasiadas/.test(e.message)?'Escribe tu nombre a mano 🙂':''}}
 function guardaCli(){const g=id=>$(id)?.value.trim()||'';F.cli={nombre:g('#cNom'),tel:g('#cTel').replace(/\D/g,''),dni:g('#cDni').replace(/\D/g,''),ciudad:g('#cCiu')};F.nota=g('#cNota')}
 async function refFoto(inp){const f=inp.files[0];if(!f)return;try{F.ref=await compressImg(f,900,.72);$('#refPrev').innerHTML=`<img src="${F.ref}">`}catch(e){toast('❌ '+e.message)}}
 function loadTS(){const r=()=>window.turnstile.render('#ts',{sitekey:CONFIG.TURNSTILE_SITEKEY,theme:'dark',callback:t=>F.ts=t});if(window.turnstile)return r();const s=document.createElement('script');s.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';s.onload=r;document.head.appendChild(s)}

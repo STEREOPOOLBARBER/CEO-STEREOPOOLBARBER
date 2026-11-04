@@ -372,7 +372,7 @@ const DEF_EST={por_validar:{t:'Yape por validar',i:'💸',c:'#f0883e'},confirmad
 const DEF_CFG={nombre:'Stereo Barber Pool',eslogan:'Barber · Pool · Lima',logo:'🎱',logoImg:'',acento:'#8a3ffc',acento2:'#ff3fd2',
  whatsapp:'',ciudad:'Lima, Perú',direccion:'Av. Principal 123, Puente Piedra',maps:'',lat:'',lng:'',
  modAdelanto:true,yapeNum:'',yapeTitular:'',yapeQR:'',adelanto:10,holdMin:20,
- dias:[1,2,3,4,5,6],apertura:'09:00',cierre:'20:00',refIni:'13:00',refFin:'14:00',anticipacion:0,ventana:14,tolerancia:10,horasReprog:24,maxReprog:1,politicaTxt:'',
+ dias:[1,2,3,4,5,6],apertura:'09:00',cierre:'20:00',refIni:'13:00',refFin:'14:00',anticipacion:0,ventana:14,dniTopeDia:300,tolerancia:10,horasReprog:24,maxReprog:1,politicaTxt:'',
  modFotos:true,modFidelidad:true,fidelidad:6,modComision:true,modWalkin:true,
  txtBienvenida:'¿Qué te hacemos hoy?',txtFinal:'¡Reserva recibida!',
  waConfirma:'Hola {cliente} 👋\nTu cita en *{negocio}* está *CONFIRMADA* ✅\n\n📅 {fecha} a las {hora}\n💈 Barbero: {barbero}\n✂️ {servicio}\n🔖 Código: {codigo}\n📍 {direccion}\n🗺️ {maps}\n\n🔎 Mira el estado de tu cita: {seguimiento}\n\nTe esperamos 💪',
@@ -1149,7 +1149,7 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barbero
   <p class="hint">En «Ver estado de cita» el cliente ve solo este texto (escribe ahí tu tolerancia y reglas). El botón <b>📅 Reprogramar</b> solo le aparece si faltan ${c.horasReprog??24} horas o más para su corte.</p>`)}
  ${acc('seguridad','🔐 Seguridad y respaldo',API.remote?'Accesos, respaldo y pruebas':'PIN admin, exportar, ejemplos',()=>`
   ${API.remote?'<p class="hint" style="margin-top:0">🔒 El acceso es solo con Google. Los dueños se definen en Cloudflare (variable OWNER_EMAILS); barberos y personal, por su correo.</p>':`<label class="lb">PIN de administrador</label><input class="in" inputmode="numeric" maxlength="6" value="${esc(c.adminPin)}" onchange="setC('adminPin',this.value.replace(/\\D/g,''))">`}
-  ${API.remote?`<button class="btn w" style="margin-top:12px" onclick="probarDni()">🪪 Probar consulta de DNI</button>`:''}
+  ${API.remote?`<button class="btn w" style="margin-top:12px" onclick="probarDni()">🪪 Probar consulta de DNI</button><label class="lb">Tope de consultas DNI por día (0 = sin tope)</label><input class="in" type="number" min="0" value="${c.dniTopeDia??300}" onchange="setN('dniTopeDia',this.value)"><p class="hint">Protege tu saldo de Shalom. Las consultas repetidas salen de la memoria y no cuentan.</p>`:''}
   ${API.remote?`<button class="btn w" style="margin-top:12px" onclick="accDueno()">🔑 Mi clave y huella (dueño)</button>`:''}
   ${API.remote?`<div class="g2" style="margin-top:12px"><button class="btn" onclick="probarNube()">🔍 Probar nube</button><button class="btn" onclick="verAccesos()">📜 Registro de accesos</button></div>`:''}
   <div class="g2" style="margin-top:12px"><button class="btn" onclick="exportar()">⬇️ Exportar</button><label class="btn">⬆️ Importar<input type="file" accept=".json" style="display:none" onchange="importar(this)"></label></div>
@@ -1240,7 +1240,7 @@ async function buscarDniP(inp){const v=inp.value.replace(/\D/g,'');inp.value=v;c
   est.textContent='✅ '+r.nombre}
  catch(e){est.textContent='⚠️ '+e.message}}
 async function probarDni(){const d=prompt('DNI de 8 dígitos para probar la conexión con RENIEC:');if(!d)return;
- try{const r=await API.req('GET','/dni/'+d.replace(/\D/g,'')+'?crudo=1');alert('Nombre que usará el sistema: '+(r.nombre||'(no se pudo armar)')+'\n\nRespuesta del servicio:\n'+JSON.stringify(r.crudo,null,1).slice(0,1200))}catch(e){alert('❌ '+e.message)}}
+ try{const r=await API.req('GET','/dni/'+d.replace(/\D/g,'')+'?crudo=1');alert(`Consultas de DNI hoy: ${r.usoHoy}${r.tope?' de '+r.tope:''}\n\n`+'Nombre que usará el sistema: '+(r.nombre||'(no se pudo armar)')+'\n\nRespuesta del servicio:\n'+JSON.stringify(r.crudo,null,1).slice(0,1200))}catch(e){alert('❌ '+e.message)}}
 function togUser(id){const u=D().usuarios.find(x=>x.id===id);u.activo=u.activo===false;dirty();renderConfig()}
 function togPB(k){const c=D().cfg;c.permBarbero={...ROLES.barbero.p,...(c.permBarbero||{})};c.permBarbero[k]=!c.permBarbero[k];dirty();renderConfig()}
 function editUser(id){const u=id?D().usuarios.find(x=>x.id===id):{id:'',nombre:'',pin:'',rol:'recepcion',barberoId:'',permisos:{...ROLES.recepcion.p},activo:true};S._u=clone(u);

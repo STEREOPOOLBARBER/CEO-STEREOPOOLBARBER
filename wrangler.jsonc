@@ -16,6 +16,13 @@
   "r2_buckets": [
     { "binding": "FOTOS", "bucket_name": "stereo-barber-fotos" }
   ],
+  // Límites de Cloudflare (no tocan la base de datos). Periodo en segundos: 10 o 60.
+  // RL_PUB: todo lo público por IP · RL_DNI: consultas de DNI · RL_RES: reservas, reprogramar y fichas.
+  "ratelimits": [
+    { "name": "RL_PUB", "namespace_id": "4101", "simple": { "limit": 120, "period": 60 } },
+    { "name": "RL_DNI", "namespace_id": "4102", "simple": { "limit": 10, "period": 60 } },
+    { "name": "RL_RES", "namespace_id": "4103", "simple": { "limit": 6, "period": 60 } }
+  ],
   // Vence cada 5 minutos las reservas que no pagaron a tiempo.
   "triggers": { "crons": ["*/5 * * * *"] },
   // ID de cliente de Google (dato público). Va en el código para que no se pierda al desplegar.
