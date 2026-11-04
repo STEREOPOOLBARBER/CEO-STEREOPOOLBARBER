@@ -30,7 +30,7 @@ await P.evaluate(() => editBarbero(D().barberos[0].id)); await P.waitForSelector
 await P.fill('#accC', 'claveJhon7'); await P.click('text=Poner clave'); await P.waitForSelector('text=activa');
 check('dueño pone clave al barbero', true);
 const nom = await P.evaluate(() => D().barberos[0].nombre);
-await P.evaluate(() => API.logout()); await P.evaluate(() => localStorage.removeItem('brb_ses')); await P.reload(); await P.waitForSelector('#pfGrid .btn');
+await P.evaluate(() => API.logout()); await P.evaluate(() => localStorage.removeItem('brb_ses')); await P.reload({ waitUntil: 'domcontentloaded' }); await P.waitForSelector('#pfGrid .btn');
 check('al cerrar sesión vuelve al selector (sin pedir Google)', true);
 await P.click(`#pfGrid .btn:has-text("${nom}")`); await P.fill('#cClave', 'claveJhon7'); await P.click('text=🔑 Entrar con clave'); await P.waitForSelector('#login', { state: 'hidden' });
 check('el barbero entra con su clave', true);

@@ -21,7 +21,10 @@ Sistema de reservas de una barbería en Puente Piedra (Lima, Perú). El dueño n
 Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño prueba en staging → se pasa a `main` (merge) → Cloudflare despliega producción. GitHub Actions (`.github/workflows/pruebas.yml`) corre las pruebas en cada push.
 
 ## Estructura
-- `index.html` — panel (dueño, barberos, personal). Un solo archivo con su JS; modo nube (`/api`) o local (localStorage, solo demo).
+- `index.html` — panel (dueño, barberos, personal): solo HTML y estilos. Su JS está en `js/panel/` por pantalla (`base`, `agenda`, `clientes`, `compartir`, `dashboard`, `config`, `acceso`, `inicio`), cargados en ese orden como scripts clásicos (comparten el ámbito global). Modo nube (`/api`) o local (localStorage, solo demo).
+- `js/reservar.js`, `js/estado.js` — JS del formulario y de la página de estado.
+- `js/eventos.js` — **despachador de eventos** y registro `ACC` de acciones (generado a partir de los antiguos `onclick`).
+- **CSP estricta: prohibido el JavaScript en línea** (`script-src 'self'`, `script-src-attr 'none'`). Nunca escribir `onclick="…"`, `onchange="…"` ni `<script>` dentro del HTML. Para un botón nuevo: `data-on-click="nombreAccion"` (también `data-on-change`, `data-on-input`, `data-on-keydown`) y, junto al código de esa pantalla, `ACC.nombreAccion = function (event) { … }` (`this` = el elemento). Los datos van en `data-p0`, `data-p1`… (`this.dataset.p0`). Si `test/csp.ui.mjs` encuentra una acción sin registrar o una violación de CSP, falla.
 - `reservar.html` — formulario público de reservas (con el narrador «Tío Stereo»).
 - `estado.html` — página pública para ver el estado de una cita (`?c=CODIGO`) y reprogramarla.
 - `worker/` — API (Cloudflare Worker), **monolito modular**:

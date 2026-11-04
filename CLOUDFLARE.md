@@ -127,3 +127,8 @@ La estructura de la base de datos ahora es **versionada** (`MIGRACIONES` en `wor
 - **Clientes** ya no descarga toda la historia: lista desde la base de datos con orden (recientes, más visitas, más gasto, A–Z, por recuperar), búsqueda **sin tildes** y «Ver más» por cursor. Desde la ficha: WhatsApp, copiar celular y **➕ Cita** con los datos ya llenos.
 - **Dashboard** pide solo el periodo elegido; retención y «por recuperar» salen de las fichas.
 - Migración **v2** (`citas.tel` + tabla `clientes`), se aplica sola y arma las fichas de todas las citas existentes. Botón «🔄 Reconstruir fichas de clientes» en 🛡️ Monitoreo.
+
+### Panel modular + CSP estricta (Fase 5)
+- El JavaScript salió del HTML: `js/panel/*.js` (por pantalla), `js/reservar.js`, `js/estado.js`. Ya no hay ningún `onclick` en línea: los botones usan `data-on-click` y un despachador único (`js/eventos.js`).
+- La política de seguridad prohíbe ejecutar scripts en línea (`script-src 'self'` y `script-src-attr 'none'`): aunque alguien lograra meter texto con código en una cita o un nombre, el navegador no lo ejecuta.
+- `js/` se sirve con `Cache-Control: no-cache` (los cambios se ven al recargar). Prueba de recorrido: `test/csp.ui.mjs`.

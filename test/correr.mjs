@@ -28,6 +28,7 @@ const SUITES = [
   { n: 'paginacion.ui', vars: PIN, sql: ADMIN, historial: true, ui: true },
   { n: 'clientes.e2e', vars: PIN, sql: ADMIN },
   { n: 'auditoria.e2e', vars: PIN, sql: ADMIN },
+  { n: 'csp.ui', vars: PIN, sql: ADMIN, ui: true },
   { n: 'monitoreo.e2e', vars: { ...PIN, ...DNI, RESPALDO_MIN: '0', SIN_LIMITES_CF: 'false' }, sql: ADMIN, extra: ['--test-scheduled'] },
 ];
 const filtro = process.argv.slice(2), lista = SUITES.filter(s => !filtro.length || filtro.some(f => s.n.includes(f)));
