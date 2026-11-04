@@ -24,7 +24,14 @@ Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño pru
 - `index.html` — panel (dueño, barberos, personal). Un solo archivo con su JS; modo nube (`/api`) o local (localStorage, solo demo).
 - `reservar.html` — formulario público de reservas (con el narrador «Tío Stereo»).
 - `estado.html` — página pública para ver el estado de una cita (`?c=CODIGO`) y reprogramarla.
-- `worker/index.js` — API y tareas programadas (Cloudflare Worker). `worker/webauthn.js` — huella/llaves de acceso sin librerías.
+- `worker/` — API (Cloudflare Worker), **monolito modular**:
+  - `index.js` — solo entrada: seguridad común (límite público, mismo origen), migraciones, enrutador por módulos, cron.
+  - `comun.js` — constantes, utilidades, hora de Lima y reglas de agenda (`slotsDia`, `trabaja`, `reglaReprog`). Sin dependencias.
+  - `datos.js` — D1: **migraciones versionadas** (`MIGRACIONES`), kv, citas (insertar/guardar/expirar), fotos y audios en R2.
+  - `modulos/publico.js` (formulario, estado, reprogramar) · `modulos/auth.js` (Google, puerta, perfiles, clave, huella, accesos) · `modulos/citas.js` (panel, búsqueda paginada, configuración, citas) · `modulos/config.js` (links, fotos, exportar/importar) · `modulos/dni.js` · `modulos/seguridad.js` (límites, Turnstile, ficha) · `modulos/monitoreo.js` · `modulos/respaldos.js`.
+  - `vista-previa.js` (tarjetas de WhatsApp) · `webauthn.js` (huella sin librerías).
+  - Cada módulo exporta `rutasX(c)`: devuelve una respuesta si la ruta es suya, o nada para que siga el siguiente.
+- **Cambiar la base de datos:** agregar una versión nueva al final de `MIGRACIONES` en `worker/datos.js` (nunca editar una ya publicada). Se aplica sola al arrancar y queda en la tabla `_migraciones`.
 - `wrangler.jsonc` — bindings: D1 `DB`, R2 `FOTOS`, límites `RL_PUB`/`RL_DNI`/`RL_RES`, cron cada 5 min. `keep_vars: true`.
 - `_headers` — CSP y encabezados de seguridad de los archivos estáticos.
 - `CLOUDFLARE.md` — manual de despliegue y de cada función (para el dueño). Los `.md` no se publican (`.assetsignore`).

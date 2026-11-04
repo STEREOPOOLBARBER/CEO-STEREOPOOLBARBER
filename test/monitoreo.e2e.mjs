@@ -6,7 +6,9 @@ const dni = http.createServer((q, r) => { r.end(JSON.stringify({ data: { nombres
 let ok = 0, bad = 0; const check = (n, c, x = '') => { c ? ok++ : bad++; console.log(`${c ? '✅' : '❌'} ${n} ${c ? '' : x}`) };
 const call = async (m, p, b, c, h = {}) => { const r = await fetch(BASE + '/api' + p, { method: m, headers: { ...(b ? { 'Content-Type': 'application/json' } : {}), ...(c ? { Cookie: c } : {}), Origin: BASE, ...h }, body: b ? JSON.stringify(b) : undefined }); const t = await r.text(); let j; try { j = JSON.parse(t) } catch { j = t } return { s: r.status, j, h: r.headers } };
 const adm = (await fetch(BASE + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: BASE }, body: '{"pin":"5821"}' })).headers.get('set-cookie').split(';')[0];
-let r = await call('GET', '/alertas', null, adm);
+let r = await call('GET', '/diagnostico', null, adm);
+check('la base de datos tiene aplicadas las migraciones versionadas', Array.isArray(r.j.db?.migraciones) && r.j.db.migraciones.includes(1), JSON.stringify(r.j));
+r = await call('GET', '/alertas', null, adm);
 check('sin respaldo todavía → aviso en la campana', r.j.some(a => /respaldo/i.test(a.t)), JSON.stringify(r.j));
 await fetch(BASE + '/__scheduled?cron=*/5+*+*+*+*');
 r = await call('GET', '/respaldos', null, adm);

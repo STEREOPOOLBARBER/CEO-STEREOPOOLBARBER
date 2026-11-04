@@ -52,7 +52,7 @@ for (const s of lista) {
   const linea = (out.match(/\d+ OK · \d+ fallos/) || ['sin resultado'])[0];
   res.push({ n: s.n, ok, linea, seg: Math.round((Date.now() - t0) / 1000) });
   console.log(`${ok ? '✅' : '❌'} ${s.n.padEnd(16)} ${linea.padEnd(18)} ${res.at(-1).seg}s`);
-  if (!ok) console.log(out.split('\n').filter(l => l.trim()).slice(-14).map(l => '     ' + l).join('\n'));
+  if (!ok) console.log(out.split('\n').filter(l => l.trim()).slice(-40).map(l => '     ' + l).join('\n'));
 }
 rmSync(tmp, { recursive: true, force: true });
 const malos = res.filter(r => !r.ok);

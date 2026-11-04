@@ -117,3 +117,7 @@ Página solo para consultar la cita: `estado.html?c=CODIGO` (o escribir el códi
 - **Cookies `__Host-brb_s` / `__Host-brb_g`** (no las puede pisar ningún subdominio). Las de nombre viejo se aceptan durante la transición.
 - **Sesión nueva en cada ingreso**: al entrar a un perfil se cierra la sesión anterior del mismo navegador.
 - **Librerías sin CDN**: `vendor/qrcode.min.js` y `vendor/xlsx.full.min.js` guardadas en el proyecto, cargadas con `integrity` (SRI). La CSP ya no permite scripts de cdnjs.
+
+### Monolito modular (Fase 3 de la arquitectura)
+El servidor dejó de ser un solo archivo de 1 100 líneas: ahora son módulos por área de la barbería (`worker/modulos/`: público, acceso, citas, configuración, DNI, seguridad, monitoreo, respaldos) con un enrutador central. Mismo comportamiento (las 15 suites de pruebas pasan igual).
+La estructura de la base de datos ahora es **versionada** (`MIGRACIONES` en `worker/datos.js`, tabla `_migraciones`): cada cambio futuro se aplica una sola vez y en orden. «🔍 Probar nube» muestra las versiones aplicadas.
