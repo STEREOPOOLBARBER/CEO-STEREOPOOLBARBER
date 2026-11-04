@@ -27,6 +27,15 @@ button{cursor:pointer}
 .ibtn .dot{position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;font-size:11px;font-weight:700;min-width:20px;height:20px;border-radius:99px;display:grid;place-items:center;padding:0 5px}
 .ibtn.out{border-color:var(--red);color:var(--red);background:rgba(248,81,73,.08)}
 .ibtn.bare{border:0;background:none}
+#notif{position:fixed;z-index:80;top:64px;right:12px;width:min(390px,calc(100vw - 24px));max-height:72vh;display:none;flex-direction:column;background:var(--card,#161025);border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 50px rgba(0,0,0,.55);overflow:hidden}
+#notif.on{display:flex}#notif .nh{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
+#notif .nh b{font-size:16px}#notif .nh button{color:var(--mu);font-size:13px;background:none;border:0}
+#notif .nl{overflow:auto;padding:4px 0}#notif .ni{display:flex;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+#notif .ni:last-child{border-bottom:0}#notif .ni .e{font-size:22px;line-height:1}#notif .ni .x{flex:1;min-width:0}
+#notif .ni .x b{display:block;font-size:14px}#notif .ni .x small{display:block;color:var(--mu);font-size:12px;margin-top:2px}
+#notif .ni .t{color:var(--mu);font-size:11px;white-space:nowrap}#notif .ni.nueva .t::after{content:'';display:block;width:8px;height:8px;border-radius:50%;background:var(--pur);margin:6px 0 0 auto}
+#notif .ni .ac{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}#notif .ni .ac .btn{padding:7px 12px;font-size:13px}
+#notif .vac{padding:28px 16px;text-align:center;color:var(--mu)}
 .tabs{position:sticky;top:78px;z-index:29;display:flex;background:var(--bg);border-bottom:1px solid var(--line)}
 .tabs button{flex:1;padding:14px 6px;background:none;border:0;border-bottom:3px solid transparent;color:var(--mu);font-weight:500;white-space:nowrap;font-size:16px}
 .tabs button.on{color:var(--blue);border-color:var(--blue)}
@@ -288,7 +297,7 @@ th{color:var(--mu);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
 <header class="top">
   <div class="logo" id="hLogo">💈</div>
   <div class="brand" id="hBrand" style="cursor:pointer;-webkit-user-select:none;user-select:none"><h1 id="hNombre">Barbería</h1><small id="hSub"></small></div>
-  <button class="ibtn bare" onclick="verPorValidar()" title="Yape por validar">🔔<span class="dot" id="hDot" style="display:none">0</span></button>
+  <button class="ibtn bare" id="hBell" onclick="togNotif(event)" title="Notificaciones">🔔<span class="dot" id="hDot" style="display:none">0</span></button>
   <button class="ibtn out" onclick="abrirMenu()" title="Menú">☰</button>
 </header>
 <div id="proxBar"></div>
@@ -500,7 +509,7 @@ async function reload(notify){
 function renderHeader(){
  $('#hNombre').textContent=S.cfg.nombre;document.title=S.cfg.nombre+' · Panel';logoHTML($('#hLogo'),S.cfg);
  $('#hSub').innerHTML=`${S.cfg.whatsapp?esc(S.cfg.whatsapp):esc(S.cfg.eslogan||'')} <span class="pill" style="color:var(--pur);border-color:var(--pur)">${S.ses.uid?(ROLES[S.ses.rol]?.t||'👤').split(' ')[0]+' '+esc(S.ses.nombre):S.ses.rol==='barbero'?'💈 '+esc(barb(S.ses.barberoId)?.nombre||S.ses.nombre):'👑 Dueño'}</span>`;
- const n=scope().filter(c=>c.estado==='por_validar').length;const d=$('#hDot');d.style.display=n?'grid':'none';d.textContent=n;
+ const n=notifs().filter(x=>!S.leidas.has(x.k)).length;const d=$('#hDot');d.style.display=n?'grid':'none';d.textContent=n>99?'99+':n;if($('#notif')?.classList.contains('on'))pintaNotif();
 }
 function goTab(t){S.tab=t;$$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));$$('.sec').forEach(s=>s.classList.toggle('on',s.id==='t-'+t));renderTab();scrollTo(0,0)}
 function renderTab(){({agenda:renderAgenda,compartir:renderCompartir,config:renderConfig})[S.tab]?.()}
@@ -589,6 +598,32 @@ function abrirEtiquetas(){const all=scope(),dia=esRango()?all.filter(enRango):al
  openModal(`<div class="grab"></div>${mHead('🏷️ Todas las etiquetas')}<p class="hint" style="margin:0 0 14px">${esRango()?`Cuentan las citas de la <b style="color:var(--tx)">${S.fecha==='semana'?'semana':'mes'} · ${rangoAg().t}</b>. «Yape por validar» cuenta todos los días.`:`Cuentan las citas del <b style="color:var(--tx)">${fLarga(S.fecha)}</b>. «Yape por validar» cuenta todos los días.`} Toca una para filtrar.</p>${rows}`)}
 function limpiar(){S.q='';S.barbF='';S.filtro='todos';renderAgenda()}
 function setFiltro(f){S.filtro=f;renderAgenda()}
+/* ---------- notificaciones (campana) ---------- */
+S.leidas=new Set(lsGet('notifLeidas',[]));
+function notifs(){const now=Date.now(),H=48*3600e3,out=[];
+ for(const c of scope()){const nm=c.cliente?.nombre||'Cliente',cu=`${fLarga(c.fecha)} · ${h12(c.hora)}`,bn=barb(c.barberoId)?.nombre||'',st=startTs(c);
+  if(c.estado==='por_validar'&&activa(c))out.push({k:'y_'+c.id+(c.yapeCaptura?'_c':''),ts:c.upd||c.creada||0,i:'💸',t:(c.yapeCaptura?'Yape por validar — ':'Esperando comprobante — ')+nm,s:`${cu} · ${bn} · ${soles(c.adelanto)}`,c,tipo:'yape'});
+  else if(c.origen==='web'&&(c.creada||0)>now-H&&activa(c)&&c.estado!=='atendida')out.push({k:'n_'+c.id,ts:c.creada,i:'🆕',t:'Nueva reserva — '+nm,s:`${cu} · ${bn} · ✂️ ${c.servicioNombre||''}`,c,tipo:'nueva'});
+  if(c.reprogTs&&c.reprogTs>now-H&&activa(c))out.push({k:'r_'+c.id+'_'+c.reprogTs,ts:c.reprogTs,i:'🔁',t:'Reprogramó — '+nm,s:`Ahora ${cu}${c.reprogDe?` · antes ${fLarga(c.reprogDe.fecha)} ${h12(c.reprogDe.hora)}`:''}`,c,tipo:'reprog'});
+  if(c.estado==='confirmada'&&st>now&&st-now<=60*60e3)out.push({k:'p_'+c.id+'_'+c.fecha+c.hora,ts:st-60*60e3,i:'⏰',t:`Cita ${falta(st)} — ${nm}`,s:`${h12(c.hora)} · ${bn} · ✂️ ${c.servicioNombre||''}`,c,tipo:'prox'});
+  if(['cancelada','no_vino'].includes(c.estado)&&(c.upd||0)>now-H&&st>now-24*3600e3)out.push({k:'x_'+c.id+'_'+c.estado,ts:c.upd,i:c.estado==='cancelada'?'🚫':'❌',t:(c.estado==='cancelada'?'Cita cancelada — ':'No vino — ')+nm,s:`${cu} · ${bn}`,c,tipo:'baja'})}
+ return out.sort((a,b)=>b.ts-a.ts)}
+function togNotif(e){e?.stopPropagation();let el=$('#notif');if(!el){el=document.createElement('div');el.id='notif';el.addEventListener('click',ev=>ev.stopPropagation());document.body.appendChild(el);
+  document.addEventListener('pointerdown',ev=>{if(!el.contains(ev.target)&&!ev.target.closest?.('#hBell'))el.classList.remove('on')},true)}
+ if(el.classList.contains('on'))return el.classList.remove('on');pintaNotif();el.classList.add('on')}
+function pintaNotif(){const el=$('#notif'),l=notifs(),vis=l.filter(x=>!S.leidas.has(x.k)||x.tipo==='yape'||x.tipo==='prox');
+ const wa=(x,key,txt)=>x.c.cliente?.tel&&(can('verTel')||isAdmin())?`<button class="btn sm" style="border-color:#25d366;color:#25d366" onclick="notifWA('${x.c.id}','${key}','${x.k}')">💬 ${txt}</button>`:'';
+ const acc=x=>{const v=`<button class="btn sm" onclick="notifVer('${x.c.id}','${x.k}')">👁️ Ver</button>`;
+  if(x.tipo==='yape')return v+(x.c.yapeCaptura&&can('yape')?`<button class="btn sm p" onclick="notifLeer('${x.k}');$('#notif').classList.remove('on');verYape('${x.c.id}')">✅ Validar Yape</button>`:wa(x,'waYape','Pedir Yape'));
+  if(x.tipo==='prox')return v+wa(x,'waRecuerda','Recordar');
+  if(x.tipo==='baja')return v+wa(x,'waVuelve','Reagendar');
+  return v+wa(x,'waConfirma','Confirmar')};
+ el.innerHTML=`<div class="nh"><b>🔔 Notificaciones</b>${l.some(x=>!S.leidas.has(x.k))?`<button onclick="notifTodas()">Marcar todo leído</button>`:''}</div>
+ <div class="nl">${vis.length?vis.map(x=>`<div class="ni ${S.leidas.has(x.k)?'':'nueva'}"><span class="e">${x.i}</span><div class="x"><b>${esc(x.t)}</b><small>${esc(x.s)}</small><div class="ac">${acc(x)}</div></div><span class="t">${x.tipo==='prox'?'':hace(x.ts)}</span></div>`).join(''):'<div class="vac">✨ Todo al día. Aquí verás reservas nuevas, Yapes por validar, reprogramaciones y citas próximas.</div>'}</div>`}
+function notifLeer(k){S.leidas.add(k);lsSet('notifLeidas',[...S.leidas].slice(-300));renderHeader()}
+function notifTodas(){notifs().forEach(x=>S.leidas.add(x.k));lsSet('notifLeidas',[...S.leidas].slice(-300));renderHeader();pintaNotif()}
+function notifVer(id,k){notifLeer(k);$('#notif').classList.remove('on');irACita(id)}
+function notifWA(id,key,k){const c=cita(id);if(!c)return;window.open(waUrl(waNum(c.cliente.tel),tpl(S.cfg[key]||'',c)),'_blank');notifLeer(k)}
 function verPorValidar(){if(S.tab!=='agenda')goTab('agenda');S.filtro='por_validar';S.q='';renderAgenda()}
 function renderLista(){
  let cs=scope();const q=S.q.trim().toLowerCase(),global=!!q||esRango()||['por_validar'].includes(S.filtro);

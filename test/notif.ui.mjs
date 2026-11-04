@@ -1,0 +1,34 @@
+// Prueba de pantalla: la campana muestra las notificaciones de la barbería.
+// Requiere wrangler dev en localhost:8787 con --var ALLOW_PIN:true --var GOOGLE_CLIENT_ID: y adminPin 5821 sembrado.
+import { createRequire } from 'node:module';
+const { chromium } = createRequire(import.meta.url)(process.env.PW_PATH || 'playwright');
+const B = process.env.BASE || 'http://localhost:8787';
+let ok = 0, bad = 0; const check = (n, c, x = '') => { c ? ok++ : bad++; console.log(`${c ? '✅' : '❌'} ${n} ${c ? '' : x}`) };
+const call = async (m, p, b, c) => { const r = await fetch(B + '/api' + p, { method: m, headers: { ...(b ? { 'Content-Type': 'application/json' } : {}), ...(c ? { Cookie: c } : {}), Origin: B }, body: b ? JSON.stringify(b) : undefined }); return { s: r.status, j: await r.json().catch(() => ({})), cookie: (r.headers.get('set-cookie') || '').split(';')[0] } };
+const lima = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date());
+const dia = n => { const d = new Date(lima + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); if (d.getUTCDay() === 0) d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10) };
+const adm = (await call('POST', '/auth/login', { pin: '5821' })).cookie, pn = (await call('GET', '/panel', null, adm)).j;
+await call('PUT', '/config', { cfg: { ...pn.cfg, yapeNum: '987654321', modAdelanto: true, adelanto: 10, whatsapp: '957292479' }, barberos: pn.barberos, servicios: pn.servicios, usuarios: pn.usuarios }, adm);
+const res = (b, f, h, n) => call('POST', '/publico/reservas', { servicioId: pn.servicios[0].id, barberoId: pn.barberos[b].id, fecha: f, hora: h, cliente: { nombre: n, tel: '98765432' + b, ciudad: 'Lima' } });
+await res(0, dia(3), '10:00', 'Ana Yape');
+const r2 = await res(1, dia(4), '11:00', 'Beto Reprog');
+await call('POST', `/publico/cita/${r2.j.codigo}/reprogramar`, { fecha: dia(5), hora: '12:00' });
+const now = new Date(Date.now() + 30 * 60e3), hh = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(now);
+await call('POST', '/citas', { fecha: lima, hora: hh, barberoId: pn.barberos[2].id, servicioId: pn.servicios[0].id, servicioNombre: pn.servicios[0].nombre, cliente: { nombre: 'Carla Pronto', tel: '987000111' }, estado: 'confirmada' }, adm);
+const br = await chromium.launch(), ctx = await br.newContext({ viewport: { width: 412, height: 900 }, timezoneId: 'America/Lima' }), P = await ctx.newPage(); P.on('pageerror', e => console.log('PAGEERR', e.message)); P.on('console', m => m.type() === 'error' && console.log('CONSOLE', m.text()));
+const lr = await ctx.request.post(B + '/api/auth/login', { data: { pin: '5821' }, headers: { Origin: B } });
+await P.goto(B + '/index.html'); await P.evaluate(s => localStorage.setItem('brb_ses', JSON.stringify(s)), await lr.json()); await P.reload(); await P.waitForSelector('#login', { state: 'hidden' });
+await P.waitForTimeout(500); const dot = await P.locator('#hDot').innerText(); check('la campana cuenta las no leídas', +dot >= 3, dot);
+await P.click('#hBell'); await P.waitForSelector('#notif.on');
+const t = await P.locator('#notif').innerText(); console.log(t.replace(/\n+/g, ' | ').slice(0, 600));
+check('muestra Yape por validar / esperando comprobante', /Esperando comprobante — Ana Yape|Yape por validar — Ana Yape/.test(t));
+check('muestra la reprogramación con la fecha anterior', /Reprogramó — Beto Reprog/.test(t) && /antes/.test(t));
+check('muestra la cita próxima', /Cita en \d+ min — Carla Pronto/.test(t));
+check('cada aviso tiene Ver y WhatsApp', (await P.locator('#notif .ni >> text=👁️ Ver').count()) >= 3 && (await P.locator('#notif .ni >> text=💬').count()) >= 2);
+await P.click('text=Marcar todo leído'); await P.waitForTimeout(200);
+check('marcar todo leído apaga el contador', !(await P.locator('#hDot').isVisible()));
+await P.mouse.click(30, 500); check('se cierra al tocar fuera', !(await P.locator('#notif').isVisible()));
+await P.click('#hBell'); await P.locator('#notif .ni:has-text("Carla Pronto") >> text=👁️ Ver').click(); await P.waitForTimeout(300);
+check('Ver abre la agenda en esa cita', !(await P.locator('#notif').isVisible()) && /Carla Pronto/.test(await P.locator('#t-agenda').innerText().catch(() => '')));
+await P.screenshot({ path: '/tmp/claude-0/notif.png' });
+console.log(`\n${ok} OK · ${bad} fallos`); await br.close(); process.exit(bad ? 1 : 0);
