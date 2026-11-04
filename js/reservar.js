@@ -181,14 +181,14 @@ async function s2(){
 function s3(){const s=serv(),np=sinPagoF();
  shell(`<h2>Tus datos</h2>
  <div class="card"><div class="res"><span>✂️</span><span><b>${esc(s.nombre)}</b> · ${soles(s.precio)}</span><span>💈</span><span>${esc(barbNom(F.barb))}</span><span>📅</span><span>${fLarga(F.fecha)} · ${h12(F.hora)}</span></div></div>
- <label class="lb">DNI <small style="color:var(--mu)">(opcional · llena tus datos solo)</small></label><input class="in" id="cDni" inputmode="numeric" maxlength="8" placeholder="8 dígitos" autocomplete="off" value="${esc(F.cli.dni||'')}" data-on-input="a5d5818b0"><small id="dniEst" style="color:var(--mu);display:block;min-height:16px;margin-top:4px"></small>
+ <label class="lb">DNI <small style="color:var(--mu)">(opcional · llena tus datos solo)</small></label><input class="in" id="cDni" inputmode="numeric" maxlength="8" placeholder="8 dígitos" autocomplete="off" value="${esc(F.cli.dni||'')}" data-on-input="a5d5818b0"><small id="dniEst" style="color:var(--mu);display:block;min-height:16px;margin-top:4px"></small><small style="color:var(--mu);display:block;font-size:11px">Si lo escribes, consultamos tu nombre en RENIEC para llenarlo por ti. <a href="privacidad.html" target="_blank" rel="noopener" style="color:var(--blue)">Privacidad</a></small>
  <label class="lb">Nombre y apellido *</label><input class="in" id="cNom" autocomplete="name" value="${esc(F.cli.nombre)}">
  <label class="lb">WhatsApp *</label><div class="pre"><span>+51</span><input class="in" id="cTel" inputmode="tel" autocomplete="tel" placeholder="9XXXXXXXX" maxlength="11" value="${esc(F.cli.tel)}"></div>
  <label class="lb">Ciudad / distrito *</label><input class="in" id="cCiu" placeholder="Ej: Puente Piedra, Lima" value="${esc(F.cli.ciudad)}">
  <label class="lb">¿Algo que deba saber tu barbero?</label><textarea class="in" id="cNota" rows="2" placeholder="Ej: mid fade, dejar largo arriba">${esc(F.nota)}</textarea>
  <label class="lb">Foto de referencia (opcional)</label>
  <label class="upl"><span class="prev" id="refPrev">${F.ref?`<img src="${F.ref}">`:'🖼️'}</span><span><b>Sube el corte que quieres</b><br><small style="color:var(--mu)">Una captura de Instagram o TikTok sirve</small></span><input type="file" accept="image/*" data-on-change="a488e7220"></label>
- <label class="chk"><input type="checkbox" id="cOk" ${F.cli.nombre?'checked':''}><span>Acepto que usen mis datos para gestionar mi cita y que me escriban por WhatsApp.</span></label>
+ <label class="chk"><input type="checkbox" id="cOk" ${F.cli.nombre?'checked':''}><span>Acepto que usen mis datos para gestionar mi cita, validar mi DNI y escribirme por WhatsApp, según el <a href="privacidad.html" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline">aviso de privacidad</a>.</span></label>
  <div id="ts" style="margin-top:12px"></div><p class="err" id="err"></p>`,
  `<button class="btn" data-on-click="a50bede1b">←</button><button class="btn p" id="bRes" data-on-click="aba4fdcb4">${np?'✅ Reservar':`Reservar y pagar ${soles(adel())} →`}</button>`);
  if(CONFIG.TURNSTILE_SITEKEY)loadTS()}
@@ -216,7 +216,7 @@ async function reservar(){if(F.busy)return;guardaCli();const e=$('#err'),c=F.cli
  F.busy=true;const b=$('#bRes');b.disabled=true;b.textContent='Reservando…';
  if(CONFIG.TURNSTILE_SITEKEY&&!F.ts){b.textContent='Verificando…';if(!await tsEsperar(12)){F.busy=false;b.disabled=false;b.textContent='Reintentar';return e.textContent='Completa la verificación de Cloudflare'}b.textContent='Reservando…'}
  try{c.tel=c.tel.slice(-9);lsSet('yo',c);
-  F.cita=await API.crear({servicioId:F.serv,barberoId:F.barb,fecha:F.fecha,hora:F.hora,cliente:c,nota:F.nota,refFoto:F.ref,turnstile:F.ts,linkToken:F.link?.token||''});
+  F.cita=await API.crear({servicioId:F.serv,barberoId:F.barb,fecha:F.fecha,hora:F.hora,cliente:c,nota:F.nota,refFoto:F.ref,turnstile:F.ts,linkToken:F.link?.token||'',consentimiento:true});
   go(F.cita.expira?4:5);say(F.cita.expira?'datos':'listo')}
  catch(err){e.textContent='❌ '+err.message;b.disabled=false;b.textContent='Reintentar';if(/link/i.test(err.message)){F.link=null}if(/ocupa/i.test(err.message)){say('ocupado');F.hora=null;setTimeout(()=>go(2),1400)}}
  finally{F.busy=false;if(CONFIG.TURNSTILE_SITEKEY)tsNuevo()}}

@@ -1,7 +1,7 @@
 import { DEF, addD, ahoraLocal, fail, json, str, uid } from '../comun.js';
 import { leerKV } from '../datos.js';
 import { auditar, quienEs } from './auth.js';
-import { respaldar } from './respaldos.js';
+import { descifrar, respaldar } from './respaldos.js';
 import { anotarSeg } from './seguridad.js';
 
 /* Monitoreo: seguridad, avisos, bitácora, respaldos y diagnóstico. */
@@ -48,12 +48,13 @@ export async function rutasMonitoreo(c) {
   if (path === '/respaldos' && m === 'GET') {
     exigir('excel'); if (!env.FOTOS) fail(503, 'Falta conectar el almacén de fotos (R2)');
     const l = await env.FOTOS.list({ prefix: 'respaldos/', include: ['customMetadata'] });
-    return json(l.objects.map(o => ({ fecha: o.key.slice(10, 20), bytes: o.size, citas: +(o.customMetadata?.citas || 0) })).sort((a, b) => b.fecha.localeCompare(a.fecha)));
+    return json(l.objects.map(o => ({ fecha: o.key.slice(10, 20), bytes: o.size, citas: +(o.customMetadata?.citas || 0), cifrado: !!o.customMetadata?.cifrado })).sort((a, b) => b.fecha.localeCompare(a.fecha)));
   }
   if (path === '/respaldos' && m === 'POST') { exigir('config'); const r = await respaldar(env); await auditar(env, quienEs(s), 'Creó respaldo', r.fecha, `${r.citas} citas`); return json(r) }
   if ((x = path.match(/^\/respaldos\/(\d{4}-\d{2}-\d{2})$/)) && m === 'GET') {
     exigir('excel'); const o = await env.FOTOS?.get(`respaldos/${x[1]}.json`); if (!o) fail(404, 'Ese respaldo no existe');
-    return new Response(o.body, { headers: { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="respaldo-${x[1]}.json"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
+    const plano = await descifrar(env, await o.arrayBuffer());
+    return new Response(plano, { headers: { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="respaldo-${x[1]}.json"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
   }
   if (path === '/diagnostico' && m === 'GET') {
     exigir('config');

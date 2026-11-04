@@ -39,10 +39,16 @@ check('permisos de usuario se cambian (togPermU)', await P.evaluate(() => S._u.r
 await P.evaluate(() => abrirMenu()); await P.waitForTimeout(300); await revisar(P, 'Menú'); await P.evaluate(() => closeModal());
 await P.evaluate(() => abrirCaja()); await P.waitForTimeout(400); await revisar(P, 'Caja'); await P.evaluate(() => closeModal());
 await P.evaluate(() => abrirDash()); await P.waitForSelector('.sheet .dsec', { timeout: 8000 }); await revisar(P, 'Dashboard'); await P.evaluate(() => closeModal());
-await P.evaluate(() => abrirClientes()); await P.waitForTimeout(800); await revisar(P, 'Clientes'); await P.evaluate(() => closeModal());
+await P.evaluate(async () => { await API.req('POST', '/citas', { fecha: hoy(), hora: '19:00', barberoId: S.barberos[0].id, servicioId: S.servicios[0].id, precio: 30, cliente: { nombre: 'Ficha Prueba', tel: '987000555' }, estado: 'confirmada' }); await reload() });
+await P.evaluate(() => abrirClientes()); await P.waitForSelector('#cliList >> text=Ficha Prueba', { timeout: 8000 }); await revisar(P, 'Clientes');
+await P.click('#cliList >> text=Ficha Prueba'); await P.waitForSelector('#ficPref'); await revisar(P, 'Ficha de cliente (con derechos ARCO)');
+check('la ficha ofrece descargar y anonimizar (Ley 29733)', await P.locator('text=📄 Descargar sus datos').count() === 1 && await P.locator('[data-on-click="anonimizarFicha"]').count() === 1); await P.evaluate(() => closeModal());
 await P.evaluate(() => verSeguridad()); await P.waitForSelector('text=Últimos 14 días', { timeout: 8000 }); await revisar(P, 'Monitoreo');
 await P.click('text=📝 Bitácora: quién hizo qué'); await P.waitForTimeout(600); await revisar(P, 'Bitácora'); await P.evaluate(() => closeModal());
 await P.evaluate(() => moverCitas()); await P.waitForTimeout(300); await revisar(P, 'Mover citas'); await P.evaluate(() => closeModal());
+// ---- aviso de privacidad
+const PV = await nueva(); await PV.goto(B + '/privacidad.html'); await PV.waitForSelector('text=Tus derechos', { timeout: 8000 });
+check('el aviso de privacidad carga (Ley 29733, derechos ARCO)', /29733/.test(await PV.locator('body').innerText()));
 // ---- formulario de reservas: recorrer los pasos con clics reales
 const R = await nueva();
 await R.goto(B + '/reservar.html'); await R.waitForSelector('[data-on-click^="a"]', { timeout: 8000 }); await revisar(R, 'Reservar: servicios');

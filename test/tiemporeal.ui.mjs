@@ -4,7 +4,7 @@ import http from 'node:http';
 const { chromium } = createRequire(import.meta.url)(process.env.PW_PATH || 'playwright');
 const B = process.env.BASE || 'http://localhost:8787';
 let ok = 0, bad = 0; const check = (n, c, x = '') => { c ? ok++ : bad++; console.log(`${c ? '✅' : '❌'} ${n} ${c ? '' : x}`) };
-const api = async (m, p, b, h = {}) => { const r = await fetch(B + '/api' + p, { method: m, headers: { ...(b ? { 'Content-Type': 'application/json' } : {}), Origin: B, ...h }, body: b ? JSON.stringify(b) : undefined }); return { s: r.status, j: await r.json().catch(() => ({})) } };
+const api = async (m, p, b, h = {}) => { const r = await fetch(B + '/api' + p, { method: m, headers: { ...(b ? { 'Content-Type': 'application/json' } : {}), Origin: B, ...h }, body: b ? JSON.stringify(p === '/publico/reservas' && b && !('consentimiento' in b) ? { consentimiento: true, ...b } : b) : undefined }); return { s: r.status, j: await r.json().catch(() => ({})) } };
 // petición de WebSocket «a mano» (fetch no permite el encabezado Upgrade): devuelve el código HTTP
 const ws = (h = {}) => new Promise(res => { const u = new URL(B + '/api/tiempo-real'); const q = http.request({ host: u.hostname, port: u.port, path: u.pathname, headers: { Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': 'dGhlIHNhbXBsZSBub25jZQ==', ...h } }); q.on('response', r => { res(r.statusCode); r.resume() }); q.on('upgrade', (r, sock) => { res(101); sock.destroy() }); q.on('error', () => res(0)); q.end() });
 // seguridad del WebSocket

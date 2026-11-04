@@ -147,6 +147,13 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barbero
  ${acc('funciones','🧩 Funciones','Activa solo lo que usas',()=>`
   ${[['modFotos','📷 Fotos antes y después','En cada cita confirmada'],['modFidelidad','🎁 Tarjeta de fidelidad','Corte gratis cada N visitas'],['modComision','💰 Comisiones','% por barbero en la Caja'],['modWalkin','⚡ Clientes sin cita','Botón para pasar directo a silla']].map(([k,t,s])=>`<div class="li"><div class="t"><b>${t}</b><small>${s}</small></div>${sw(c[k],'setB',k)}</div>`).join('')}
   ${c.modFidelidad?`<label class="lb">Corte gratis cada</label><input class="in" type="number" min="2" value="${c.fidelidad}" data-on-change="afed2ea6a">`:''}`)}
+ ${acc('privacidad','🔏 Privacidad y datos personales','Ley 29733: aviso, responsable y retención',()=>`
+  <p class="hint" style="margin-top:0">Estos datos aparecen en tu <a href="privacidad.html" target="_blank" rel="noopener" style="color:var(--blue)">aviso de privacidad</a>, que el cliente acepta al reservar.</p>
+  <label class="lb">Responsable de los datos (nombre o razón social)</label><input class="in" value="${esc(c.privTitular||'')}" placeholder="Ej: Juan Pérez · Stereo Barber Pool" data-cfg="privTitular" data-on-change="cfgTexto">
+  <div class="g2"><div><label class="lb">RUC o DNI (opcional)</label><input class="in" value="${esc(c.privRuc||'')}" data-cfg="privRuc" data-on-change="cfgTexto"></div><div><label class="lb">Correo para solicitudes</label><input class="in" type="email" value="${esc(c.privCorreo||'')}" placeholder="tu@correo.com" data-cfg="privCorreo" data-on-change="cfgTexto"></div></div>
+  <label class="lb">Anonimizar clientes que no vienen hace…</label><select class="in" data-cfg="retencionMeses" data-on-change="cfgNumero">${[[0,'No anonimizar automáticamente'],[12,'12 meses'],[24,'24 meses (recomendado)'],[36,'36 meses']].map(([v,t])=>`<option value="${v}" ${+(c.retencionMeses||0)===v?'selected':''}>${t}</option>`).join('')}</select>
+  <label class="lb">Borrar capturas de Yape después de…</label><select class="in" data-cfg="capturasDias" data-on-change="cfgNumero">${[[0,'No borrar'],[90,'90 días'],[180,'180 días (recomendado)'],[365,'1 año']].map(([v,t])=>`<option value="${v}" ${+(c.capturasDias||0)===v?'selected':''}>${t}</option>`).join('')}</select>
+  <p class="hint">Los clientes con notas o preferencias guardadas no se anonimizan solos. Para un pedido puntual: 👥 Clientes → ficha → 🔏 Datos personales. Los respaldos se guardan cifrados 30 días.</p>`)}
  ${acc('politica','📜 Política','Tolerancia y reprogramación',()=>`
   <div class="g2"><div><label class="lb">Tolerancia (minutos)</label><input class="in" type="number" min="0" max="120" value="${c.tolerancia??10}" data-on-change="a6ffed754"></div><div><label class="lb">Reprogramar hasta (horas antes)</label><input class="in" type="number" min="1" max="168" value="${c.horasReprog??24}" data-on-change="af822b928"></div></div>
   <label class="lb">Veces que el cliente puede reprogramar</label><select class="in" data-on-change="a77c8e8c2">${[0,1,2,3].map(n=>`<option value="${n}" ${+(c.maxReprog??1)===n?'selected':''}>${n===0?'No permitir':n===1?'1 vez':n+' veces'}</option>`).join('')}</select>
@@ -364,3 +371,7 @@ async function probarNube(){toast('⏳ Probando…');try{const r=await API.req('
 async function cargarDemo(){lsSet('citas',[...lsGet('citas',[]).filter(c=>!c.demo),...demoCitas()]);await reload();toast('🧪 Ejemplos cargados en la Agenda')}
 async function borrarTodo(){if(!confirm('¿Borrar TODAS las citas?')||prompt('Escribe BORRAR para confirmar')!=='BORRAR')return;lsSet('citas',[]);await reload();toast('🗑️ Citas borradas')}
 
+
+/* Campos simples de configuración (sin JavaScript en línea): data-cfg = nombre del campo. */
+ACC.cfgTexto=function(){setC(this.dataset.cfg,this.value.trim())};
+ACC.cfgNumero=function(){setN(this.dataset.cfg,this.value)};

@@ -2,7 +2,7 @@
 // Arranque: ver test/correr.mjs (PIN de pruebas 5821, sin Google).
 const BASE = process.env.BASE || 'http://127.0.0.1:8787';
 let ok = 0, bad = 0; const check = (n, c, x = '') => { c ? ok++ : bad++; console.log(`${c ? '✅' : '❌'} ${n} ${c ? '' : x}`) };
-const call = async (m, p, b, c) => { const r = await fetch(BASE + '/api' + p, { method: m, headers: { ...(b ? { 'Content-Type': 'application/json' } : {}), ...(c ? { Cookie: c } : {}), Origin: BASE }, body: b ? JSON.stringify(b) : undefined }); const t = await r.text(); let j; try { j = JSON.parse(t) } catch { j = t } return { s: r.status, j, raw: r.headers.get('set-cookie') || '', cookie: (r.headers.get('set-cookie') || '').split(';')[0] } };
+const call = async (m, p, b, c) => { const r = await fetch(BASE + '/api' + p, { method: m, headers: { ...(b ? { 'Content-Type': 'application/json' } : {}), ...(c ? { Cookie: c } : {}), Origin: BASE }, body: b ? JSON.stringify(p === '/publico/reservas' && b && !('consentimiento' in b) ? { consentimiento: true, ...b } : b) : undefined }); const t = await r.text(); let j; try { j = JSON.parse(t) } catch { j = t } return { s: r.status, j, raw: r.headers.get('set-cookie') || '', cookie: (r.headers.get('set-cookie') || '').split(';')[0] } };
 let r = await call('POST', '/auth/login', { pin: '5821' }); const adm = r.cookie;
 check('la cookie de sesión usa el prefijo __Host-', /^__Host-brb_s=/.test(adm) && /Secure/i.test(r.raw) && /Path=\//.test(r.raw) && !/Domain=/i.test(r.raw), r.raw);
 check('una cookie con el nombre viejo sigue sirviendo (transición)', (await call('GET', '/panel', null, adm.replace('__Host-brb_s', 'brb_s'))).s === 200);

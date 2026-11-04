@@ -17,11 +17,11 @@
      TZ                 zona horaria del local (por defecto America/Lima)
    ===================================================================== */
 
-import { HttpError, addD, ahoraLocal, fail, json } from './comun.js';
+import { DEF, HttpError, addD, ahoraLocal, fail, json } from './comun.js';
 import { asegurarSchema, datos, expirar, sembrar } from './datos.js';
 import { rutasAcceso, rutasAuth, sesion } from './modulos/auth.js';
 import { rutasCitas } from './modulos/citas.js';
-import { rutasClientes } from './modulos/clientes.js';
+import { retencion, rutasClientes } from './modulos/clientes.js';
 import { rutasConfig } from './modulos/config.js';
 import { rutasDni } from './modulos/dni.js';
 import { rutasMonitoreo } from './modulos/monitoreo.js';
@@ -85,6 +85,7 @@ export default {
     await expirar(env);
     if (await versionActual(env) !== v0) await avisar(env); // una reserva venció sin Yape: los paneles se enteran al toque
     try { await respaldoDiario(env) } catch (e) { console.error('respaldo', e) }
+    try { const r = await retencion(env, { ...DEF, ...(await datos(env)).cfg }); if (r.anonimizados || r.capturas) await avisar(env) } catch (e) { console.error('retención', e) }
     const corte = addD(ahoraLocal(env).fecha, -60);
     await env.DB.batch([
       env.DB.prepare("DELETE FROM contadores WHERE (k LIKE 'seg:%' AND k < ?) OR (k LIKE 'dni:%' AND k < ?)").bind('seg:' + corte, 'dni:' + corte),

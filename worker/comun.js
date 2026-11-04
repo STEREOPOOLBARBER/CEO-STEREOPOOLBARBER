@@ -10,7 +10,7 @@ export const SES_MS = 14 * 864e5;
 export const COOKIE = '__Host-brb_s', COOKIE_P = '__Host-brb_g', VIEJA = { [COOKIE]: 'brb_s', [COOKIE_P]: 'brb_g' };
 export const MAX_FOTO = 3 * 1024 * 1024;
 export const MAX_AUDIO = 2.5 * 1024 * 1024;
-export const DEF = { dias: [1, 2, 3, 4, 5, 6], apertura: '09:00', cierre: '20:00', refIni: '13:00', refFin: '14:00', anticipacion: 0, ventana: 14, modAdelanto: true, yapeNum: '', adelanto: 10, holdMin: 20, bloqueos: [], tolerancia: 10, horasReprog: 24, maxReprog: 1, politicaTxt: '', dniTopeDia: 300 };
+export const DEF = { dias: [1, 2, 3, 4, 5, 6], apertura: '09:00', cierre: '20:00', refIni: '13:00', refFin: '14:00', anticipacion: 0, ventana: 14, modAdelanto: true, yapeNum: '', adelanto: 10, holdMin: 20, bloqueos: [], tolerancia: 10, horasReprog: 24, retencionMeses: 0, capturasDias: 0, maxReprog: 1, politicaTxt: '', dniTopeDia: 300 };
 
 /* ---------- utilidades ---------- */
 export class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status } }

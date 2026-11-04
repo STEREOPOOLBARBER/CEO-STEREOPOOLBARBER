@@ -6,7 +6,7 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
 let ok = 0, bad = 0;
 const check = (name, cond, extra = '') => { cond ? ok++ : bad++; console.log(`${cond ? '✅' : '❌'} ${name} ${cond ? '' : extra}`) };
 async function call(m, p, b, cookie) {
-  const r = await fetch(BASE + '/api' + p, { method: m, headers: { ...(b ? { 'Content-Type': 'application/json' } : {}), ...(cookie ? { Cookie: cookie } : {}) }, body: b ? JSON.stringify(b) : undefined });
+  const r = await fetch(BASE + '/api' + p, { method: m, headers: { ...(b ? { 'Content-Type': 'application/json' } : {}), ...(cookie ? { Cookie: cookie } : {}) }, body: b ? JSON.stringify(p === '/publico/reservas' && b && !('consentimiento' in b) ? { consentimiento: true, ...b } : b) : undefined });
   const t = await r.text(); let j; try { j = JSON.parse(t) } catch { j = t }
   return { s: r.status, j, cookie: (r.headers.get('set-cookie') || '').split(';')[0] };
 }

@@ -20,6 +20,7 @@ async function fichaCliente(k,mas){let r;try{r=await API.req('GET','/clientes/'+
  <label class="lb">✂️ Preferencias de corte</label><input class="in" id="ficPref" maxlength="500" placeholder="Ej: mid fade, raya al lado, no tocar la barba" value="${esc(c.prefs||'')}">
  <label class="lb">📝 Notas internas</label><textarea class="in" id="ficNot" rows="2" maxlength="1000" placeholder="Ej: prefiere a Jhon, llega 10 min tarde, alérgico a…">${esc(c.notas||'')}</textarea>
  <button class="btn p w" style="margin-top:8px" data-on-click="af6381239" data-p0="${k}">💾 Guardar ficha</button>
+ ${can('config')?`<details style="margin-top:10px"><summary class="hint" style="cursor:pointer">🔏 Datos personales (Ley 29733)</summary><div class="g2" style="margin-top:8px"><a class="btn sm" href="${CONFIG.API_URL}/clientes/${k}/datos" download>📄 Descargar sus datos</a><button class="btn sm r" data-on-click="anonimizarFicha" data-p0="${k}">🗑️ Anonimizar</button></div><p class="hint">Anonimizar borra nombre, celular, DNI, distrito, notas, fotos y capturas de Yape de este cliente, y conserva solo fechas y montos. No se puede deshacer.</p></details>`:''}
  <div class="row" style="margin:12px 0"><button class="btn g" style="flex:1" data-on-click="a63dc68e3" data-p0="${esc(c.tel)}" data-p1="${esc(c.nombre).replace(/'/g,'')}">💬 WhatsApp</button><button class="btn" style="flex:1" data-on-click="a71d0100d" data-p0="${esc(c.tel)}">📋 Copiar cel</button>${can('crear')?`<button class="btn" style="flex:1" data-on-click="ae82e61fc">➕ Cita</button>`:''}</div>
  <p class="lb">Historial (${c.citas} cita${c.citas===1?'':'s'})</p>${items||'<p class="hint">Sin citas</p>'}
  ${S.fic.siguiente?`<button class="btn w" style="margin-top:10px" data-on-click="a0fdf74c1" data-p0="${k}">Ver más</button>`:''}`)}
@@ -51,3 +52,9 @@ function abrirCaja(){if(!cubre(S.cajaF,S.cajaF)){traerRango(S.cajaF,S.cajaF).the
  ${filas.map(r=>`<tr><td>${esc(r.b.nombre)}${com?`<br><small style="color:var(--mu)">${+r.b.comision||0}%</small>`:''}</td><td class="n">${r.cortes}</td><td class="n">${soles(r.g)}</td>${com?`<td class="n" style="color:var(--pur)">${soles(r.pago)}</td>`:''}${com&&isAdmin()?`<td class="n">${soles(r.neto)}</td>`:''}</tr>`).join('')}</table>`:'<div class="empty"><b>🧾</b>Sin movimientos este día</div>'}
  ${isAdmin()?`<button class="btn g w" style="margin-top:14px" data-on-click="ac87a633e">📤 Enviar resumen por WhatsApp</button>`:''}`)}
 
+
+/* Derecho de cancelación (Ley 29733): anonimizar al cliente desde su ficha. */
+ACC.anonimizarFicha=async function(){const k=this.dataset.p0,n=S.fic?.cliente?.nombre||'este cliente';
+ const t=prompt(`Vas a ANONIMIZAR a ${n}: se borran su nombre, celular, DNI, distrito, notas, fotos y capturas de Yape. Las citas quedan solo con fecha y monto.\n\nNo se puede deshacer. Escribe ANONIMIZAR para confirmar:`);
+ if(t!=='ANONIMIZAR')return toast('Cancelado');const motivo=prompt('Motivo (opcional, ej. «lo pidió por WhatsApp»):')||'';
+ try{const r=await API.req('POST','/clientes/'+k+'/anonimizar',{confirmar:'ANONIMIZAR',motivo});closeModal();S.cliR=null;await reload();toast(`✅ Cliente anonimizado (${r.citas} cita(s), ${r.fotos} foto(s) borrada(s))`)}catch(e){toast('❌ '+e.message)}};

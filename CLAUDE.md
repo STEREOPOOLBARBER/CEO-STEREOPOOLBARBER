@@ -61,6 +61,12 @@ Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño pru
 - **Paginación por cursor** (keyset) en `/api/citas/buscar` (sin texto) y `/api/clientes`: `siguiente` → `cursor`. Con texto, la búsqueda de citas usa páginas de 30.
 - **Búsqueda sin acentos**: `nombre_n` y `buscar` guardan el texto sin tildes (se calcula en JS con `sinAcentos`).
 
+## Datos personales (Ley 29733)
+- `privacidad.html` + `js/privacidad.js`: aviso de privacidad armado con `cfg` (`privTitular`, `privRuc`, `privCorreo`, `retencionMeses`, `capturasDias`). El formulario exige `consentimiento: true` (el Worker rechaza sin él) y guarda `cita.consentimiento = {ts, aviso, version}`. Si el aviso cambia de fondo, subir la versión en los dos lugares.
+- Derechos del cliente (solo permiso `config`): `GET /api/clientes/:tel/datos` (acceso) y `POST /api/clientes/:tel/anonimizar` con `confirmar: 'ANONIMIZAR'` (borra nombre, celular, DNI, distrito, notas, fotos y capturas en R2, links y su nombre en la bitácora; conserva fecha/servicio/monto/estado).
+- Retención en el cron (`retencion()`), **apagada por defecto**: `retencionMeses` (anonimiza inactivos sin notas) y `capturasDias` (borra capturas de Yape). Caché de DNI se borra a los 30 días.
+- Respaldos en R2 **cifrados** AES-256-GCM (`cifrar`/`descifrar` en `modulos/respaldos.js`; clave = secreto `RESPALDO_CLAVE` o una aleatoria en `kv.claveRespaldo`). La descarga del panel los entrega descifrados.
+
 ## Rendimiento
 - `GET /api/panel` trae solo la ventana de citas (35 días atrás, 120 adelante, más Yape pendientes). Lo demás: `GET /api/citas/buscar` (filtros y páginas en D1). Clientes usa la ficha del servidor; el Dashboard pide solo el periodo elegido (`traerRango`) más retención y «por recuperar» desde `clientes`; solo el Excel de citas baja toda la historia.
 

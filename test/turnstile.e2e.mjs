@@ -7,7 +7,7 @@ const usados = new Set();
 const ver = http.createServer((q, r) => { let b = ''; q.on('data', d => b += d); q.on('end', () => { const p = new URLSearchParams(b), t = p.get('response'); const ok = p.get('secret') === 'secreto' && t?.startsWith('bueno') && !usados.has(t); if (ok) usados.add(t); r.setHeader('Content-Type', 'application/json'); r.end(JSON.stringify({ success: ok })) }) }).listen(8797);
 const dni = http.createServer((q, r) => { r.setHeader('Content-Type', 'application/json'); r.end(JSON.stringify({ data: { nombres: 'ANA', apellidoPaterno: 'LUZ', apellidoMaterno: 'MAR' } })) }).listen(8798);
 let ok = 0, bad = 0; const check = (n, c, x = '') => { c ? ok++ : bad++; console.log(`${c ? '✅' : '❌'} ${n} ${c ? '' : x}`) };
-const call = async (m, p, b, h = {}) => { const r = await fetch(BASE + '/api' + p, { method: m, headers: { ...(b ? { 'Content-Type': 'application/json' } : {}), Origin: BASE, ...h }, body: b ? JSON.stringify(b) : undefined }); return { s: r.status, j: await r.json().catch(() => ({})) } };
+const call = async (m, p, b, h = {}) => { const r = await fetch(BASE + '/api' + p, { method: m, headers: { ...(b ? { 'Content-Type': 'application/json' } : {}), Origin: BASE, ...h }, body: b ? JSON.stringify(p === '/publico/reservas' && b && !('consentimiento' in b) ? { consentimiento: true, ...b } : b) : undefined }); return { s: r.status, j: await r.json().catch(() => ({})) } };
 let r = await call('GET', '/publico'); check('la página recibe la site key de Turnstile', r.j.ts === 'sitio');
 r = await call('POST', '/publico/ficha', {}); check('sin Turnstile no hay ficha', r.s === 403);
 r = await call('POST', '/publico/ficha', { turnstile: 'malo1' }); check('Turnstile inválido → sin ficha', r.s === 403);

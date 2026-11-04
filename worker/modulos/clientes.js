@@ -1,6 +1,6 @@
 import { ACTIVOS, ahoraLocal, addD, fail, json, str } from '../comun.js';
 import { auditar, quienEs } from './auth.js';
-import { filaCita } from '../datos.js';
+import { bumpStmt, filaCita } from '../datos.js';
 
 /* ---------- ficha de cliente ----------
    La tabla `clientes` resume a cada cliente (clave: últimos 9 dígitos del celular) a partir de sus citas:
@@ -57,6 +57,54 @@ function vistaCliente(s, x) {
   return v;
 }
 
+/* ---------- Ley 29733: derechos del cliente y retención ----------
+   Anonimizar = borrar todo lo que identifica a la persona (nombre, celular, DNI, distrito, notas, fotos de cortes,
+   capturas de Yape, links personales y su nombre en la bitácora), conservando solo lo contable (fecha, servicio, monto, estado). */
+const FOTOS_CITA = ['refFoto', 'yapeCaptura', 'fotoAntes', 'fotoDespues'];
+export async function anonimizarCliente(env, tel, quien, motivo) {
+  if (!/^\d{6,9}$/.test(tel || '')) return { citas: 0 };
+  const r = await env.DB.prepare('SELECT id, data FROM citas WHERE tel = ?').bind(tel).all();
+  const nombres = new Set(), dnis = new Set(), fotos = [], cambios = [];
+  for (const x of r.results) {
+    const d = JSON.parse(x.data), cl = d.cliente || {};
+    if (cl.nombre) nombres.add(String(cl.nombre)); if (cl.dni) dnis.add(String(cl.dni));
+    for (const k of FOTOS_CITA) { if (typeof d[k] === 'string' && /^f_[\w-]+$/.test(d[k])) fotos.push(d[k]); delete d[k] }
+    d.cliente = { nombre: 'Cliente anónimo', tel: '', dni: '', ciudad: '' }; d.nota = ''; d.links = []; d.anonimo = true; delete d.consentimiento;
+    cambios.push(env.DB.prepare('UPDATE citas SET data = ? WHERE id = ?').bind(JSON.stringify(d), x.id));
+  }
+  // links personales con ese celular
+  const ls = await env.DB.prepare('SELECT id, data FROM links').all();
+  for (const l of ls.results) { const d = JSON.parse(l.data); if (String(d.cliente?.tel || '').replace(/\D/g, '').slice(-9) === tel) { d.cliente = { nombre: 'Cliente anónimo', tel: '' }; cambios.push(env.DB.prepare('UPDATE links SET data = ? WHERE id = ?').bind(JSON.stringify(d), l.id)) } }
+  for (const n of nombres) if (n.length >= 3) cambios.push(env.DB.prepare("UPDATE auditoria SET detalle = replace(detalle, ?1, 'Cliente anónimo'), objeto = replace(objeto, ?1, 'Cliente anónimo') WHERE instr(detalle, ?1) > 0 OR instr(objeto, ?1) > 0").bind(n));
+  for (const d of dnis) cambios.push(env.DB.prepare('DELETE FROM dnis WHERE dni = ?').bind(d));
+  cambios.push(env.DB.prepare('DELETE FROM clientes WHERE tel = ?').bind(tel), bumpStmt(env));
+  for (let i = 0; i < cambios.length; i += 50) await env.DB.batch(cambios.slice(i, i + 50));
+  if (env.FOTOS && fotos.length) for (let i = 0; i < fotos.length; i += 100) { try { await env.FOTOS.delete(fotos.slice(i, i + 100)) } catch (e) { console.error('fotos', e) } }
+  await auditar(env, quien, 'Anonimizó cliente', '', `${r.results.length} cita(s) · ${fotos.length} foto(s) borrada(s)${motivo ? ' · ' + motivo : ''}`);
+  return { citas: r.results.length, fotos: fotos.length };
+}
+// Tarea programada: aplica la retención que eligió el dueño (apagada por defecto). Poco a poco, para no pasar los límites.
+export async function retencion(env, cfg) {
+  const hoy = ahoraLocal(env).fecha, out = { anonimizados: 0, capturas: 0 };
+  await env.DB.prepare('DELETE FROM dnis WHERE ts < ?').bind(Date.now() - 30 * 864e5).run();
+  const meses = +cfg.retencionMeses || 0;
+  if (meses > 0) {
+    const corte = addD(hoy, -Math.round(meses * 30.4));
+    const r = await env.DB.prepare(`SELECT tel FROM clientes WHERE notas = '' AND prefs = '' AND coalesce(ultima, primera) < ? AND prox IS NULL
+      AND NOT EXISTS (SELECT 1 FROM citas WHERE citas.tel = clientes.tel AND citas.fecha >= ?) LIMIT 10`).bind(corte, corte).all();
+    for (const x of r.results) { await anonimizarCliente(env, x.tel, 'Sistema (retención)', `sin venir desde antes de ${corte}`); out.anonimizados++ }
+  }
+  const dias = +cfg.capturasDias || 0;
+  if (dias > 0 && env.FOTOS) {
+    const r = await env.DB.prepare("SELECT id, data FROM citas WHERE fecha < ? AND estado <> 'por_validar' AND json_extract(data, '$.yapeCaptura') IS NOT NULL LIMIT 50").bind(addD(hoy, -dias)).all();
+    for (const x of r.results) {
+      const d = JSON.parse(x.data); try { await env.FOTOS.delete(d.yapeCaptura) } catch { }
+      delete d.yapeCaptura; d.capturaBorrada = hoy; await env.DB.prepare('UPDATE citas SET data = ? WHERE id = ?').bind(JSON.stringify(d), x.id).run(); out.capturas++;
+    }
+  }
+  return out;
+}
+
 /* Rutas de clientes (panel). */
 export async function rutasClientes(c) {
   const { req, env, path, m, body, s, exigir } = c;
@@ -84,6 +132,20 @@ export async function rutasClientes(c) {
     const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM clientes').first();
     await auditar(env, quienEs(s), 'Reconstruyó fichas de clientes', '', `${n.n} clientes`);
     return json({ clientes: n.n });
+  }
+  // Derecho de acceso: todos los datos de un cliente en un archivo.
+  if ((x = path.match(/^\/clientes\/(\d{6,9})\/datos$/)) && m === 'GET') {
+    exigir('config');
+    const [cli, cs] = await Promise.all([env.DB.prepare('SELECT * FROM clientes WHERE tel = ?').bind(x[1]).first(), env.DB.prepare('SELECT * FROM citas WHERE tel = ? ORDER BY fecha, hora').bind(x[1]).all()]);
+    if (!cli) fail(404, 'Cliente no encontrado');
+    await auditar(env, quienEs(s), 'Exportó datos de cliente', '', 'derecho de acceso');
+    return new Response(JSON.stringify({ generado: new Date().toISOString(), aviso: 'Datos personales del cliente (Ley 29733)', cliente: cli, citas: cs.results.map(filaCita) }, null, 1), { headers: { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="datos-cliente-${x[1].slice(-4)}.json"`, 'Cache-Control': 'no-store' } });
+  }
+  // Derecho de cancelación: anonimizar (borra lo que identifica a la persona y conserva lo contable).
+  if ((x = path.match(/^\/clientes\/(\d{6,9})\/anonimizar$/)) && m === 'POST') {
+    exigir('config'); const b = await body();
+    if (b.confirmar !== 'ANONIMIZAR') fail(400, 'Escribe ANONIMIZAR para confirmar');
+    return json(await anonimizarCliente(env, x[1], quienEs(s), str(b.motivo, 120)));
   }
   // Retención para el dashboard: visitas totales y primera cita de una lista de clientes.
   if (path === '/clientes/resumen' && m === 'POST') {

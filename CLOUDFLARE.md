@@ -138,3 +138,10 @@ La estructura de la base de datos ahora es **versionada** (`MIGRACIONES` en `wor
 - Cuando algo se guarda (reserva, Yape, reprogramación, edición, cancelación, una reserva que vence), los paneles se actualizan **en menos de 1 segundo**. El aviso no lleva datos: cada panel vuelve a pedir lo suyo con sus permisos.
 - Punto junto a la 🔔: **verde** = en vivo; **gris** = sin conexión (se actualiza cada 20 s y se reconecta solo). Con conexión, la consulta periódica baja a cada 2 minutos (menos consultas a la base de datos).
 - Prueba: `test/tiemporeal.ui.mjs`.
+
+### Datos personales · Ley 29733 (Fase 7)
+- **Aviso de privacidad** público en `/privacidad.html` (enlazado en el formulario, junto al DNI y al pie de reservar/estado). Se llena con ⚙️ Config → **🔏 Privacidad y datos personales** (responsable, RUC/DNI, correo).
+- **Consentimiento obligatorio** al reservar, con constancia (fecha y versión del aviso) en cada cita.
+- **Derechos del cliente**: en su ficha → 🔏 Datos personales → **📄 Descargar sus datos** o **🗑️ Anonimizar** (escribiendo ANONIMIZAR). Queda en la bitácora sin su nombre.
+- **Retención** (apagada por defecto): anonimizar clientes inactivos tras 12/24/36 meses y borrar capturas de Yape tras 90/180/365 días.
+- **Respaldos cifrados** (AES-256). Recomendado: crear el secreto `RESPALDO_CLAVE` (texto largo al azar) en Settings → Variables and secrets. Si se cambia esa clave, los respaldos anteriores ya no se pueden abrir (descárgalos antes).

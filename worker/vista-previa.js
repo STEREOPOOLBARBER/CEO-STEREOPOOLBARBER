@@ -14,6 +14,8 @@ export async function conVistaPrevia(req, env, url) {
   if (panel) {
     titulo = q.get('huella') ? `Activa tu huella · ${nombre}` : `${nombre} · Panel`;
     desc = q.get('huella') ? 'Toca para activar tu huella o Face ID y entrar sin escribir clave.' : 'Agenda, citas y clientes de la barbería.';
+  } else if (/\/privacidad(\.html)?$/.test(url.pathname)) {
+    titulo = `Aviso de privacidad · ${nombre}`; desc = 'Cómo cuidamos tus datos personales (Ley 29733).';
   } else if (q.get('c') || /\/estado(\.html)?$/.test(url.pathname)) {
     titulo = `Tu cita en ${nombre}`; desc = 'Mira el estado de tu cita y cómo llegar a la barbería 💈';
   } else {

@@ -23,6 +23,8 @@ export async function reservar(req, env, b) {
   if (!/^9\d{8}$/.test(cliente.tel)) fail(400, 'Escribe un WhatsApp válido (9 dígitos, empieza con 9)');
   if (cliente.dni && cliente.dni.length !== 8) fail(400, 'El DNI debe tener 8 dígitos (o déjalo vacío)');
   if (cliente.ciudad.length < 2) fail(400, 'Escribe tu ciudad o distrito');
+  // Ley 29733: sin consentimiento informado no se guardan los datos. Se deja constancia de cuándo y de qué versión del aviso.
+  if (b.consentimiento !== true) fail(400, 'Marca la casilla de aceptación para continuar');
 
   await expirar(env);
   const d = await datos(env), cfg = { ...DEF, ...d.cfg }, ahora = ahoraLocal(env);
@@ -65,7 +67,7 @@ export async function reservar(req, env, b) {
     estado: 'por_validar', expira: sinPago ? null : Date.now() + (+cfg.holdMin || 20) * 60e3, origen: link ? 'link' : 'web',
   };
   for (const barb of candidatos) {
-    const c = { id: uid(), codigo: codigo(), creada: Date.now(), ...base, barberoId: barb.id };
+    const c = { id: uid(), codigo: codigo(), creada: Date.now(), ...base, barberoId: barb.id, consentimiento: { ts: Date.now(), aviso: 'privacidad.html', version: 1 } };
     const extra = link ? [env.DB.prepare('UPDATE links SET data = ? WHERE id = ?').bind(JSON.stringify({ ...link, estado: 'usado', citaId: c.id, usado: Date.now() }), link.id)] : [];
     try { await insertarCita(env, c, extra); await auditar(env, 'Cliente', 'Reservó', c.codigo, `${c.cliente?.nombre || ''} · ${c.fecha} ${c.hora}`); return json({ id: c.id, codigo: c.codigo, expira: c.expira, barberoId: c.barberoId, estado: c.estado }) }
     catch (e) { if (e.status !== 409) throw e }
