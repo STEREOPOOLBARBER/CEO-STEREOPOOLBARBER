@@ -170,6 +170,16 @@ async function initLoginNube(){let ac={google:'',pin:true};try{ac=await API.auth
  if(!ac.google)return;const r=()=>gPintar().catch(e=>toast('❌ '+e.message));
  if(window.google?.accounts)return r();const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.async=true;s.onload=r;document.head.appendChild(s)}
 async function logout(){if(S.dirty&&!confirm('Tienes cambios sin guardar en Config. ¿Salir igual?'))return;if(!confirm('¿Cerrar sesión?'))return;await API.logout();localStorage.removeItem('brb_ses');location.reload()}
+/* ---------- tiempo real: WebSocket con el Durable Object «Avisos» ----------
+   El aviso no trae datos: solo dice «algo cambió» y el panel vuelve a pedir lo suyo (con sus permisos). */
+const TR={ws:null,intentos:0,t:null};
+const trVivo=()=>TR.ws?.readyState===1;
+function marcarVivo(){const v=$('#vivo');if(v){v.classList.toggle('on',trVivo());v.title=trVivo()?'En vivo: los cambios llegan al instante':'Sin conexión en vivo: se actualiza cada 20 s'}}
+function conectarTR(){if(!API.remote||!S.ses||TR.ws)return;let ws;try{ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+CONFIG.API_URL+'/tiempo-real')}catch(e){return}
+ TR.ws=ws;ws.onopen=()=>{TR.intentos=0;marcarVivo()};
+ ws.onmessage=e=>{if(e.data==='pong')return;clearTimeout(TR.t);TR.t=setTimeout(()=>reload(true),250)};
+ ws.onclose=()=>{TR.ws=null;marcarVivo();if(!S.ses)return;setTimeout(conectarTR,Math.min(30e3,1e3*2**TR.intentos++))};ws.onerror=()=>{}}
+setInterval(()=>{if(trVivo())TR.ws.send('ping')},25e3);
 async function boot(){
  await reload();
  const tabs=[['agenda','📅 Agenda']];if(can('links'))tabs.push(['compartir','🔗 Compartir']);if(can('config'))tabs.push(['config','⚙️ Config']);
@@ -178,7 +188,9 @@ async function boot(){
  let lt=0;$('#hBrand').addEventListener('click',()=>{const n=Date.now();if(n-lt<380){lt=0;can('dash')?abrirDash():toast('🔒 Sin permiso para el dashboard')}else lt=n});
  $('#hLogo').style.cursor='pointer';$('#hLogo').addEventListener('click',()=>can('excel')?abrirDatos():toast('🔒 Sin permiso para Excel y respaldos'));
  setInterval(tickCD,30000);setInterval(tickSec,1000);
- setInterval(()=>reload(true),CONFIG.POLL_MS);
+ // Si el tiempo real está conectado, la consulta periódica solo es un respaldo (cada 2 min).
+ setInterval(()=>{if(trVivo()&&Date.now()-(S.ultCarga||0)<120e3)return;reload(true)},CONFIG.POLL_MS);
+ conectarTR();addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){reload(true);conectarTR()}});
  addEventListener('storage',e=>{if(e.key==='brb_citas')reload(true)});
 }
 async function reload(notify){
@@ -189,6 +201,7 @@ async function reload(notify){
   const rep=S.citas.filter(c=>c.reprogTs&&mine(c)&&S.known.has(c.id)&&c.reprogTs>(S.repVisto||0));if(rep.length){toast(`🔁 ${rep.map(c=>c.cliente?.nombre?.split(' ')[0]).join(', ')} reprogramó: ${fLarga(rep[0].fecha)} · ${h12(rep[0].hora)}`);navigator.vibrate?.([120,60,120]);beep()}}
  S.repVisto=Math.max(S.repVisto||0,...S.citas.map(c=>c.reprogTs||0));
  cargarAlertas();
+ S.ultCarga=Date.now();
  S.known=new Set(S.citas.map(c=>c.id));S.loaded=true;if(!S.dirty)applyTheme(S.cfg);renderHeader();renderProx();
  if(S.tab==='agenda'&&document.activeElement?.id==='q')renderLista();else if(S.tab==='agenda')renderTab();
 }

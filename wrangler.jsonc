@@ -16,6 +16,9 @@
   "r2_buckets": [
     { "binding": "FOTOS", "bucket_name": "stereo-barber-fotos" }
   ],
+  // Tiempo real: un Durable Object (con SQLite, disponible en el plan gratis) reparte los avisos por WebSocket.
+  "durable_objects": { "bindings": [{ "name": "AVISOS", "class_name": "Avisos" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Avisos"] }],
   // Límites de Cloudflare (no tocan la base de datos). Periodo en segundos: 10 o 60.
   // RL_PUB: todo lo público por IP · RL_DNI: consultas de DNI · RL_RES: reservas, reprogramar y fichas.
   "ratelimits": [
@@ -43,6 +46,7 @@
       "r2_buckets": [
         { "binding": "FOTOS", "bucket_name": "stereo-barber-fotos-staging" }
       ],
+      "durable_objects": { "bindings": [{ "name": "AVISOS", "class_name": "Avisos" }] },
       "ratelimits": [
         { "name": "RL_PUB", "namespace_id": "4201", "simple": { "limit": 120, "period": 60 } },
         { "name": "RL_DNI", "namespace_id": "4202", "simple": { "limit": 10, "period": 60 } },

@@ -29,6 +29,7 @@ const SUITES = [
   { n: 'clientes.e2e', vars: PIN, sql: ADMIN },
   { n: 'auditoria.e2e', vars: PIN, sql: ADMIN },
   { n: 'csp.ui', vars: PIN, sql: ADMIN, ui: true },
+  { n: 'tiemporeal.ui', vars: PIN, sql: ADMIN, ui: true },
   { n: 'monitoreo.e2e', vars: { ...PIN, ...DNI, RESPALDO_MIN: '0', SIN_LIMITES_CF: 'false' }, sql: ADMIN, extra: ['--test-scheduled'] },
 ];
 const filtro = process.argv.slice(2), lista = SUITES.filter(s => !filtro.length || filtro.some(f => s.n.includes(f)));
@@ -54,7 +55,7 @@ for (const s of lista) {
   const linea = (out.match(/\d+ OK · \d+ fallos/) || ['sin resultado'])[0];
   res.push({ n: s.n, ok, linea, seg: Math.round((Date.now() - t0) / 1000) });
   console.log(`${ok ? '✅' : '❌'} ${s.n.padEnd(16)} ${linea.padEnd(18)} ${res.at(-1).seg}s`);
-  if (!ok) console.log(out.split('\n').filter(l => l.trim()).slice(-40).map(l => '     ' + l).join('\n'));
+  if (!ok || process.env.VER) console.log(out.split('\n').filter(l => l.trim()).slice(-40).map(l => '     ' + l).join('\n'));
 }
 rmSync(tmp, { recursive: true, force: true });
 const malos = res.filter(r => !r.ok);

@@ -29,6 +29,8 @@ import { rutasPublicas } from './modulos/publico.js';
 import { respaldoDiario } from './modulos/respaldos.js';
 import { frenar, ipDe } from './modulos/seguridad.js';
 import { conVistaPrevia } from './vista-previa.js';
+import { avisar, rutasTiempoReal, versionActual } from './modulos/tiempo-real.js';
+export { Avisos } from './modulos/tiempo-real.js';
 
 /* ---------- rutas: cada módulo atiende las suyas; si ninguno responde → 404 ---------- */
 async function api(req, env, path) {
@@ -55,17 +57,22 @@ async function api(req, env, path) {
   const propia = c => { if (!s.perm.verTodas && c.barberoId !== s.barberoId) fail(403, 'No es tu cita') };
 
   Object.assign(c, { d, s, exigir, propia });
-  for (const r of [rutasDni, rutasAcceso, rutasMonitoreo, rutasClientes, rutasCitas, rutasConfig]) { const res = await r(c); if (res) return res }
+  for (const r of [rutasTiempoReal, rutasDni, rutasAcceso, rutasMonitoreo, rutasClientes, rutasCitas, rutasConfig]) { const res = await r(c); if (res) return res }
   fail(404, 'Ruta no encontrada');
 }
 
 /* ---------- entrada ---------- */
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
     if (!url.pathname.startsWith('/api/')) return conVistaPrevia(req, env, url);
     if (!env.DB) return json({ error: 'Falta conectar la base de datos (D1). En Cloudflare: Settings → Bindings → agrega D1 con el nombre DB.' }, 503);
-    try { return await api(req, env, url.pathname.slice(4)) }
+    try {
+      const path = url.pathname.slice(4), res = await api(req, env, path);
+      // Tiempo real: si algo se guardó con éxito, avisar a los paneles abiertos (sin datos; ellos vuelven a pedir lo suyo).
+      if (req.method !== 'GET' && req.method !== 'HEAD' && res.ok && !/^\/(auth|passkey)\b|^\/publico\/ficha$/.test(path)) ctx.waitUntil(avisar(env));
+      return res;
+    }
     catch (e) {
       if (e instanceof HttpError) return json({ error: e.message }, e.status);
       console.error(e);
@@ -74,7 +81,9 @@ export default {
   },
   async scheduled(_ev, env) {
     await asegurarSchema(env);
+    const v0 = await versionActual(env);
     await expirar(env);
+    if (await versionActual(env) !== v0) await avisar(env); // una reserva venció sin Yape: los paneles se enteran al toque
     try { await respaldoDiario(env) } catch (e) { console.error('respaldo', e) }
     const corte = addD(ahoraLocal(env).fecha, -60);
     await env.DB.batch([

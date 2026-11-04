@@ -132,3 +132,9 @@ La estructura de la base de datos ahora es **versionada** (`MIGRACIONES` en `wor
 - El JavaScript salió del HTML: `js/panel/*.js` (por pantalla), `js/reservar.js`, `js/estado.js`. Ya no hay ningún `onclick` en línea: los botones usan `data-on-click` y un despachador único (`js/eventos.js`).
 - La política de seguridad prohíbe ejecutar scripts en línea (`script-src 'self'` y `script-src-attr 'none'`): aunque alguien lograra meter texto con código en una cita o un nombre, el navegador no lo ejecuta.
 - `js/` se sirve con `Cache-Control: no-cache` (los cambios se ven al recargar). Prueba de recorrido: `test/csp.ui.mjs`.
+
+### Tiempo real (Fase 6)
+- Durable Object **Avisos** (`wrangler.jsonc`: `durable_objects` + `migrations` con `new_sqlite_classes`, disponible en el plan gratis) mantiene un WebSocket con cada panel abierto (`/api/tiempo-real`, solo con sesión y desde la propia página).
+- Cuando algo se guarda (reserva, Yape, reprogramación, edición, cancelación, una reserva que vence), los paneles se actualizan **en menos de 1 segundo**. El aviso no lleva datos: cada panel vuelve a pedir lo suyo con sus permisos.
+- Punto junto a la 🔔: **verde** = en vivo; **gris** = sin conexión (se actualiza cada 20 s y se reconecta solo). Con conexión, la consulta periódica baja a cada 2 minutos (menos consultas a la base de datos).
+- Prueba: `test/tiemporeal.ui.mjs`.
