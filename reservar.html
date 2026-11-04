@@ -222,8 +222,8 @@ const API={
  async req(m,p,b){const r=await fetch(CONFIG.API_URL+p,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||('Error '+r.status));return j},
  /* La consulta de DNI necesita la «ficha» del formulario (token firmado de 30 min que el Worker entrega tras Turnstile). */
  async ficha(){if(F.ficha&&F.fichaExp>Date.now()+60e3)return F.ficha;
-  if(CONFIG.TURNSTILE_SITEKEY){for(let i=0;i<40&&!F.ts;i++)await new Promise(r=>setTimeout(r,250));if(!F.ts)throw new Error('Completa la verificación')}
-  const r=await this.req('POST','/publico/ficha',{turnstile:F.ts||''});if(CONFIG.TURNSTILE_SITEKEY){F.ts='';window.turnstile?.reset?.('#ts')}F.ficha=r.ficha;F.fichaExp=r.exp;return r.ficha},
+  if(CONFIG.TURNSTILE_SITEKEY&&!await tsEsperar(10))throw new Error('Completa la verificación')
+  const r=await this.req('POST','/publico/ficha',{turnstile:F.ts||''});if(CONFIG.TURNSTILE_SITEKEY)tsNuevo();F.ficha=r.ficha;F.fichaExp=r.exp;return r.ficha},
  async dni(d,otra){const f=await this.ficha(),r=await fetch(CONFIG.API_URL+'/publico/dni/'+d,{headers:{'X-Ficha':f}}),j=await r.json().catch(()=>({}));
   if(r.status===403&&!otra){F.ficha=null;return this.dni(d,true)}if(!r.ok)throw new Error(j.error||('Error '+r.status));return j},
  async publico(){if(this.remote){const d=await this.req('GET','/publico');d.cfg=mergeCfg(d.cfg);return d}seed();const cs=expirarLocal();const cfg=mergeCfg(lsGet('cfg',{}));delete cfg.adminPin;
@@ -322,20 +322,24 @@ async function buscarDni(inp){const v=inp.value.replace(/\D/g,'');inp.value=v;co
  catch(e){est.textContent=/No encontramos/.test(e.message)?'No encontramos ese DNI. Escribe tu nombre a mano.':/consultas de DNI|Demasiadas/.test(e.message)?'Escribe tu nombre a mano 🙂':''}}
 function guardaCli(){const g=id=>$(id)?.value.trim()||'';F.cli={nombre:g('#cNom'),tel:g('#cTel').replace(/\D/g,''),dni:g('#cDni').replace(/\D/g,''),ciudad:g('#cCiu')};F.nota=g('#cNota')}
 async function refFoto(inp){const f=inp.files[0];if(!f)return;try{F.ref=await compressImg(f,900,.72);$('#refPrev').innerHTML=`<img src="${F.ref}">`}catch(e){toast('❌ '+e.message)}}
-function loadTS(){const r=()=>window.turnstile.render('#ts',{sitekey:CONFIG.TURNSTILE_SITEKEY,theme:'dark',callback:t=>F.ts=t});if(window.turnstile)return r();const s=document.createElement('script');s.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';s.onload=r;document.head.appendChild(s)}
+/* Turnstile: cada pase sirve una sola vez. Al usarlo (consulta DNI o reserva) se pide otro con tsNuevo(). */
+let TSW=null;
+function tsNuevo(){F.ts='';try{if(TSW!=null&&$('#ts')?.childElementCount)window.turnstile?.reset(TSW)}catch(_){}}
+async function tsEsperar(seg=10){for(let i=0;i<seg*4&&!F.ts;i++)await new Promise(r=>setTimeout(r,250));return F.ts}
+function loadTS(){const r=()=>{F.ts='';TSW=window.turnstile.render('#ts',{sitekey:CONFIG.TURNSTILE_SITEKEY,theme:'dark',callback:t=>F.ts=t,'expired-callback':tsNuevo,'error-callback':()=>{F.ts=''}})};if(window.turnstile)return r();const s=document.createElement('script');s.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';s.onload=r;document.head.appendChild(s)}
 async function reservar(){if(F.busy)return;guardaCli();const e=$('#err'),c=F.cli;
  if(c.nombre.length<3)return e.textContent='Escribe tu nombre completo';
  if(!/^9\d{8}$/.test(c.tel.slice(-9))||c.tel.length<9)return e.textContent='Escribe un WhatsApp válido (9 dígitos, empieza con 9)';
  if(c.dni&&c.dni.length!==8)return e.textContent='El DNI debe tener 8 dígitos (o déjalo vacío)';
  if(c.ciudad.length<2)return e.textContent='Escribe tu ciudad o distrito';
  if(!$('#cOk').checked)return e.textContent='Marca la casilla para continuar';
- if(CONFIG.TURNSTILE_SITEKEY&&!F.ts)return e.textContent='Completa la verificación';
  F.busy=true;const b=$('#bRes');b.disabled=true;b.textContent='Reservando…';
+ if(CONFIG.TURNSTILE_SITEKEY&&!F.ts){b.textContent='Verificando…';if(!await tsEsperar(12)){F.busy=false;b.disabled=false;b.textContent='Reintentar';return e.textContent='Completa la verificación de Cloudflare'}b.textContent='Reservando…'}
  try{c.tel=c.tel.slice(-9);lsSet('yo',c);
   F.cita=await API.crear({servicioId:F.serv,barberoId:F.barb,fecha:F.fecha,hora:F.hora,cliente:c,nota:F.nota,refFoto:F.ref,turnstile:F.ts,linkToken:F.link?.token||''});
   go(F.cita.expira?4:5);say(F.cita.expira?'datos':'listo')}
  catch(err){e.textContent='❌ '+err.message;b.disabled=false;b.textContent='Reintentar';if(/link/i.test(err.message)){F.link=null}if(/ocupa/i.test(err.message)){say('ocupado');F.hora=null;setTimeout(()=>go(2),1400)}}
- finally{F.busy=false;window.turnstile?.reset?.('#ts');F.ts=''}}
+ finally{F.busy=false;if(CONFIG.TURNSTILE_SITEKEY)tsNuevo()}}
 /* paso 4: adelanto Yape */
 function s4(){const cfg=P.cfg,s=serv(),resto=Math.max(0,(+s.precio||0)-adel());
  shell(`<h2>Confirma con tu adelanto</h2>
