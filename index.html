@@ -7,7 +7,7 @@
 <title>Barbería · Panel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="vendor/qrcode.min.js" integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU"></script>
 <style>
 :root{--bg:#0b0812;--card:#15101f;--card2:#1d1530;--line:#33264a;--tx:#f3eefc;--mu:#a397b8;--blue:#8a3ffc;--pur:#ff3fd2;--grn:#3fb950;--red:#f85149;--yel:#d29922;--org:#f0883e;--r:18px}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -745,6 +745,7 @@ function formCita(id){const c=id?cita(id):null,cl=c?.cliente||{};
   <div class="row"><input class="in" id="edLink" placeholder="https://…" onkeydown="if(event.key==='Enter')edAddLink()"><button class="btn p" style="white-space:nowrap;flex:none" onclick="edAddLink()">+ Add</button></div>
   <div id="edLinks">${edLinks()}</div></div></div></details>
  <button class="btn p w" style="margin-top:16px;padding:15px;font-size:17px" onclick="guardarCita('${id||''}')">💾 Guardar cita</button>
+ ${c&&API.remote&&can('config')?`<button class="btn w" style="margin-top:8px" onclick="verBitacora('${esc(c.codigo)}')">📝 Historial de cambios de esta cita</button>`:''}
  <button class="btn w" style="margin-top:10px;padding:13px;color:var(--mu)" onclick="closeModal()">Cancelar</button>
 `);
  S._eh=c?.hora||'';S._eid=id||'';fillHoras()}
@@ -902,8 +903,8 @@ function ayudaLinks(){openModal(mHead('📖 Links para clientes')+[
 function bajarQR(){const c=$('#qr canvas'),i=$('#qr img');const src=c?c.toDataURL('image/png'):i?.src;if(!src)return toast('QR no disponible');const a=document.createElement('a');a.href=src;a.download='qr-reservas.png';a.click()}
 
 /* =================== MENÚ (esquina derecha): Excel, respaldo y más =================== */
-function loadScript(src){return new Promise((res,rej)=>{if(document.querySelector(`script[src="${src}"]`))return res();const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('Sin conexión para cargar Excel'));document.head.appendChild(s)})}
-const XLSX_SRC='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+function loadScript(src){return new Promise((res,rej)=>{if(document.querySelector(`script[src="${src}"]`))return res();const s=document.createElement('script');s.src=src;if(src===XLSX_SRC)s.integrity=XLSX_SRI;s.onload=res;s.onerror=()=>rej(new Error('No se pudo cargar Excel'));document.head.appendChild(s)})}
+const XLSX_SRC='vendor/xlsx.full.min.js',XLSX_SRI='sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw';
 const COLS=['Código','Fecha','Hora','Cliente','Teléfono','Ciudad','Barbero','Servicio','Precio','Adelanto','Adelanto validado','Estado','Nota','Origen','Gratis','Creado'];
 function abrirMenu(){openModal(`<div class="grab"></div>${mHead('☰ Menú')}
  <div class="card" style="padding:12px 14px"><div class="row"><span class="av lg">👤</span><div style="flex:1"><b>${esc(S.ses.nombre||'')}</b><p class="hint" style="margin:0">${S.ses.uid?ROLES[S.ses.rol]?.t||'':S.ses.rol==='barbero'?'💈 Barbero':'👑 Dueño'} · ${Object.values(S.perm).filter(Boolean).length}/${PERMS.length} permisos</p></div></div>${misCitas()}</div>
@@ -1259,7 +1260,16 @@ async function verSeguridad(){openModal(mHead('🛡️ Monitoreo y respaldos')+'
  <p class="lb">Por día</p><div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><tr style="color:var(--mu);text-align:right"><th style="text-align:left">Día</th><th>📥</th><th>🪪</th><th>🛡️</th><th>🔐✗</th></tr>${ds.map(([f,x])=>{const b=Object.values(x.bloqueos).reduce((a,n)=>a+n,0);return `<tr style="text-align:right;border-top:1px solid var(--line)"><td style="text-align:left;padding:6px 0">${fLarga(f).split(' ').slice(0,2).join(' ')}</td><td>${x.reservas||'·'}</td><td>${x.dni||'·'}</td><td style="color:${b?'var(--red)':''}">${b||'·'}</td><td style="color:${x.ingresosFallidos?'#f0883e':''}">${x.ingresosFallidos||'·'}</td></tr>`}).join('')}</table></div>
  <p class="lb">💾 Respaldos automáticos</p><p class="hint" style="margin-top:0">Cada madrugada se guarda una copia completa (citas, clientes, configuración) en tu almacén privado de Cloudflare. Se guardan los últimos 30 días. Para restaurar: descarga uno y usa «♻️ Restaurar respaldo».</p>
  ${can('config')?`<button class="btn w" onclick="respaldarAhora(this)">💾 Crear respaldo ahora</button>`:''}
+ <button class="btn w" style="margin-top:14px" onclick="verBitacora()">📝 Bitácora: quién hizo qué</button>
  <div style="margin-top:8px">${rs.length?rs.slice(0,30).map(x=>`<div class="li"><div class="t"><b>${fLarga(x.fecha)}</b><small>${x.citas} citas · ${kb(x.bytes)}</small></div><a class="btn sm" href="${CONFIG.API_URL}/respaldos/${x.fecha}" download>⬇️ Descargar</a></div>`).join(''):'<p class="hint">Todavía no hay respaldos.</p>'}</div>`}
+/* Bitácora (auditoría): quién creó, editó, validó, canceló, reprogramó o cambió la configuración. */
+async function verBitacora(cod,off=0){const q=`/auditoria?limit=40&offset=${off}${cod?'&objeto='+encodeURIComponent(cod):''}`;
+ let r;try{r=await API.req('GET',q)}catch(e){return toast('❌ '+e.message)}
+ S._bit=off?{...r,items:S._bit.items.concat(r.items)}:r;const it=S._bit.items;
+ const fh=ts=>{const d=new Date(ts);return d.toLocaleDateString('es-PE',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('es-PE',{hour:'numeric',minute:'2-digit'})};
+ openModal(mHead('📝 '+(cod?'Historial de la cita '+esc(cod):'Bitácora'))+`<p class="hint" style="margin-top:0">Se guarda 180 días. ${S._bit.total} registro(s).</p>
+ ${it.length?it.map(x=>`<div class="li" style="align-items:flex-start"><div class="t"><b>${esc(x.accion)}${x.objeto&&!cod?` · <span style="color:var(--blue);cursor:pointer" onclick="verBitacora('${esc(x.objeto)}')">#${esc(x.objeto)}</span>`:''}</b><small>${esc(x.detalle)}</small><small>👤 ${esc(x.quien)}</small></div><small style="color:var(--mu);white-space:nowrap">${fh(x.ts)}</small></div>`).join(''):'<p class="hint">Todavía no hay registros.</p>'}
+ ${it.length<S._bit.total?`<button class="btn w" style="margin-top:10px" onclick="verBitacora(${cod?`'${esc(cod)}'`:'null'},${it.length})">Ver más</button>`:''}`)}
 async function respaldarAhora(b){b.disabled=true;b.textContent='⏳ Creando…';try{const r=await API.req('POST','/respaldos');toast(`✅ Respaldo creado: ${r.citas} citas`);S.alT=0;cargarAlertas();verSeguridad()}catch(e){toast('❌ '+e.message);b.disabled=false;b.textContent='💾 Crear respaldo ahora'}}
 async function probarDni(){const d=prompt('DNI de 8 dígitos para probar la conexión con RENIEC:');if(!d)return;
  try{const r=await API.req('GET','/dni/'+d.replace(/\D/g,'')+'?crudo=1');alert(`Consultas de DNI hoy: ${r.usoHoy}${r.tope?' de '+r.tope:''}\n\n`+'Nombre que usará el sistema: '+(r.nombre||'(no se pudo armar)')+'\n\nRespuesta del servicio:\n'+JSON.stringify(r.crudo,null,1).slice(0,1200))}catch(e){alert('❌ '+e.message)}}

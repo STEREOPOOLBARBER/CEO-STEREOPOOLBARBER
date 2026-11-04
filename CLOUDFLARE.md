@@ -111,3 +111,9 @@ Página solo para consultar la cita: `estado.html?c=CODIGO` (o escribir el códi
 - Rama `desarrollo` → Worker **ceo-stereopoolbarber-staging** (base y fotos propias). Rama `main` → producción. Detalles y reglas en `CLAUDE.md`.
 - Configurar el staging en Cloudflare (una sola vez): Workers & Pages → **Create** → **Import a repository** → este repo → nombre `ceo-stereopoolbarber-staging` → en **Build settings**: rama de producción `desarrollo` y *Deploy command* `npx wrangler deploy --env staging`. Agregar al Worker de staging las variables `OWNER_EMAILS`, `SHALOM_API_KEY` (opcional) y Turnstile (o dejarlo sin Turnstile). En Google Cloud agregar el origen `https://ceo-stereopoolbarber-staging.stereophysique15.workers.dev`.
 - En el Worker de **producción** → Settings → Builds: desactivar **«Builds for non-production branches»**, para que la rama `desarrollo` no use la base de datos real.
+
+### Blindaje base (Fase 2 de la arquitectura)
+- **Bitácora** (tabla `auditoria`, 180 días): quién creó, editó, cambió de estado, validó Yape, eliminó, reprogramó (cliente) o reservó; cambios de configuración, claves, invitaciones, respaldos y restauraciones. Nunca guarda claves. Panel: 🛡️ Monitoreo → «📝 Bitácora», y en cada cita «📝 Historial de cambios». API: `GET /api/auditoria?objeto=CODIGO`.
+- **Cookies `__Host-brb_s` / `__Host-brb_g`** (no las puede pisar ningún subdominio). Las de nombre viejo se aceptan durante la transición.
+- **Sesión nueva en cada ingreso**: al entrar a un perfil se cierra la sesión anterior del mismo navegador.
+- **Librerías sin CDN**: `vendor/qrcode.min.js` y `vendor/xlsx.full.min.js` guardadas en el proyecto, cargadas con `integrity` (SRI). La CSP ya no permite scripts de cdnjs.

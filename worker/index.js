@@ -25,7 +25,8 @@ const PERMS = ['verTodas', 'verTel', 'verMontos', 'crear', 'cancelar', 'yape', '
 const ALLP = Object.fromEntries(PERMS.map(k => [k, true]));
 const ROL_BARBERO = { verTel: true, crear: true, links: true };
 const SES_MS = 14 * 864e5;
-const COOKIE = 'brb_s', COOKIE_P = 'brb_g';
+// Prefijo __Host-: el navegador solo la acepta con Secure, Path=/ y sin Domain (no la puede pisar un subdominio).
+const COOKIE = '__Host-brb_s', COOKIE_P = '__Host-brb_g', VIEJA = { [COOKIE]: 'brb_s', [COOKIE_P]: 'brb_g' };
 const MAX_FOTO = 3 * 1024 * 1024;
 const MAX_AUDIO = 2.5 * 1024 * 1024;
 const DEF = { dias: [1, 2, 3, 4, 5, 6], apertura: '09:00', cierre: '20:00', refIni: '13:00', refFin: '14:00', anticipacion: 0, ventana: 14, modAdelanto: true, yapeNum: '', adelanto: 10, holdMin: 20, bloqueos: [], tolerancia: 10, horasReprog: 24, maxReprog: 1, politicaTxt: '', dniTopeDia: 300 };
@@ -50,6 +51,9 @@ const SCHEMA = [
   `CREATE INDEX IF NOT EXISTS ix_passkeys_sujeto ON passkeys(sujeto)`,
   `CREATE TABLE IF NOT EXISTS invitaciones(h TEXT PRIMARY KEY, sujeto TEXT NOT NULL, exp INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS retos(h TEXT PRIMARY KEY, tipo TEXT NOT NULL, sujeto TEXT, exp INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS auditoria(id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, quien TEXT NOT NULL, accion TEXT NOT NULL, objeto TEXT NOT NULL DEFAULT '', detalle TEXT NOT NULL DEFAULT '')`,
+  `CREATE INDEX IF NOT EXISTS ix_auditoria_ts ON auditoria(ts)`,
+  `CREATE INDEX IF NOT EXISTS ix_auditoria_obj ON auditoria(objeto, ts)`,
   `CREATE TABLE IF NOT EXISTS contadores(k TEXT PRIMARY KEY, n INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS dnis(dni TEXT PRIMARY KEY, nombre TEXT NOT NULL, ts INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS accesos(id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, via TEXT NOT NULL, quien TEXT, ok INTEGER NOT NULL, motivo TEXT, ip TEXT)`,
@@ -239,7 +243,10 @@ async function consultarDni(env, dni, crudo = false) {
 }
 
 /* ---------- autenticación ---------- */
-function cookieDe(req, n = COOKIE) { const m = (req.headers.get('Cookie') || '').match(new RegExp('(?:^|;\\s*)' + n + '=([^;]+)')); return m ? m[1] : '' }
+function cookieDe(req, n = COOKIE) {
+  const c = req.headers.get('Cookie') || '', leer = k => c.match(new RegExp('(?:^|;\\s*)' + k + '=([^;]+)'))?.[1] || '';
+  return leer(n) || leer(VIEJA[n] || n); // acepta el nombre viejo mientras dure la transición
+}
 const setCookie = (val, maxAge, n = COOKIE) => `${n}=${val}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 const pinValido = p => /^\d{4,6}$/.test(p);
 // El PIN está apagado: el acceso es solo con Google. Solo se enciende con ALLOW_PIN=true (pruebas locales).
@@ -335,6 +342,13 @@ async function abrirPuerta(env, data, ms = SES_MS) {
   await env.DB.prepare('INSERT INTO sesiones(id, data, exp) VALUES(?, ?, ?)').bind(await sha256(t), JSON.stringify({ via: 'puerta', ...data }), Date.now() + ms).run();
   return setCookie(t, ms / 1000, COOKIE_P);
 }
+/* Bitácora: quién hizo qué (citas, configuración, accesos, respaldos). Se guarda 180 días. */
+async function auditar(env, quien, accion, objeto = '', detalle = '') {
+  try { await env.DB.prepare('INSERT INTO auditoria(ts, quien, accion, objeto, detalle) VALUES(?, ?, ?, ?, ?)').bind(Date.now(), String(quien || '?').slice(0, 80), accion, String(objeto).slice(0, 80), String(detalle).slice(0, 400)).run() } catch { }
+}
+const quienEs = s => s ? (s.nombre || s.email || 'Panel') + (s.rol ? ` (${s.rol})` : '') : 'Cliente';
+// Al entrar a un perfil se cierra la sesión anterior de ese navegador: cada ingreso estrena sesión.
+async function cerrarPrevia(req, env) { const t = cookieDe(req); if (t) await env.DB.prepare('DELETE FROM sesiones WHERE id = ?').bind(await sha256(t)).run() }
 async function abrirSesion(env, data) {
   const t = rnd();
   await env.DB.prepare('INSERT INTO sesiones(id, data, exp) VALUES(?, ?, ?)').bind(await sha256(t), JSON.stringify(data), Date.now() + SES_MS).run();
@@ -558,6 +572,7 @@ async function api(req, env, path) {
     const antes = { fecha: c.fecha, hora: c.hora };
     Object.assign(c, { fecha, hora, reprog: (c.reprog || 0) + 1, reprogDe: antes, reprogTs: Date.now(), upd: Date.now() });
     await guardarCita(env, c);
+    await auditar(env, 'Cliente', 'Reprogramó', c.codigo, `${c.cliente?.nombre || ''} · ${antes.fecha} ${antes.hora} → ${fecha} ${hora}`);
     return json({ ok: true, fecha, hora });
   }
   if (path === '/publico/reservas' && m === 'POST') return reservar(req, env, await body());
@@ -617,6 +632,7 @@ async function api(req, env, path) {
     const ident = porSujeto(sujeto, d), k = await env.DB.prepare('SELECT (SELECT COUNT(*) FROM claves WHERE sujeto = ?1) + (SELECT COUNT(*) FROM passkeys WHERE sujeto = ?1) AS n').bind(sujeto).first();
     if (!g || !g.email || g.dueno || !ident || k.n > 0) fail(403, 'Este perfil necesita clave o huella');
     await anotar(env, 'google', ident.nombre, true, ident.rol, req);
+    await cerrarPrevia(req, env);
     return json(ident, 200, { 'Set-Cookie': await abrirSesion(env, { via: 'google', email: g.email }) });
   }
   if (path === '/auth/puerta/salir' && m === 'POST') {
@@ -632,6 +648,7 @@ async function api(req, env, path) {
     // Mientras el dueño no cambie su clave, la de arranque es 1111 (solo se acepta tras entrar con Google).
     const ok = row ? igualTxt(await hashClave(clave, row.salt), row.hash) : sujeto === 'admin' && exigePuerta(env) && igualTxt(clave, '1111');
     if (!ident || !ok) { await anotar(env, 'clave', ident?.nombre || sujeto, false, 'clave incorrecta', req); fail(403, 'Clave incorrecta') }
+    await cerrarPrevia(req, env);
     const cookie = await abrirSesion(env, { via: 'clave', sujeto, cv: row ? row.v : 0 });
     await anotar(env, 'clave', ident.nombre, true, ident.rol, req);
     return json(ident, 200, { 'Set-Cookie': cookie });
@@ -649,6 +666,7 @@ async function api(req, env, path) {
     if (!g || !ident) { await anotar(env, 'huella', '', false, 'huella no registrada', req); fail(403, 'Esta huella no está registrada. Pide al administrador que la active.') }
     let cnt; try { cnt = await verificarAfirmacion(cred, g, b.challenge, u.hostname, u.origin) } catch (e) { await anotar(env, 'huella', ident.nombre, false, e.message, req); fail(403, 'No se pudo verificar la huella') }
     await env.DB.prepare('UPDATE passkeys SET cnt = ? WHERE id = ?').bind(cnt, g.id).run();
+    await cerrarPrevia(req, env);
     const cookie = await abrirSesion(env, { via: 'huella', sujeto: g.sujeto, cid: g.id });
     await anotar(env, 'huella', ident.nombre, true, ident.rol, req);
     return json(ident, 200, { 'Set-Cookie': cookie });
@@ -704,7 +722,8 @@ async function api(req, env, path) {
   }
   if (path === '/auth/logout' && m === 'POST') {
     const t = cookieDe(req); if (t) await env.DB.prepare('DELETE FROM sesiones WHERE id = ?').bind(await sha256(t)).run();
-    return json({ ok: true }, 200, { 'Set-Cookie': setCookie('', 0) });
+    const h = new Headers({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); h.append('Set-Cookie', setCookie('', 0)); h.append('Set-Cookie', `brb_s=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: h });
   }
 
   /* ----- panel (requiere sesión) ----- */
@@ -734,10 +753,12 @@ async function api(req, env, path) {
     const salt = rnd(16);
     await env.DB.prepare('INSERT INTO claves(sujeto, salt, hash, v, upd) VALUES(?, ?, ?, 1, ?) ON CONFLICT(sujeto) DO UPDATE SET salt = excluded.salt, hash = excluded.hash, v = claves.v + 1, upd = excluded.upd').bind(x[1], salt, await hashClave(clave, salt), Date.now()).run();
     await anotar(env, 'clave', ident.nombre, true, 'clave cambiada por ' + s.nombre, req);
+    await auditar(env, quienEs(s), 'Cambió clave', ident.nombre);
     return json({ ok: true });
   }
   if ((x = path.match(/^\/acceso\/(admin|[bu]_[\w-]+)\/invitacion$/)) && m === 'POST') {
     exigir('config'); const ident = porSujeto(x[1], d); if (!ident) fail(404, 'Esa persona todavía no existe: toca «Guardar configuración» primero.');
+    await auditar(env, quienEs(s), 'Invitó a activar huella', ident.nombre);
     const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM passkeys WHERE sujeto = ?').bind(x[1]).first(); if (n.n >= 5) fail(409, 'Ya tiene 5 dispositivos. Quita alguno primero.');
     const codigo = codigoInv(), vence = Date.now() + 864e5;
     await env.DB.prepare('INSERT INTO invitaciones(h, sujeto, exp) VALUES(?, ?, ?)').bind(await hashInv(codigo), x[1], vence).run();
@@ -782,12 +803,18 @@ async function api(req, env, path) {
     const u = resp.ultimoRespaldo; if (!u || u.fecha < addD(hoy, -2)) out.push({ k: 'resp_' + hoy, i: '💾', t: u ? 'El respaldo automático está atrasado' : 'Aún no hay respaldo automático', s: u ? `Último: ${u.fecha}. Crea uno en ⚙️ Config → Seguridad.` : 'Se crea solo cada madrugada; también puedes crearlo ahora en ⚙️ Config → Seguridad.' });
     return json(out);
   }
+  if (path === '/auditoria' && m === 'GET') {
+    exigir('config'); const q = new URL(req.url).searchParams, lim = Math.min(100, Math.max(1, +q.get('limit') || 50)), off = Math.max(0, +q.get('offset') || 0), obj = str(q.get('objeto') || '', 80);
+    const w = obj ? ' WHERE objeto = ?' : '', a = obj ? [obj] : [];
+    const [t, r] = await Promise.all([env.DB.prepare('SELECT COUNT(*) AS n FROM auditoria' + w).bind(...a).first(), env.DB.prepare('SELECT * FROM auditoria' + w + ' ORDER BY ts DESC, id DESC LIMIT ? OFFSET ?').bind(...a, lim, off).all()]);
+    return json({ total: t.n, items: r.results });
+  }
   if (path === '/respaldos' && m === 'GET') {
     exigir('excel'); if (!env.FOTOS) fail(503, 'Falta conectar el almacén de fotos (R2)');
     const l = await env.FOTOS.list({ prefix: 'respaldos/', include: ['customMetadata'] });
     return json(l.objects.map(o => ({ fecha: o.key.slice(10, 20), bytes: o.size, citas: +(o.customMetadata?.citas || 0) })).sort((a, b) => b.fecha.localeCompare(a.fecha)));
   }
-  if (path === '/respaldos' && m === 'POST') { exigir('config'); return json(await respaldar(env)) }
+  if (path === '/respaldos' && m === 'POST') { exigir('config'); const r = await respaldar(env); await auditar(env, quienEs(s), 'Creó respaldo', r.fecha, `${r.citas} citas`); return json(r) }
   if ((x = path.match(/^\/respaldos\/(\d{4}-\d{2}-\d{2})$/)) && m === 'GET') {
     exigir('excel'); const o = await env.FOTOS?.get(`respaldos/${x[1]}.json`); if (!o) fail(404, 'Ese respaldo no existe');
     return new Response(o.body, { headers: { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="respaldo-${x[1]}.json"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
@@ -829,6 +856,10 @@ async function api(req, env, path) {
     exigir('config'); const b = await body();
     if (!b.cfg || typeof b.cfg !== 'object' || !Array.isArray(b.barberos) || !Array.isArray(b.servicios)) fail(400, 'Datos no válidos');
     if (!pinPermitido(env)) { delete b.cfg.adminPin; b.barberos = b.barberos.map(({ pin, ...x }) => x); if (Array.isArray(b.usuarios)) b.usuarios = b.usuarios.map(({ pin, ...x }) => x) }
+    { const ant = d.cfg, cambios = Object.keys({ ...ant, ...b.cfg }).filter(k => k !== 'adminPin' && JSON.stringify(ant[k]) !== JSON.stringify(b.cfg[k]));
+      const lista = (a, z, t) => { const ids = new Set(a.map(x => x.id)), nz = new Set(z.map(x => x.id)); return [...z.filter(x => !ids.has(x.id)).map(x => '+' + t + ' ' + x.nombre), ...a.filter(x => !nz.has(x.id)).map(x => '−' + t + ' ' + x.nombre), ...z.filter(x => ids.has(x.id) && JSON.stringify(a.find(y => y.id === x.id)) !== JSON.stringify(x)).map(x => '✎' + t + ' ' + x.nombre)] };
+      const det = [cambios.length ? 'config: ' + cambios.join(', ') : '', ...lista(d.barberos, b.barberos, 'barbero'), ...lista(d.servicios, b.servicios, 'servicio'), ...(Array.isArray(b.usuarios) ? lista(d.usuarios, b.usuarios, 'usuario') : [])].filter(Boolean).join(' · ');
+      if (det) await auditar(env, quienEs(s), 'Configuración', '', det) }
     await env.DB.batch([kvStmt(env, 'cfg', b.cfg), kvStmt(env, 'barberos', b.barberos), kvStmt(env, 'servicios', b.servicios), ...(Array.isArray(b.usuarios) ? [kvStmt(env, 'usuarios', b.usuarios)] : []), bumpStmt(env)]);
     return json({ ok: true });
   }
@@ -838,19 +869,27 @@ async function api(req, env, path) {
     const { id, codigo: _c, creada, ...resto } = b;
     const c = { ...resto, id: uid(), codigo: codigo(), creada: Date.now(), estado: b.estado || 'confirmada', creadoPor: s.uid || s.barberoId || 'dueno' };
     if (!s.perm.verTodas) c.barberoId = s.barberoId;
-    return json(await insertarCita(env, c));
+    const nueva = await insertarCita(env, c);
+    await auditar(env, quienEs(s), 'Creó cita', c.codigo, `${c.cliente?.nombre || ''} · ${c.fecha} ${c.hora} · ${c.estado}`);
+    return json(nueva);
   }
   if ((x = path.match(/^\/citas\/([\w-]+)$/)) && (m === 'PATCH' || m === 'DELETE')) {
     const c = await citaPorId(env, x[1]); if (!c) fail(404, 'La cita ya no existe'); propia(c);
-    if (m === 'DELETE') { exigir('cancelar'); await env.DB.batch([env.DB.prepare('DELETE FROM citas WHERE id = ?').bind(c.id), bumpStmt(env)]); return json({ ok: true }) }
+    if (m === 'DELETE') { exigir('cancelar'); await env.DB.batch([env.DB.prepare('DELETE FROM citas WHERE id = ?').bind(c.id), bumpStmt(env)]); await auditar(env, quienEs(s), 'Eliminó cita', c.codigo, `${c.cliente?.nombre || ''} · ${c.fecha} ${c.hora}`); return json({ ok: true }) }
     const { id, codigo: _c, creada, ...patch } = await body();
     if (['cancelada', 'no_vino'].includes(patch.estado)) exigir('cancelar');
     else if ('adelantoOk' in patch) { if (!s.perm.yape && !s.perm.crear) fail(403, 'No tienes permiso para validar pagos') }
     else exigir('crear');
     if (!s.perm.verTodas && patch.barberoId && patch.barberoId !== s.barberoId) fail(403, 'No puedes pasar la cita a otro barbero');
+    const antes = { ...c };
     Object.assign(c, patch, { upd: Date.now() });
     if (patch.estado && patch.estado !== 'por_validar') c.expira = null;
     await guardarCita(env, c);
+    { const camp = { estado: 'estado', fecha: 'fecha', hora: 'hora', barberoId: 'barbero', servicioNombre: 'servicio', precio: 'precio', adelantoOk: 'Yape validado' };
+      const det = Object.entries(camp).filter(([k]) => k in patch && JSON.stringify(antes[k]) !== JSON.stringify(c[k])).map(([k, t]) => `${t}: ${antes[k] ?? '—'} → ${c[k]}`);
+      if (patch.cliente && JSON.stringify(antes.cliente) !== JSON.stringify(c.cliente)) det.push('datos del cliente');
+      if (['fotoAntes', 'fotoDespues'].some(k => k in patch && patch[k] !== antes[k])) det.push('fotos');
+      if (det.length) await auditar(env, quienEs(s), patch.adelantoOk && !antes.adelantoOk ? 'Validó Yape' : patch.estado && patch.estado !== antes.estado ? 'Cambió estado' : 'Editó cita', c.codigo, `${c.cliente?.nombre || ''} · ${det.join(' · ')}`) }
     return json(c);
   }
   if (path === '/citas/import' && m === 'POST') {
@@ -889,6 +928,7 @@ async function api(req, env, path) {
   }
   if (path === '/importar' && m === 'POST') {
     exigir('config'); const b = await body();
+    await auditar(env, quienEs(s), 'Restauró respaldo', '', `${Array.isArray(b.citas) ? b.citas.length : 0} citas`);
     if (!b.cfg || !Array.isArray(b.citas)) fail(400, 'Archivo no válido');
     if (!pinPermitido(env)) { delete b.cfg.adminPin; b.barberos = (b.barberos || []).map(({ pin, ...x }) => x); b.usuarios = (b.usuarios || []).map(({ pin, ...x }) => x) }
     let fotos = 0;
@@ -965,7 +1005,7 @@ async function reservar(req, env, b) {
   for (const barb of candidatos) {
     const c = { id: uid(), codigo: codigo(), creada: Date.now(), ...base, barberoId: barb.id };
     const extra = link ? [env.DB.prepare('UPDATE links SET data = ? WHERE id = ?').bind(JSON.stringify({ ...link, estado: 'usado', citaId: c.id, usado: Date.now() }), link.id)] : [];
-    try { await insertarCita(env, c, extra); return json({ id: c.id, codigo: c.codigo, expira: c.expira, barberoId: c.barberoId, estado: c.estado }) }
+    try { await insertarCita(env, c, extra); await auditar(env, 'Cliente', 'Reservó', c.codigo, `${c.cliente?.nombre || ''} · ${c.fecha} ${c.hora}`); return json({ id: c.id, codigo: c.codigo, expira: c.expira, barberoId: c.barberoId, estado: c.estado }) }
     catch (e) { if (e.status !== 409) throw e }
   }
   fail(409, 'Ese horario se acaba de ocupar 😕');
@@ -1045,6 +1085,7 @@ export default {
       env.DB.prepare('DELETE FROM retos WHERE exp < ?').bind(Date.now()),
       env.DB.prepare('DELETE FROM invitaciones WHERE exp < ?').bind(Date.now()),
       env.DB.prepare('DELETE FROM accesos WHERE ts < ?').bind(Date.now() - 90 * 864e5),
+      env.DB.prepare('DELETE FROM auditoria WHERE ts < ?').bind(Date.now() - 180 * 864e5),
     ]);
   },
 };

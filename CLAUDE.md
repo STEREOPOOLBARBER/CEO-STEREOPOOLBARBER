@@ -6,7 +6,7 @@ Sistema de reservas de una barbería en Puente Piedra (Lima, Perú). El dueño n
 - **Idioma:** todo en español (código, comentarios, mensajes, commits, respuestas). Nombres de funciones cortos en español, como el código existente.
 - **Hora:** siempre la de Lima (`America/Lima`, UTC-5, sin horario de verano). En el Worker usar `ahoraLocal(env)`; nunca la hora del servidor.
 - **Nunca subir claves** (Shalom, Turnstile, Google secret, PIN) al repositorio ni pegarlas en mensajes. Van como *Secret* en Cloudflare.
-- **Probar antes de subir:** `npm test` debe quedar 14/14 en verde. Si una prueba falla, se arregla la causa; nunca se borra ni se salta la prueba.
+- **Probar antes de subir:** `npm test` debe quedar todo en verde. Si una prueba falla, se arregla la causa; nunca se borra ni se salta la prueba.
 - **Primero el plan, luego el OK del dueño**, en fases. Explicar en palabras simples qué cambió y qué debe hacer él en Cloudflare.
 - No inventar resultados: decir qué se probó en local y qué solo se podrá ver en producción (Google real, Turnstile real, RENIEC real, celulares reales).
 

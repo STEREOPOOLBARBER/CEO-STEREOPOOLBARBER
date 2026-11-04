@@ -1,0 +1,4 @@
+Librerías de terceros guardadas en el proyecto (sin CDN externo):
+- qrcode.min.js — QRCode.js 1.0.0 (davidshimjs), licencia MIT. Origen: npm qrcodejs@1.0.0
+- xlsx.full.min.js — SheetJS Community Edition 0.18.5, licencia Apache-2.0. Origen: npm xlsx@0.18.5
+Se cargan con «integrity» (SRI): si el archivo cambia, el navegador no lo ejecuta.
