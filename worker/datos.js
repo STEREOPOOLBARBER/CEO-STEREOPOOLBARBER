@@ -59,6 +59,13 @@ export const MIGRACIONES = [
     `CREATE INDEX IF NOT EXISTS ix_citas_origen ON citas(origen, fecha)`,
     `CREATE INDEX IF NOT EXISTS ix_citas_pago ON citas(pago, fecha)`,
   ] },
+  // Calificaciones anónimas del cliente: sin nombre, celular, código ni hora (solo el mes). Una huella aparte evita calificar dos veces.
+  { v: 6, nombre: 'calificaciones anónimas', sql: [
+    `CREATE TABLE IF NOT EXISTS calificaciones(id TEXT PRIMARY KEY, barbero_id TEXT NOT NULL DEFAULT '', servicio_id TEXT NOT NULL DEFAULT '', mes TEXT NOT NULL, estrellas INTEGER NOT NULL, etiquetas TEXT NOT NULL DEFAULT '[]', comentario TEXT NOT NULL DEFAULT '')`,
+    `CREATE INDEX IF NOT EXISTS ix_calif_barbero ON calificaciones(barbero_id, mes)`,
+    // Qué citas ya calificaron, como huella (hash) para que nadie pueda unir una calificación con su cliente.
+    `CREATE TABLE IF NOT EXISTS calif_hechas(h TEXT PRIMARY KEY)`,
+  ] },
 ];
 export let schemaListo = null;
 export function asegurarSchema(env) { return schemaListo ||= aplicarMigraciones(env).catch(e => { schemaListo = null; throw e }) }
@@ -166,12 +173,14 @@ export async function guardarFoto(env, data, key = 'f_' + uid()) {
 }
 // Fotos que el formulario público necesita ver (logo, barberos, servicios…). El resto es privado.
 // Audios del narrador (la voz grabada por el dueño). Se guardan en R2 con clave a_xxx.
+// Solo WAV: el panel convierte cada grabación a WAV, el único formato que leen todos los navegadores (iPhone incluido).
 export function leerAudio(data) {
   const m = /^data:(audio\/[a-z0-9.+-]+)(?:;[a-z0-9=.+-]+)*;base64,([A-Za-z0-9+/=]+)$/i.exec(String(data || ''));
-  if (!m || !/^audio\/(wav|x-wav|wave|mpeg|mp3|mp4|x-m4a|aac|ogg|webm|3gpp)$/i.test(m[1])) fail(400, 'Audio no válido');
+  if (!m || !/^audio\/(wav|x-wav|wave)$/i.test(m[1])) fail(400, 'Audio no válido: debe ser WAV (el panel lo convierte solo)');
   const bin = atob(m[2]); if (bin.length > MAX_AUDIO) fail(413, 'El audio pesa demasiado (máx. 2.5 MB)');
+  if (bin.slice(0, 4) !== 'RIFF' || bin.slice(8, 12) !== 'WAVE') fail(400, 'Audio no válido: debe ser WAV (el panel lo convierte solo)');
   const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return { tipo: m[1].toLowerCase(), bytes };
+  return { tipo: 'audio/wav', bytes };
 }
 export async function guardarAudio(env, data) {
   if (!env.FOTOS) fail(503, 'Falta conectar el almacén de fotos (R2). En Cloudflare: Settings → Bindings → agrega R2 con el nombre FOTOS.');

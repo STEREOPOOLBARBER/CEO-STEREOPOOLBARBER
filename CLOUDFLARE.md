@@ -162,3 +162,10 @@ La estructura de la base de datos ahora es **versionada** (`MIGRACIONES` en `wor
 - **Doble toque en una etiqueta:** su orden y sus filtros (p. ej. Yape por validar → más antiguo / por vencer / con o sin captura; Confirmada → confirmó que viene; Atendido → mayor monto / sin foto después; Cancelada → canceladas o expiradas). Cada etiqueta recuerda su orden en ese celular.
 - El barbero ve el ⚙️ sin barbero, pago ni cliente; el servidor lo vuelve a comprobar.
 - Técnico: `GET /api/citas/buscar` (filtros, `orden`, cursor) y `GET /api/citas/conteo` (números por estado). Migración v5 agrega `servicio_id`, `origen` y `pago` indexados. No hay que hacer nada en Cloudflare.
+
+### Narrador: solo tu voz, «Toca para entrar» y después del corte
+- **Voz:** ya no existe la voz de robot. Habla solo lo que grabes en ⚙️ Config → 🗣️ Narrador. Botones **🎬 Frases** y **📅 Fechas y horas** (guion guiado). Las horas salen de tu horario: si lo cambias, el panel avisa cuáles faltan.
+- **Entrada:** el link de reserva y el estado de la cita abren con tu logo y **«Toca para entrar»**; ese toque habilita el sonido en todos los celulares (en iPhone suena aunque esté en silencio, desde iOS 17), el logo se derrite y el Tío Stereo saluda.
+- **Estado de la cita:** el Tío Stereo dice el estado con la fecha y hora. Antes de la cita sale un **QR**: en el panel, el **📷** junto al buscador lo lee y abre la cita.
+- **Ya atendido:** el cliente ve su **antes y después**, **califica en anónimo** (estrellas, etiquetas, comentario) y ve el botón de **reseña en Google** (pega tu link en ⚙️ Config → 📝 Formulario). Ves el resultado en ☰ Menú → **⭐ Calificaciones** (cada barbero aparece al juntar 3).
+- En Cloudflare no hay nada que hacer (la base de datos se actualiza sola).

@@ -211,6 +211,10 @@ th{color:var(--mu);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
 .lnk .row b{flex:1;font-size:17px}
 .st{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:99px;font-size:13px;font-weight:700;border:1px solid}
 /* próximas / chips / usuarios */
+/* escáner del QR de la cita (js/panel/escaner.js) */
+.esc{position:relative;border-radius:16px;overflow:hidden;background:#000;aspect-ratio:1}.esc video{width:100%;height:100%;object-fit:cover;display:block}.esc i{position:absolute;inset:18%;border:3px solid var(--pur);border-radius:18px;box-shadow:0 0 0 999px rgba(0,0,0,.35)}
+/* voz del narrador (js/panel/voz.js) */
+.vozt{font-size:13px;color:var(--mu);margin-top:6px;line-height:1.5}.vozt .pill{font-size:11px;padding:1px 7px}
 /* filtros de la agenda (js/panel/filtros.js) */
 .fchips{display:flex;flex-wrap:wrap;gap:8px}
 .chip.f{text-transform:none;font-size:14px;white-space:normal;text-align:left}
@@ -315,13 +319,17 @@ th{color:var(--mu);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
 <div id="viewer" data-on-click="a637f718f"></div>
 
 <script src="js/eventos.js"></script>
+<script src="js/voz.js"></script>
 <script src="js/panel/base.js"></script>
 <script src="js/panel/agenda.js"></script>
 <script src="js/panel/filtros.js"></script>
+<script src="js/panel/escaner.js"></script>
 <script src="js/panel/clientes.js"></script>
+<script src="js/panel/calificaciones.js"></script>
 <script src="js/panel/compartir.js"></script>
 <script src="js/panel/dashboard.js"></script>
 <script src="js/panel/config.js"></script>
+<script src="js/panel/voz.js"></script>
 <script src="js/panel/acceso.js"></script>
 <script src="js/panel/inicio.js"></script>
 </body>

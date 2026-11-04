@@ -24,6 +24,7 @@ import { rutasCitas } from './modulos/citas.js';
 import { retencion, rutasClientes } from './modulos/clientes.js';
 import { rutasWhatsapp, rutasWhatsappPublicas, whatsappAuto } from './modulos/whatsapp.js';
 import { reporteSemanal, rutasReportes } from './modulos/reportes.js';
+import { rutasCalificacionPublica, rutasCalificaciones } from './modulos/calificaciones.js';
 import { rutasConfig } from './modulos/config.js';
 import { rutasDni } from './modulos/dni.js';
 import { rutasMonitoreo } from './modulos/monitoreo.js';
@@ -49,7 +50,7 @@ async function api(req, env, path) {
   await sembrar(env);
 
   const c = { req, env, path, m, body };
-  for (const r of [rutasPublicas, rutasWhatsappPublicas, rutasAuth]) { const res = await r(c); if (res) return res }
+  for (const r of [rutasPublicas, rutasCalificacionPublica, rutasWhatsappPublicas, rutasAuth]) { const res = await r(c); if (res) return res }
 
   /* ----- panel (requiere sesión) ----- */
   const d = await datos(env);
@@ -59,7 +60,7 @@ async function api(req, env, path) {
   const propia = c => { if (!s.perm.verTodas && c.barberoId !== s.barberoId) fail(403, 'No es tu cita') };
 
   Object.assign(c, { d, s, exigir, propia });
-  for (const r of [rutasTiempoReal, rutasWhatsapp, rutasReportes, rutasDni, rutasAcceso, rutasMonitoreo, rutasClientes, rutasCitas, rutasConfig]) { const res = await r(c); if (res) return res }
+  for (const r of [rutasTiempoReal, rutasWhatsapp, rutasReportes, rutasCalificaciones, rutasDni, rutasAcceso, rutasMonitoreo, rutasClientes, rutasCitas, rutasConfig]) { const res = await r(c); if (res) return res }
   fail(404, 'Ruta no encontrada');
 }
 

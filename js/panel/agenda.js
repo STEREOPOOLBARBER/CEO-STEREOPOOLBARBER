@@ -22,7 +22,7 @@ function renderAgenda(){const v=S.vista,chx=$('#agChips')?.scrollLeft;
  ${can('config')&&pagoOn()&&!S.cfg.yapeNum?`<div class="banner">⚠️ Falta tu número de Yape. Sin él, el formulario no cobra el adelanto. <span style="text-decoration:underline;cursor:pointer" data-on-click="aa7c933c5">Configurar</span></div>`:''}
  <div class="stats" id="agStats"></div>
  <div class="card">
-  <div class="row"><div class="search">🔍<input id="q" placeholder="Buscar nombre, DNI, celular, código…" value="${esc(v.q)}" data-on-input="fBuscar"><button class="ibtn bare" title="Búsqueda avanzada" data-on-click="abrirAvanzada">⚙️${pas.length?`<span class="dot">${pas.length}</span>`:''}</button></div></div>
+  <div class="row"><div class="search">🔍<input id="q" placeholder="Buscar nombre, DNI, celular, código…" value="${esc(v.q)}" data-on-input="fBuscar"><button class="ibtn bare" title="Escanear el QR de la cita" data-on-click="abrirEscaner">📷</button><button class="ibtn bare" title="Búsqueda avanzada" data-on-click="abrirAvanzada">⚙️${pas.length?`<span class="dot">${pas.length}</span>`:''}</button></div></div>
   <p class="hint" id="qHint" style="margin:8px 0 0;${conTexto(v)?'':'display:none'}">🔎 Buscando en <b style="color:var(--tx)">todas las fechas</b></p>
   ${hay?`<div class="row" style="margin-top:10px;flex-wrap:wrap">${pas.map(x=>`<span class="fchip" data-on-click="fQuitar" data-p0="${x.k}" data-p1="${esc(x.x||'')}">${esc(x.t)} ✕</span>`).join('')}<span class="fchip lim" data-on-click="fLimpiar">✕ Limpiar</span></div>`:''}
   <div class="days"><button class="day ${v.per.t==='mes'?'on':''}" data-on-click="fMes"><small>Mes</small><b>📆</b><small>${MESC[+mesTira.slice(5)-1]}</small></button>${dias.map(f=>{const d=pYmd(f),n=cuenta(f);return `<button class="day ${v.per.t==='dia'&&f===v.per.f?'on':''}" data-on-click="fDia" data-p0="${f}">${n?`<i>${n}</i>`:''}<small>${f===hoy()?'Hoy':f===addD(hoy(),1)?'Mañ':DIAS[d.getDay()]}</small><b>${d.getDate()}</b><small>${MESC[d.getMonth()]}</small></button>`}).join('')}</div>
@@ -235,6 +235,8 @@ async function guardarCita(id){const s=S.servicios.find(x=>x.id===$('#fServ').va
  try{const vaActiva=ACTIVOS.includes(estN);if(vaActiva&&ocupado(S.citas,d.barberoId,d.fecha,d.hora,id||undefined))throw new Error('Ese horario está ocupado');
   if(id)await API.updateCita(id,d);else await API.crearCita({...d,enSillaTs:estN==='en_silla'?Date.now():undefined,adelanto:0,adelantoOk:false,origen:'panel',creadoPor:S.ses.uid||S.ses.barberoId||'dueno'});
   closeModal();fijarDia(d.fecha);await reload();toast('✅ Cita guardada')}catch(e){toast('❌ '+e.message)}}
+/* «❌ No vino» desde el aviso de la próxima cita atrasada. */
+const noVino=id=>cambiarEstado(id,'no_vino');
 async function cambiarEstado(id,k){const c=cita(id);if(ACTIVOS.includes(k)&&!activa(c)&&ocupado(S.citas,c.barberoId,c.fecha,c.hora,id))return toast('❌ Ese horario ya lo tomó otra cita');closeModal();await setEstado(id,k,k==='confirmada'&&c.adelanto>0?{adelantoOk:true}:{})}
 async function eliminar(id){if(!confirm('¿Eliminar la cita para siempre?'))return;closeModal();try{await API.borrarCita(id);await reload();toast('🗑️ Eliminada')}catch(e){toast('❌ '+e.message)}}
 function walkIn(){const bid=isAdmin()?(S.vista.barb[0]||S.barberos.find(b=>b.activo!==false)?.id||''):S.ses.barberoId;

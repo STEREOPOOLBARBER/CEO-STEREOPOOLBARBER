@@ -21,17 +21,19 @@ Sistema de reservas de una barbería en Puente Piedra (Lima, Perú). El dueño n
 Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño prueba en staging → se pasa a `main` (merge) → Cloudflare despliega producción. GitHub Actions (`.github/workflows/pruebas.yml`) corre las pruebas en cada push.
 
 ## Estructura
-- `index.html` — panel (dueño, barberos, personal): solo HTML y estilos. Su JS está en `js/panel/` por pantalla (`base`, `agenda`, `filtros`, `clientes`, `compartir`, `dashboard`, `config`, `acceso`, `inicio`), cargados en ese orden como scripts clásicos (comparten el ámbito global). Modo nube (`/api`) o local (localStorage, solo demo).
+- `index.html` — panel (dueño, barberos, personal): solo HTML y estilos. Su JS está en `js/panel/` por pantalla (`base`, `agenda`, `filtros`, `escaner`, `clientes`, `calificaciones`, `compartir`, `dashboard`, `config`, `voz`, `acceso`, `inicio`), después de `js/voz.js`,, cargados en ese orden como scripts clásicos (comparten el ámbito global). Modo nube (`/api`) o local (localStorage, solo demo).
 - `js/reservar.js`, `js/estado.js` — JS del formulario y de la página de estado.
+- `js/voz.js` (guion de voz, frases originales, piezas de fecha y hora; lo usan las 3 páginas) · `js/escena.js` + `css/escena.css` (pantalla «Toca para entrar», narrador y reproductor de la voz grabada; reservar y estado) · `img/` (narrador y logo Stereo).
 - `js/eventos.js` — **despachador de eventos** y registro `ACC` de acciones (generado a partir de los antiguos `onclick`).
 - **CSP estricta: prohibido el JavaScript en línea** (`script-src 'self'`, `script-src-attr 'none'`). Nunca escribir `onclick="…"`, `onchange="…"` ni `<script>` dentro del HTML. Para un botón nuevo: `data-on-click="nombreAccion"` (también `data-on-change`, `data-on-input`, `data-on-keydown`) y, junto al código de esa pantalla, `ACC.nombreAccion = function (event) { … }` (`this` = el elemento). Los datos van en `data-p0`, `data-p1`… (`this.dataset.p0`). Si `test/csp.ui.mjs` encuentra una acción sin registrar o una violación de CSP, falla.
-- `reservar.html` — formulario público de reservas (con el narrador «Tío Stereo»).
-- `estado.html` — página pública para ver el estado de una cita (`?c=CODIGO`) y reprogramarla.
+- `reservar.html` — formulario público de reservas (con el narrador «Tío Stereo»). `reservar.html?c=…` redirige a `estado.html`.
+- `estado.html` — página pública para ver el estado de una cita (`?c=CODIGO`): narrador, QR antes de la cita, reprogramar; ya atendida: fotos, calificación anónima y reseña de Google.
 - `worker/` — API (Cloudflare Worker), **monolito modular**:
   - `index.js` — solo entrada: seguridad común (límite público, mismo origen), migraciones, enrutador por módulos, cron.
   - `comun.js` — constantes, utilidades, hora de Lima y reglas de agenda (`slotsDia`, `trabaja`, `reglaReprog`). Sin dependencias.
   - `datos.js` — D1: **migraciones versionadas** (`MIGRACIONES`), kv, citas (insertar/guardar/expirar), fotos y audios en R2.
   - `modulos/filtros.js` — filtros y órdenes de la agenda (los usan `/citas/buscar` y `/citas/conteo`).
+  - `modulos/calificaciones.js` — calificación anónima (`POST /publico/cita/:c/calificar`, migración v6) y resumen del panel (`GET /calificaciones`).
   - `modulos/publico.js` (formulario, estado, reprogramar) · `modulos/auth.js` (Google, puerta, perfiles, clave, huella, accesos) · `modulos/citas.js` (panel, búsqueda paginada, configuración, citas) · `modulos/clientes.js` (ficha de cliente, cursor, búsqueda sin acentos) · `modulos/config.js` (links, fotos, exportar/importar) · `modulos/dni.js` · `modulos/seguridad.js` (límites, Turnstile, ficha) · `modulos/monitoreo.js` · `modulos/respaldos.js`.
   - `vista-previa.js` (tarjetas de WhatsApp) · `webauthn.js` (huella sin librerías).
   - `modulos/tiempo-real.js` — Durable Object `Avisos` (binding `AVISOS`, SQLite, hibernación): WebSocket `/api/tiempo-real` con los paneles. Tras cada escritura exitosa (no GET, salvo auth/ficha) el Worker llama `avisar(env)` y todos reciben `{"tipo":"cambio"}` **sin datos**; cada panel vuelve a pedir `/api/panel` con sus permisos. El panel cae a consulta cada 20 s si no hay conexión y se reconecta solo.
@@ -77,6 +79,15 @@ Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño pru
 ## Reporte semanal de caja
 - `modulos/reportes.js`: semana lunes–domingo (Lima). Cron: los lunes desde las 8 a. m. guarda el de la semana anterior en `reportes` (migración v4) y avisa en la 🔔 (`/api/alertas` con `accion: 'reporte'`). Montos con la misma regla que la Caja (`ingreso()`), comisiones si `modComision`, comparación con la semana previa. Solo `verMontos` + `verTodas`. `GET /api/reportes/:fecha` (en curso = al momento, sin guardar), `POST …/rehacer` (config).
 - Panel: 📊 en el menú, en la Caja y en la 🔔; WhatsApp (resumen de texto) y Excel (4 hojas).
+
+## Narrador y voz
+- **Solo voz grabada** (nunca `speechSynthesis`): sin grabación, solo el globo. El panel convierte todo a **WAV** (`aWav` en `js/panel/voz.js`) y el Worker solo acepta WAV (`leerAudio`).
+- `js/voz.js`: `GUION` de cada momento = trozos grabados (claves `momento`, `momento_2`…) + huecos `{fecha}` / `{hora}`. Piezas: `f_hoy`, `f_manana`, `f_el`, `f_dow_0..6`, `f_d_1..31`, `f_m_1..12`, `h_HH:MM` (una por turno de `slotsDia`). `VOZ.claves(momento,{fecha,hora,hoy})` da el orden. Si cambias el guion, cuida la compatibilidad de las claves ya grabadas.
+- `js/escena.js`: el primer toque («Toca para entrar») desbloquea Web Audio (y `navigator.audioSession.type='playback'` en iPhone) y encadena las piezas; sin Web Audio usa un `<audio>`. `Escena.estado()` sirve para pruebas.
+
+## Después del corte (estado.html)
+- QR con `estado.html?c=CODIGO` mientras la cita está por validar o confirmada; el 📷 del panel (`js/panel/escaner.js`: BarcodeDetector o `vendor/jsqr.min.js` con SRI) abre la cita.
+- Atendida: fotos por `GET /publico/cita/:c/foto/(antes|despues)`; calificación anónima (sin nombre/celular/código, solo el mes; huella aparte en `calif_hechas`; 7 días; una vez); el panel la muestra por barbero con 3 o más. Reseña (`cfg.resenaUrl`) **a todos** (Google prohíbe pedirla solo a los contentos).
 
 ## Filtros de la agenda
 - Una sola vista `S.vista` (`js/panel/filtros.js`): periodo (`dia` | `mes` | `rango`), etiqueta, texto, filtros (`barb`, `serv`, `pago`, `origen`, `cli`, `wa` y los propios de una etiqueta: `captura`, `foto`, `tipo`) y `orden`. `VISTA_DEF()` es lo predeterminado y «Limpiar» vuelve a eso.

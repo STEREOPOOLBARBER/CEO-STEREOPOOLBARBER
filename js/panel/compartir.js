@@ -78,12 +78,15 @@ function ayudaLinks(){openModal(mHead('📖 Links para clientes')+[
 function bajarQR(){const c=$('#qr canvas'),i=$('#qr img');const src=c?c.toDataURL('image/png'):i?.src;if(!src)return toast('QR no disponible');const a=document.createElement('a');a.href=src;a.download='qr-reservas.png';a.click()}
 
 /* =================== MENÚ (esquina derecha): Excel, respaldo y más =================== */
-function loadScript(src){return new Promise((res,rej)=>{if(document.querySelector(`script[src="${src}"]`))return res();const s=document.createElement('script');s.src=src;if(src===XLSX_SRC)s.integrity=XLSX_SRI;s.onload=res;s.onerror=()=>rej(new Error('No se pudo cargar Excel'));document.head.appendChild(s)})}
-const XLSX_SRC='vendor/xlsx.full.min.js',XLSX_SRI='sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw';
+/* Librerías de vendor/ que se cargan solo cuando hacen falta, siempre con su huella (SRI). */
+const XLSX_SRC='vendor/xlsx.full.min.js',JSQR_SRC='vendor/jsqr.min.js';
+const SRI={[XLSX_SRC]:'sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw',[JSQR_SRC]:'sha384-GYL7Rxjq1854yADkd3HJygX53knS7A8AnR/u8k5BqauMOwFzsHTcH1vrxPnstEB0'};
+function loadScript(src){return new Promise((res,rej)=>{if(document.querySelector(`script[src="${src}"]`))return res();const s=document.createElement('script');s.src=src;s.integrity=SRI[src];s.onload=res;s.onerror=()=>rej(new Error('No se pudo cargar '+src.replace(/^vendor\//,'')));document.head.appendChild(s)})}
 const COLS=['Código','Fecha','Hora','Cliente','Teléfono','Ciudad','Barbero','Servicio','Precio','Adelanto','Adelanto validado','Estado','Nota','Origen','Gratis','Creado'];
 function abrirMenu(){openModal(`<div class="grab"></div>${mHead('☰ Menú')}
  <div class="card" style="padding:12px 14px"><div class="row"><span class="av lg">👤</span><div style="flex:1"><b>${esc(S.ses.nombre||'')}</b><p class="hint" style="margin:0">${S.ses.uid?ROLES[S.ses.rol]?.t||'':S.ses.rol==='barbero'?'💈 Barbero':'👑 Dueño'} · ${Object.values(S.perm).filter(Boolean).length}/${PERMS.length} permisos</p></div></div>${misCitas()}</div>
  ${API.remote&&can('verMontos')&&can('verTodas')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="abrirReporte">📊 Reporte semanal de caja</button>`:''}
+ ${API.remote&&can('dash')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="abrirCalificaciones">⭐ Calificaciones de los clientes</button>`:''}
  ${can('dash')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="aba7c1122">📈 Dashboard del negocio</button>`:''}
  ${can('excel')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="a62e261c1">📊 Excel y respaldo</button>`:''}
  ${can('config')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="a465d46a3">👥 Usuarios y permisos</button>`:''}

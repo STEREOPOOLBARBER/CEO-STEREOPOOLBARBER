@@ -1,0 +1,35 @@
+/* =====================================================================
+   VOZ DEL NARRADOR · lo comparten el formulario (reservar), el estado de la cita y el panel.
+   Solo habla la voz GRABADA por el dueño (nunca la voz del celular). Cada momento tiene su guion:
+   trozos que se graban (texto que se lee) y huecos {fecha} / {hora} que se llenan con piezas
+   grabadas una por una («el» + «sábado» + «veinticinco» + «de octubre» + «a las diez de la mañana»).
+   Las grabaciones se guardan en cfg.narrAudio: { clave: 'a_…' } (WAV, suena en todos los navegadores).
+   ===================================================================== */
+const VOZ=(()=>{
+ /* Texto que aparece en el globo (editable en ⚙️ Config; aquí, el original). */
+ const FRASES={holaLink:'¡Qué tal, sobrino {cliente}! Este link es solo para ti 💪 Elige tu corte.',hola:'¡Qué tal, sobrino! Soy el {narrador} 💪 Elige tu corte y yo te guío.',servicio:'¡Buena elección, sobrino! {servicio}, {precio}. Ahora elige a tu barbero.',barbero:'{barbero} te va a dejar fino, sobrino. {especialidad} 💪',cualquiera:'Tranqui sobrino, te asigno al primero que esté libre. Elige día y hora.',dia:'{fecha}. ¿A qué hora te acomoda, sobrino?',hora:'{fecha} a las {hora} ✅ Ese turno ya es casi tuyo, sobrino.',datos:'Listo {cliente}, yapea {adelanto} al {yape} y sube la captura, sobrino.',listo:'¡Reserva hecha, sobrino {cliente}! Nos vemos el {fecha} a las {hora} 🔥',ocupado:'Uy sobrino, te ganaron ese turno. Elige otro.',vencido:'Se acabó el tiempo, sobrino, pero tranqui: reserva de nuevo.',
+  estado_por_validar:'Tranqui {cliente}, estamos validando tu Yape. En un ratito te confirmo, sobrino.',estado_confirmada:'¡Listo {cliente}! Tu cita está CONFIRMADA: {fecha} a las {hora} con {barbero}. Puntual, sobrino 💪',estado_en_silla:'{cliente}, ya estás en la silla. Relájate que te dejamos fino.',estado_atendida:'¡Corte terminado, {cliente}! Gracias por venir. Mira tus fotos y califícanos, sobrino.',estado_no_vino:'{cliente}, no llegaste a tu cita. Si quieres, reserva otra vez, sobrino.',estado_cancelada:'Tu cita fue cancelada. Si fue un error, escríbenos por WhatsApp.',estado_expirada:'Se acabó el tiempo para enviar el comprobante, {cliente}. Reserva de nuevo, sobrino.'};
+ const MOMENTOS=[['hola','👋 Al abrir'],['holaLink','🔗 Al abrir un link personalizado'],['servicio','✂️ Al elegir servicio'],['barbero','💈 Al elegir barbero'],['cualquiera','🎲 Si elige cualquier barbero'],['dia','📅 Al elegir día'],['hora','⏰ Al elegir hora'],['datos','💸 Antes de pagar'],['listo','✅ Reserva lista'],['ocupado','😕 Turno ocupado'],['vencido','⌛ Tiempo de pago vencido'],['estado_por_validar','🔎 Estado: Yape por validar'],['estado_confirmada','✅ Estado: Confirmada'],['estado_en_silla','💺 Estado: En silla'],['estado_atendida','✔️ Estado: Atendido'],['estado_no_vino','❌ Estado: No vino'],['estado_cancelada','🚫 Estado: Cancelada'],['estado_expirada','⌛ Estado: Expirada']];
+ /* Guion de voz de cada momento: lo que se graba (sin nombres ni precios) y dónde van la fecha y la hora. */
+ const GUION={hola:['¡Qué tal, sobrino! Soy el Tío Stereo. Elige tu corte y yo te guío.'],holaLink:['¡Qué tal, sobrino! Este link es solo para ti. Elige tu corte.'],servicio:['¡Buena elección, sobrino! Ahora elige a tu barbero.'],barbero:['Ese barbero te va a dejar fino, sobrino.'],cualquiera:['Tranqui, sobrino, te asigno al primero que esté libre. Elige día y hora.'],
+  dia:['{fecha}','¿A qué hora te acomoda, sobrino?'],hora:['{fecha}','{hora}','Ese turno ya es casi tuyo, sobrino.'],datos:['Listo, sobrino. Yapea el adelanto y sube la captura.'],listo:['¡Reserva hecha, sobrino! Nos vemos pronto.','{fecha}','{hora}'],ocupado:['Uy, sobrino, te ganaron ese turno. Elige otro.'],vencido:['Se acabó el tiempo, sobrino, pero tranqui: reserva de nuevo.'],
+  estado_por_validar:['Tranqui, sobrino, estamos validando tu Yape. En un ratito te confirmo.'],estado_confirmada:['¡Listo, sobrino! Tu cita está confirmada. Sé puntual, que te estaré esperando','{fecha}','{hora}'],estado_en_silla:['Ya estás en la silla, sobrino. Relájate que te dejamos fino.'],estado_atendida:['¡Corte terminado, sobrino! Gracias por venir. Mira tus fotos y califícanos, que me ayuda un montón.'],estado_no_vino:['Sobrino, no llegaste a tu cita. Si quieres, reserva otra vez.'],estado_cancelada:['Tu cita fue cancelada, sobrino. Si fue un error, escríbenos por WhatsApp.'],estado_expirada:['Se acabó el tiempo para enviar el comprobante, sobrino. Reserva de nuevo.']};
+ /* Trozos de un momento: {tipo:'grab',clave,texto} | {tipo:'fecha'} | {tipo:'hora'}. El 1.er trozo grabado usa la clave del momento; los siguientes, «clave_2», «clave_3»… */
+ function trozos(k){let n=0;return(GUION[k]||[]).map(t=>t==='{fecha}'?{tipo:'fecha'}:t==='{hora}'?{tipo:'hora'}:{tipo:'grab',clave:n++?`${k}_${n}`:k,texto:t})}
+ const grabables=()=>MOMENTOS.flatMap(([k,t])=>trozos(k).filter(x=>x.tipo==='grab').map(x=>({...x,momento:t})));
+
+ /* ---------- piezas de fecha y hora ---------- */
+ const NUM=['','uno','dos','tres','cuatro','cinco','seis','siete','ocho','nueve','diez','once','doce','trece','catorce','quince','dieciséis','diecisiete','dieciocho','diecinueve','veinte','veintiuno','veintidós','veintitrés','veinticuatro','veinticinco','veintiséis','veintisiete','veintiocho','veintinueve','treinta','treinta y uno'];
+ const decenas={3:'treinta',4:'cuarenta',5:'cincuenta'},enPalabras=n=>n<=31?NUM[n]:decenas[Math.floor(n/10)]+(n%10?' y '+NUM[n%10]:'');
+ const DSEM=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'],MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+ const PIEZAS_FECHA=[['f_hoy','hoy'],['f_manana','mañana'],['f_el','el'],...DSEM.map((d,i)=>['f_dow_'+i,d]),...NUM.slice(1).map((n,i)=>['f_d_'+(i+1),n]),...MESES.map((m,i)=>['f_m_'+(i+1),'de '+m])];
+ const sumarDia=(f,n)=>{const[y,m,d]=f.split('-').map(Number),x=new Date(y,m-1,d+n);return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`};
+ function piezasFecha(f,hoy){if(!f)return[];if(f===hoy)return['f_hoy'];if(f===sumarDia(hoy,1))return['f_manana'];const[y,m,d]=f.split('-').map(Number);return['f_el','f_dow_'+new Date(y,m-1,d).getDay(),'f_d_'+d,'f_m_'+m]}
+ /* «a las diez de la mañana», «a la una de la tarde», «a las tres y media de la tarde» */
+ function textoHora(h){const[H,M]=h.split(':').map(Number),h12=H%12||12,min=M===0?'':M===15?' y cuarto':M===30?' y media':' y '+enPalabras(M);
+  const per=H<6?'de la madrugada':H<12?'de la mañana':H===12&&M===0?'del mediodía':H<19?'de la tarde':'de la noche';return `${h12===1?'a la':'a las'} ${h12===1?'una':enPalabras(h12)}${min} ${per}`}
+ const claveHora=h=>'h_'+h;
+ const piezasHora=h=>h?[claveHora(h)]:[];
+ /* Claves de audio, en orden, para decir un momento con su fecha y hora. */
+ function claves(k,{fecha,hora,hoy}={}){return trozos(k).flatMap(t=>t.tipo==='grab'?[t.clave]:t.tipo==='fecha'?piezasFecha(fecha,hoy):piezasHora(hora))}
+ return{FRASES,MOMENTOS,GUION,trozos,grabables,PIEZAS_FECHA,textoHora,claveHora,piezasFecha,piezasHora,claves}})();

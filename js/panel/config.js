@@ -11,50 +11,6 @@ const SW_OK=new Set(['togUser','togPB','togBarb','togServ','setB','togPermU']);
 const sw=(on,f,...a)=>`<button class="sw ${on?'on':''}" data-on-click="a6e350824" data-f="${f}" data-a="${esc(JSON.stringify(a))}"></button>`;
 function swAccion(el){const f=el.dataset.f;if(SW_OK.has(f)&&typeof window[f]==='function')window[f](...JSON.parse(el.dataset.a||'[]'))}
 function togPermU(k){S._u.permisos[k]=!S._u.permisos[k];S._u.rol='personal';$('#uRol').value='personal';uPerms()}
-/* ---------- voz propia del narrador ---------- */
-/* Guion: las 18 frases SIN datos (nombre, precio, hora…) para leerlas con tu voz, una por una. */
-const GUION=[['hola','¡Qué tal, sobrino! Soy el Tío Stereo. Elige tu corte y yo te guío.'],['holaLink','¡Qué tal, sobrino! Este link es solo para ti. Elige tu corte.'],['servicio','¡Buena elección, sobrino! Ahora elige a tu barbero.'],['barbero','Ese barbero te va a dejar fino, sobrino.'],['cualquiera','Tranqui, sobrino, te asigno al primero que esté libre. Elige día y hora.'],['dia','¿A qué hora te acomoda, sobrino?'],['hora','Ese turno ya es casi tuyo, sobrino.'],['datos','Listo, sobrino. Yapea el adelanto y sube la captura.'],['listo','¡Reserva hecha, sobrino! Nos vemos pronto.'],['ocupado','Uy, sobrino, te ganaron ese turno. Elige otro.'],['vencido','Se acabó el tiempo, sobrino, pero tranqui: reserva de nuevo.'],
- ['estado_por_validar','Tranqui, sobrino, estamos validando tu Yape. En un ratito te confirmo.'],['estado_confirmada','¡Listo, sobrino! Tu cita está confirmada. Sé puntual, que te estaré esperando.'],['estado_en_silla','Ya estás en la silla, sobrino. Relájate que te dejamos fino.'],['estado_atendida','¡Corte terminado, sobrino! Gracias por venir. Cuando quieras repetir, aquí estoy.'],['estado_no_vino','Sobrino, no llegaste a tu cita. Si quieres, reserva otra vez.'],['estado_cancelada','Tu cita fue cancelada, sobrino. Si fue un error, escríbenos por WhatsApp.'],['estado_expirada','Se acabó el tiempo para enviar el comprobante, sobrino. Reserva de nuevo.']];
-function abrirGuion(i){G={i:i||0};openModal('');guionPinta()}
-function guionPinta(){if(!G)return;const[k,txt]=GUION[G.i],au=D().cfg.narrAudio||{},ya=!!au[k],hechas=GUION.filter(([x])=>au[x]).length,et=(NKEYS.find(x=>x[0]===k)||[k,k])[1];
- $('#mbody').innerHTML=mHead(`🎬 Guion · ${G.i+1} de ${GUION.length}`)+`<div style="height:6px;background:var(--line);border-radius:6px;overflow:hidden"><div style="height:100%;width:${Math.round(hechas/GUION.length*100)}%;background:var(--grn)"></div></div>
- <p class="hint" style="margin:8px 0 0">${et} · ${hechas} de ${GUION.length} con tu voz</p>
- <div class="card" style="margin:12px 0;text-align:center;padding:26px 16px"><div style="font:800 24px/1.35 'Syne'">${esc(txt)}</div></div>
- <p class="hint" style="text-align:center;margin:0 0 12px">Toca <b>Grabar</b>, léela con voz grave y firme (celular a 20 cm, sin ruido) y toca <b>Detener</b>.</p>
- <div class="row" style="gap:8px"><button class="btn p" id="g_rec" data-rec="${k}" data-label="🎙️ Grabar" style="flex:2;padding:16px;font-size:17px" data-on-click="a2fadf31d" data-p0="${k}">🎙️ Grabar</button>${ya?`<button class="btn" style="flex:1" data-on-click="a6ea62739" data-p0="${k}">▶️ Oír</button>`:''}</div>
- ${ya?'<p style="text-align:center;color:var(--grn);font-weight:700;margin:10px 0 0">✅ Esta frase ya tiene tu voz</p>':''}
- <div class="row" style="gap:8px;margin-top:14px"><button class="btn" style="flex:1" data-on-click="abc3de889" ${G.i?'':'disabled'}>← Anterior</button><button class="btn g" style="flex:1" data-on-click="acf3fc65e">${G.i<GUION.length-1?'Siguiente →':'Terminar ✔'}</button></div>`}
-function guionIr(d){if(!G)return;try{REC?.mr.stop()}catch(_){}const n=G.i+d;if(n>=GUION.length){closeModal();return toast('🎉 Guion terminado · toca «Guardar configuración»')}if(n<0)return;G.i=n;setTimeout(guionPinta,REC?500:0)}
-const NAUDIO_MAX=25;let REC=null;
-/* Cualquier audio (grabación o archivo) se convierte a WAV mono 16 kHz: suena igual en iPhone, Android y computadora. */
-async function aWav(blob){const ab=await blob.arrayBuffer(),AC=window.AudioContext||window.webkitAudioContext,OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext,ctx=new AC();
- const buf=await new Promise((ok,no)=>{const r=ctx.decodeAudioData(ab,ok,no);r?.then?.(ok,no)}).catch(()=>{throw new Error('No pude leer ese audio. Prueba con otro archivo o grábalo aquí.')});ctx.close?.();
- const sr=16000,len=Math.max(1,Math.floor(Math.min(buf.duration,NAUDIO_MAX)*sr)),off=new OAC(1,len,sr),src=off.createBufferSource();src.buffer=buf;src.connect(off.destination);src.start();
- const d=(await new Promise((ok,no)=>{const r=off.startRendering();r?.then?.(ok,no);off.oncomplete=e=>ok(e.renderedBuffer)})).getChannelData(0);
- let a=0,z=d.length-1;const um=.015;while(a<z&&Math.abs(d[a])<um)a++;while(z>a&&Math.abs(d[z])<um)z--;a=Math.max(0,a-Math.floor(sr*.12));z=Math.min(d.length-1,z+Math.floor(sr*.2));
- const x=d.slice(a,z+1);let pk=0;for(let i=0;i<x.length;i++)pk=Math.max(pk,Math.abs(x[i]));const g=pk>.01?Math.min(8,.92/pk):1;
- const v=new DataView(new ArrayBuffer(44+x.length*2)),w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
- w(0,'RIFF');v.setUint32(4,36+x.length*2,true);w(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,x.length*2,true);
- for(let i=0;i<x.length;i++)v.setInt16(44+i*2,Math.max(-1,Math.min(1,x[i]*g))*32767,true);
- return new Blob([v],{type:'audio/wav'})}
-function marcarRec(k,on){document.querySelectorAll(`[data-rec="${k}"]`).forEach(b=>{b.textContent=on?'⏹️ Detener':(b.dataset.label||'🎙️ Grabar mi voz');b.classList.toggle('r',on)})}
-async function grabarNarr(k){
- if(REC){const mismo=REC.k===k;REC.mr.stop();if(mismo)return;await new Promise(r=>setTimeout(r,400))}
- if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)return toast('Este navegador no puede grabar: usa «Subir audio»');
- try{const st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
-  const mt=['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg'].find(x=>MediaRecorder.isTypeSupported?.(x))||'',mr=new MediaRecorder(st,mt?{mimeType:mt}:{}),ch=[],t0=Date.now();
-  mr.ondataavailable=e=>{if(e.data&&e.data.size)ch.push(e.data)};
-  mr.onstop=async()=>{clearInterval(REC?.t);st.getTracks().forEach(x=>x.stop());REC=null;marcarRec(k,false);await subirAudioNarr(k,new Blob(ch,{type:mr.mimeType||mt||'audio/webm'}))};
-  REC={k,mr,t:setInterval(()=>{const s=(Date.now()-t0)/1000;document.querySelectorAll(`[data-rec="${k}"]`).forEach(b=>b.textContent=`⏹️ Detener · ${Math.floor(s)} s`);if(s>=NAUDIO_MAX)mr.stop()},250)};
-  mr.start();marcarRec(k,true);toast('🎙️ Grabando… di la frase y toca Detener')}
- catch(e){toast(e.name==='NotAllowedError'?'❌ Permite el micrófono en tu navegador':'❌ No se pudo grabar: '+e.message)}}
-async function subirAudioNarr(k,blob){toast('⏳ Procesando audio…');
- try{const w=await aWav(blob),data=await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=no;r.readAsDataURL(w)});
-  const key=await API.putAudio(data);(D().cfg.narrAudio=D().cfg.narrAudio||{})[k]=key;dirty();renderConfig();if(G&&$('#g_rec'))guionPinta();toast('✅ Audio listo · toca Guardar configuración')}
- catch(e){toast('❌ '+(e.message||'No se pudo procesar el audio'))}}
-function subirArchivoNarr(k,inp){const f=inp.files[0];if(f)subirAudioNarr(k,f);inp.value=''}
-async function oirNarr(k){const key=D().cfg.narrAudio?.[k];if(!key)return;try{await new Audio(await API.audioUrl(key)).play()}catch(e){toast('❌ '+e.message)}}
-function quitarAudioNarr(k){if(!confirm('¿Quitar tu audio de esta frase? Volverá la voz del celular.'))return;delete D().cfg.narrAudio[k];dirty();renderConfig()}
 function setLL(la,lo){D().cfg.lat=String(+(+la).toFixed(6));D().cfg.lng=String(+(+lo).toFixed(6));dirty();renderConfig()}
 function ubicAqui(){if(!navigator.geolocation)return toast('Tu navegador no permite la ubicación');toast('📍 Buscando tu ubicación…');navigator.geolocation.getCurrentPosition(p=>{setLL(p.coords.latitude,p.coords.longitude);toast('✅ Ubicación lista · toca Guardar')},e=>toast(e.code===1?'❌ Permite la ubicación en tu navegador (candado junto a la dirección)':e.code===3?'❌ Tardó demasiado: prueba de nuevo o usa «Buscar mi dirección»':'❌ No se pudo obtener tu ubicación: usa «Buscar mi dirección»'),{enableHighAccuracy:true,timeout:15000})}
 async function ubicBuscar(){const c=D().cfg,q=[c.direccion,c.ciudad].filter(Boolean).join(', ');if(!q)return toast('Primero escribe la dirección');toast('🔎 Buscando…');try{const r=await(await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=pe&q='+encodeURIComponent(q))).json();if(!r[0])return toast('No la encontré: usa «Usar donde estoy»');setLL(r[0].lat,r[0].lon);toast('✅ Encontrada · revisa el mapa y toca Guardar')}catch(e){toast('❌ No se pudo buscar')}}
@@ -123,24 +79,19 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barbero
  ${acc('form','📝 Formulario del cliente','Textos que ve tu cliente',()=>`
   <label class="lb">Título del primer paso</label><input class="in" value="${esc(c.txtBienvenida)}" data-on-change="a5b1dd04e">
   <label class="lb">Mensaje al terminar</label><input class="in" value="${esc(c.txtFinal)}" data-on-change="a3440152d">
+  <label class="lb">⭐ Link para reseñas en Google</label><input class="in" type="url" placeholder="https://g.page/r/…/review" value="${esc(c.resenaUrl||'')}" data-on-change="cfgResena">
+  <p class="hint">En tu Perfil de Empresa de Google → «Pedir reseñas» → copia el link. Sale en el estado de la cita a <b>todos</b> los clientes atendidos (Google no permite pedir reseñas solo a los contentos).</p>
   <button class="btn w" style="margin-top:12px" data-on-click="aa29a5450">↗ Ver formulario</button>`)}
  ${acc('narrador','🗣️ Narrador y pantalla de carga',c.narrOn?`${esc(c.narrNombre)} · activo`:'Narrador apagado',()=>`
-  <div class="li"><div class="t"><b>Pantalla de carga</b><small>Tu logo al abrir el formulario</small></div>${sw(c.splashOn,'setB','splashOn')}</div>
-  ${c.splashOn?`<div class="li"><div class="t"><b>Efecto derretir</b><small>El logo se derrite cuando termina de cargar</small></div>${sw(c.splashMelt,'setB','splashMelt')}</div>
+  <div class="li"><div class="t"><b>Pantalla de carga</b><small>Tu logo y «Toca para entrar» en el formulario y en el estado de la cita. Ese toque habilita la voz en todos los celulares.</small></div>${sw(c.splashOn,'setB','splashOn')}</div>
+  ${c.splashOn?`<div class="li"><div class="t"><b>Efecto derretir</b><small>El logo se derrite al tocar la pantalla</small></div>${sw(c.splashMelt,'setB','splashMelt')}</div>
   <label class="lb">Imagen de carga</label><div class="row"><label class="upl"><span class="prev" style="background:#000">${c.splashImg?`<img data-foto="${c.splashImg}">`:`<small style="font-size:11px;color:#f5c542">Incluido ✓</small>`}</span><span class="btn sm">📷 Subir logo</span><input type="file" accept="image/*" data-on-change="a893e370d"></label>${c.splashImg?`<button class="btn sm r" data-on-click="ad42f0c21">Quitar</button>`:''}</div>
   <p class="hint">Sin imagen subida usa el logo Stereo incluido (con su versión derretida).</p>`:''}
   <div class="li" style="margin-top:8px"><div class="t"><b>Narrador</b><small>Personaje que acompaña al cliente</small></div>${sw(c.narrOn,'setB','narrOn')}</div>
   ${c.narrOn?`<label class="lb">Nombre del narrador</label><input class="in" value="${esc(c.narrNombre)}" data-on-change="a65b5ad8f">
   <label class="lb">Imagen del narrador</label><div class="row"><label class="upl"><span class="prev" style="border-radius:50%;border:3px solid #e01b1b">${c.narrImg?`<img data-foto="${c.narrImg}">`:`<small style="font-size:11px;color:#f5c542">Incluido ✓</small>`}</span><span class="btn sm">📷 Subir imagen</span><input type="file" accept="image/*" data-on-change="a17f88ebd"></label>${c.narrImg?`<button class="btn sm r" data-on-click="ade5ce8b5">Quitar</button>`:''}</div>
   <p class="hint">Sin imagen subida usa al Tío Stereo incluido.</p>
-  <div class="li"><div class="t"><b>Voz encendida desde el inicio</b><small>Si está apagada, el cliente la activa tocando al narrador</small></div>${sw(c.narrVoz,'setB','narrVoz')}</div>
-  <label class="lb">Velocidad de la voz</label><select class="in" data-on-change="aa952ff32">${[[.85,'Lenta'],[1,'Normal'],[1.15,'Rápida']].map(([v,t])=>`<option value="${v}" ${+c.narrRate===v?'selected':''}>${t}</option>`).join('')}</select>
-  <label class="lb">Tono de la voz</label><select class="in" data-on-change="aa9330099">${[[.35,'Muy grave · hombre rudo'],[.5,'Grave'],[.75,'Medio'],[1,'Normal']].map(([v,tx])=>`<option value="${v}" ${+c.narrTono===v?'selected':''}>${tx}</option>`).join('')}</select><p class="hint">La voz es la que trae el celular de cada cliente: se elige una masculina en español y se le baja el tono.</p>
-  <div class="banner pu" style="margin-top:14px">🎙️ <b>Pon tu propia voz.</b> Debajo de cada frase toca <b>Grabar mi voz</b> (o sube un audio de WhatsApp) y léela con tu voz de hombre rudo. Donde no grabes nada, habla la voz del celular del cliente. Graba la frase <b>sin los datos entre llaves</b> (nombre, precio, hora…): en pantalla sí salen completos.</div>
-  <button class="btn p w" style="margin-top:12px;padding:14px" data-on-click="a95659710">🎬 Grabar todas las frases con el guion</button>
-  <label class="lb" style="margin-top:18px">Frases (lo que dice en cada paso y según el estado de la cita)</label>
-  ${NKEYS.map(([k,t])=>`<label class="lb">${t}</label><textarea class="in" id="tn_${k}" rows="2" data-on-change="aaff98a67" data-p0="${k}">${esc(c.narr[k])}</textarea><div class="vars">${NVARS.map(v=>`<button data-on-click="ae92c8d5e" data-p0="${k}" data-p1="${v}">{${v}}</button>`).join('')}<button style="color:var(--mu)" data-on-click="a9c14d532" data-p0="${k}" data-p1="${k}">↺</button></div>
-   <div class="row" style="gap:6px;margin:8px 0 14px;flex-wrap:wrap"><button class="btn sm" id="rec_${k}" data-rec="${k}" data-on-click="a2fadf31d" data-p0="${k}">🎙️ Grabar mi voz</button><label class="btn sm">⬆️ Subir audio<input type="file" accept="audio/*" style="display:none" data-on-change="a5d9979b7" data-p0="${k}"></label>${(c.narrAudio||{})[k]?`<button class="btn sm" data-on-click="a6ea62739" data-p0="${k}">▶️ Oír</button><button class="btn sm r" data-on-click="a302cf191" data-p0="${k}">🗑️</button><span class="pill" style="color:var(--grn);border-color:var(--grn)">🎙️ con tu voz</span>`:'<span class="hint" style="margin:0">Voz del celular</span>'}</div>`).join('')}`:''}
+  ${vozHTML(c)}`:''}
   <button class="btn w" style="margin-top:14px" data-on-click="aa29a5450">↗ Probar en el formulario</button>`)}
  ${acc('estados','🏷️ Estados de la cita','Nombre y emoji de cada estado',()=>`
   ${Object.keys(DEF_EST).map(k=>{const e={...DEF_EST[k],...(c.est[k]||{})};return `<div class="row" style="margin-top:8px"><input class="in" style="width:62px;text-align:center" maxlength="3" value="${esc(e.i)}" data-on-change="a0218b0f2" data-p0="${k}"><input class="in" value="${esc(e.t)}" data-on-change="a0d710823" data-p0="${k}"><span style="width:14px;height:14px;border-radius:50%;background:${e.c};flex:none"></span></div>`}).join('')}
@@ -307,7 +258,6 @@ function saveUser(){const u=S._u;u.nombre=$('#uNom').value.trim();u.pin=API.remo
  if(u.id){const i=D().usuarios.findIndex(x=>x.id===u.id);D().usuarios[i]=u}else{u.id='u'+uid();D().usuarios.push(u)}closeModal();dirty();renderConfig()}
 function delUser(id){if(!confirm('¿Eliminar este usuario? Ya no podrá entrar.'))return;D().usuarios=D().usuarios.filter(x=>x.id!==id);closeModal();dirty();renderConfig()}
 function tplPreview(s){return tpl(s,{fecha:hoy(),hora:'10:00',barberoId:D().barberos[0]?.id,servicioNombre:'Fade / Degradado',precio:30,codigo:'AB12CD',adelanto:D().cfg.adelanto,cliente:{nombre:'Carlos',tel:'987654321',ciudad:'Puente Piedra'}},D().cfg)}
-const NKEYS=[['hola','👋 Al abrir'],['holaLink','🔗 Al abrir un link personalizado'],['servicio','✂️ Al elegir servicio'],['barbero','💈 Al elegir barbero'],['cualquiera','🎲 Si elige cualquier barbero'],['dia','📅 Al elegir día'],['hora','⏰ Al elegir hora'],['datos','💸 Antes de pagar'],['listo','✅ Reserva lista'],['ocupado','😕 Turno ocupado'],['vencido','⌛ Tiempo de pago vencido'],['estado_por_validar','🔎 Estado: Yape por validar'],['estado_confirmada','✅ Estado: Confirmada'],['estado_en_silla','💺 Estado: En silla'],['estado_atendida','✔️ Estado: Atendido'],['estado_no_vino','❌ Estado: No vino'],['estado_cancelada','🚫 Estado: Cancelada'],['estado_expirada','⌛ Estado: Expirada']];
 const NVARS=['narrador','cliente','servicio','precio','barbero','especialidad','fecha','hora','adelanto','yape','negocio'];
 function insVarN(k,v){const ta=$('#tn_'+k);const p=ta.selectionStart??ta.value.length;ta.value=ta.value.slice(0,p)+'{'+v+'}'+ta.value.slice(ta.selectionEnd??p);D().cfg.narr[k]=ta.value;dirty();ta.focus()}
 async function subirImg(inp,key,max,type){const f=inp.files[0];if(!f)return;try{D().cfg[key]=await API.putFoto(await compressImg(f,max,.85,type));dirty();renderConfig()}catch(e){toast('❌ '+e.message)}}
@@ -415,3 +365,5 @@ ACC.waProbar=async function(){this.disabled=true;try{const r=await API.req('POST
 ACC.waPrueba=async function(){const t=prompt('¿A qué celular envío el mensaje de prueba? (debe estar en tu lista de números de prueba de Meta mientras la app esté en desarrollo)');if(!t)return;
  try{await API.req('POST','/whatsapp/probar',{tel:t});toast('📱 Mensaje de prueba enviado (plantilla hello_world)');await cargarWA()}catch(e){toast('❌ '+e.message)}};
 ACC.waDesconectar=async function(){if(!confirm('¿Desconectar WhatsApp automático? Se borran el token y la clave guardados y se apagan los envíos.'))return;try{await API.req('POST','/whatsapp/desconectar',{});toast('Desconectado');await cargarWA();reload()}catch(e){toast('❌ '+e.message)}};
+
+ACC.cfgResena=function(){const v=this.value.trim();if(v&&!/^https:\/\/\S+$/.test(v)){toast('El link debe empezar con https://');return}setC('resenaUrl',v)};

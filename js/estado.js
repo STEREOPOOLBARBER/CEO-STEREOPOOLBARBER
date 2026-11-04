@@ -2,6 +2,9 @@
    ESTADO DE LA CITA (público). Solo para consultar la cita con su código:
    estado.html?c=CODIGO. Usa GET /api/publico y GET /api/publico/cita/:codigo;
    reprogramar con POST /api/publico/cita/:codigo/reprogramar (el Worker valida las 24 h).
+   · Antes de la cita: QR con el link de la cita para que el barbero la encuentre al toque (📷 en el panel).
+   · Atendida: fotos de antes y después, calificación anónima (POST …/calificar) y reseña en Google para todos.
+   · El narrador (js/escena.js) dice el estado con la voz grabada, con la fecha y la hora de la cita.
    ===================================================================== */
 const CONFIG={API_URL:'/api',DUR:60};
 const $=s=>document.querySelector(s);
@@ -38,9 +41,16 @@ const API={
  publico(){return this.req('GET','/publico')},
  estado(c){return this.req('GET','/publico/cita/'+encodeURIComponent(c))},
  reprogramar(c,fecha,hora){return this.req('POST','/publico/cita/'+encodeURIComponent(c)+'/reprogramar',{fecha,hora})},
- foto(k){return !k?'':/^(data:|https?:)/.test(k)?k:`${CONFIG.API_URL}/fotos/${k}`}
+ foto(k){return !k?'':/^(data:|https?:)/.test(k)?k:`${CONFIG.API_URL}/fotos/${k}`},
+ async audio(k){const r=await fetch(`${CONFIG.API_URL}/audio/${k}`);if(!r.ok)throw new Error('audio');return r.arrayBuffer()},
+ fotoCita(c,cual){return `${CONFIG.API_URL}/publico/cita/${encodeURIComponent(c)}/foto/${cual}`},
+ calificar(c,d){return this.req('POST','/publico/cita/'+encodeURIComponent(c)+'/calificar',d)}
 };
-const P={cfg:{},barberos:[],ocupados:[]},E={codigo:'',info:null,rf:null,rh:null,timer:null};
+const P={cfg:{},barberos:[],ocupados:[]},E={codigo:'',info:null,rf:null,rh:null,timer:null,cal:null};
+/* Lo que el narrador y la pantalla de carga necesitan si el dueño aún no lo cambió en ⚙️ Config. */
+const DEF_ESCENA={narrOn:true,narrNombre:'Tío Stereo',narrImg:'',narrAudio:{},splashOn:true,splashImg:'',splashMelt:true};
+const nvEst=i=>({narrador:P.cfg.narrNombre,servicio:i.servicio||'',precio:soles(i.precio),barbero:i.barbero||'',fecha:fLarga(i.fecha).toLowerCase(),hora:h12(i.hora),cliente:(i.cliente?.nombre||'').split(' ')[0],adelanto:soles(i.adelanto),negocio:P.cfg.nombre});
+const hablar=i=>Escena.decir('estado_'+i.estado,nvEst(i),{fecha:i.fecha,hora:i.hora});
 
 function hero(){const c=P.cfg;applyTheme(c);
  $('#hero').innerHTML=`<div class="logo">${c.logoImg?`<img src="${esc(API.foto(c.logoImg))}" style="width:100%;height:100%;object-fit:cover">`:esc(c.logo||'💈')}</div><div><h1>${esc(c.nombre||'Barbería')}</h1>${c.eslogan?`<p>${esc(c.eslogan)}</p>`:''}<p>📍 ${esc(c.direccion||c.ciudad||'')}</p></div>`}
@@ -54,7 +64,7 @@ function pedirCodigo(msg){clearInterval(E.timer);
  `<button class="btn p" data-on-click="a49f988fa">Ver mi cita →</button>`);setTimeout(()=>$('#cod')?.focus(),50)}
 function buscar(){const c=($('#cod')?.value||'').trim().toUpperCase();if(!/^[A-Z0-9]{6}$/.test(c))return toast('El código tiene 6 letras o números');cargar(c)}
 async function cargar(cod){E.codigo=cod;$('#app').innerHTML='<div class="spin"></div>';
- try{E.info=await API.estado(cod);history.replaceState(null,'','?c='+cod);pintar()}catch(e){pedirCodigo(e.message)}}
+ try{E.info=await API.estado(cod);history.replaceState(null,'','?c='+cod);E.cal=null;pintar();hablar(E.info)}catch(e){pedirCodigo(e.message)}}
 
 const puedeRep=i=>!!(i&&i.puedeReprog&&startOf(i.fecha,i.hora)-Date.now()>=(+i.horasReprog||24)*3600e3);
 function pintar(){const c=P.cfg,i=E.info;clearInterval(E.timer);
@@ -65,10 +75,35 @@ function pintar(){const c=P.cfg,i=E.info;clearInterval(E.timer);
  <div class="card"><div class="res"><span>🔖</span><span>Código <b>${esc(i.codigo)}</b></span><span>👤</span><span>${esc(i.cliente?.nombre||'')}</span><span>✂️</span><span><b>${esc(i.servicio||'')}</b> · ${soles(i.precio)}</span><span>💈</span><span>${esc(i.barbero||'')}</span><span>📅</span><span>${fLarga(i.fecha)} · ${h12(i.hora)}</span><span>💸</span><span>${pago}</span></div></div>
  ${viva&&c.politicaTxt?`<div class="card" style="font-size:14px;line-height:1.45">📜 <b>Política</b><div style="white-space:pre-line;margin-top:4px">${esc(c.politicaTxt)}</div></div>`:''}
  ${viva&&API.confirmable(i)?(i.asistencia?`<div class="card" style="text-align:center;color:#3fb950;font-weight:700">👍 Confirmaste que vienes. ¡Te esperamos!</div>`:`<button class="btn p w" style="margin-top:10px;padding:15px;font-size:17px" data-on-click="confirmarAsistencia">✅ Confirmo que voy</button>`):''}
+ ${viva&&API.confirmable(i)?`<div class="card qrc"><div id="qrCita"></div><p class="pt" style="text-transform:none;letter-spacing:0;font-size:14px;color:var(--tx);margin-top:10px">📲 <b>Muéstralo al llegar:</b> tu barbero lo escanea y encuentra tu cita al toque.</p></div>`:''}
+ ${i.estado==='atendida'?atendidaHTML(i):''}
  ${puedeRep(i)?`<button class="btn w" style="margin-top:10px" data-on-click="a998d7b77">📅 Reprogramar mi cita</button><p class="pt" style="text-align:center;margin-top:6px">Puedes cambiarla hasta ${i.horasReprog||24} h antes de tu corte.</p>`:''}
  ${mapaHTML(c)}`,
  `${c.whatsapp?`<button class="btn g" data-on-click="aad98fbcb">💬 Escribir a la barbería</button>`:''}<button class="btn" data-on-click="afbbd1a2b">🔄 Actualizar</button>`);
- let n=0;E.timer=setInterval(async()=>{const x=$('#fl');if(x)x.textContent=fl();if(++n%30)return;try{const nuevo=await API.estado(E.codigo);const cambio=nuevo.estado!==E.info.estado||nuevo.fecha!==E.info.fecha||nuevo.hora!==E.info.hora;E.info=nuevo;if(cambio)pintar()}catch(_){}},1000)}
+ qrCita(i);
+ let n=0;E.timer=setInterval(async()=>{const x=$('#fl');if(x)x.textContent=fl();if(++n%30)return;try{const nuevo=await API.estado(E.codigo);const cambio=nuevo.estado!==E.info.estado||nuevo.fecha!==E.info.fecha||nuevo.hora!==E.info.hora;E.info=nuevo;if(cambio){pintar();hablar(nuevo)}}catch(_){}},1000)}
+/* QR con el link de esta cita: la cámara del celular abre esta página; el 📷 del panel abre la cita. */
+function qrCita(i){const el=$('#qrCita');if(!el)return;try{if(!window.QRCode)throw 0;new QRCode(el,{text:new URL('estado.html?c='+i.codigo,location.href).href,width:200,height:200,colorDark:'#0b0812',colorLight:'#ffffff'})}catch(e){el.closest('.qrc')?.remove()}}
+
+/* ---------- después del corte: fotos, calificación anónima y reseña ---------- */
+const ETQ_CAL=[['corte','✂️ Corte'],['trato','🤝 Trato'],['puntualidad','⏰ Puntualidad'],['limpieza','🧼 Limpieza'],['ambiente','🎶 Ambiente']];
+const resenaUrl=()=>/^https:\/\/[^\s"'<>]+$/.test(P.cfg.resenaUrl||'')?P.cfg.resenaUrl:'';
+function atendidaHTML(i){const f=i.fotos||{},foto=(k,t)=>f[k]?`<a href="${esc(API.fotoCita(i.codigo,k))}" target="_blank" rel="noopener"><img src="${esc(API.fotoCita(i.codigo,k))}" alt="${t}" loading="lazy"><span>${t}</span></a>`:'';
+ return `${f.antes||f.despues?`<div class="card"><p class="pt" style="margin-top:0">📷 Tu antes y después</p><div class="fotos">${foto('antes','ANTES')}${foto('despues','DESPUÉS')}</div></div>`:''}
+ <div id="calCard">${calHTML(i)}</div>
+ ${resenaUrl()?`<div class="card" style="text-align:center"><p style="margin:0 0 10px">⭐ ¿Nos dejas una reseña en Google? Nos ayuda muchísimo a crecer 🙏</p><a class="btn p" style="text-decoration:none" href="${esc(resenaUrl())}" target="_blank" rel="noopener">⭐ Dejar mi reseña en Google</a></div>`:''}`}
+function calHTML(i){const c=i.calificacion||{};if(c.hecha)return `<div class="card" style="text-align:center;color:#3fb950;font-weight:700">⭐ ¡Gracias por calificarnos! Tu opinión es anónima.</div>`;if(!c.puede)return'';
+ const k=E.cal||(E.cal={estrellas:0,etiquetas:[],txt:''});
+ return `<div class="card"><p class="pt" style="margin-top:0">⭐ ¿Cómo te atendimos?</p><p style="font-size:13px;color:var(--mu);margin:0 0 6px">Es <b>anónimo</b>: la barbería no ve tu nombre ni tu celular.</p>
+ <div class="stars">${[1,2,3,4,5].map(n=>`<button class="${n<=k.estrellas?'on':''}" aria-label="${n} estrella${n>1?'s':''}" data-on-click="calEstrella" data-p0="${n}">⭐</button>`).join('')}</div>
+ ${k.estrellas?`<p class="pt">¿Qué destacas?</p><div class="chipsc">${ETQ_CAL.map(([v,t])=>`<button class="${k.etiquetas.includes(v)?'on':''}" data-on-click="calEtiqueta" data-p0="${v}">${t}</button>`).join('')}</div>
+ <textarea class="in" rows="3" maxlength="300" placeholder="Cuéntanos algo más (opcional)" style="margin-top:10px" data-on-input="calTexto">${esc(k.txt)}</textarea>
+ <button class="btn p w" style="margin-top:10px" data-on-click="calEnviar">Enviar calificación</button>`:''}</div>`}
+const pintarCal=()=>{const el=$('#calCard');if(el)el.innerHTML=calHTML(E.info)};
+ACC.calEstrella=function(){E.cal.estrellas=+this.dataset.p0;pintarCal()};
+ACC.calEtiqueta=function(){const v=this.dataset.p0,l=E.cal.etiquetas;E.cal.etiquetas=l.includes(v)?l.filter(x=>x!==v):[...l,v];pintarCal()};
+ACC.calTexto=function(){E.cal.txt=this.value};
+ACC.calEnviar=async function(){this.disabled=true;const k=E.cal;try{await API.calificar(E.codigo,{estrellas:k.estrellas,etiquetas:k.etiquetas,comentario:k.txt});E.info.calificacion={hecha:true,puede:false};pintarCal();toast('⭐ ¡Gracias!')}catch(e){this.disabled=false;toast('❌ '+e.message)}};
 function escribir(){const i=E.info;window.open(waUrl(waNum(P.cfg.whatsapp),`Hola 👋 Soy ${(i.cliente?.nombre||'').split(' ')[0]}. Mi código de cita es ${i.codigo}.`),'_blank')}
 
 /* Reprogramar: mismo barbero, solo días y horas libres */
@@ -88,7 +123,9 @@ async function reprogOk(){const i=E.info;if(!E.rf||!E.rh)return;if(!confirm(`¿C
  try{await API.reprogramar(i.codigo,E.rf,E.rh);toast('✅ Cita reprogramada');E.rf=E.rh=null;await cargar(i.codigo)}catch(e){toast('❌ '+e.message);reprogUI()}}
 
 (async function(){
- try{const d=await API.publico();P.cfg={dias:[1,2,3,4,5,6],apertura:'09:00',cierre:'20:00',refIni:'13:00',refFin:'14:00',anticipacion:0,ventana:14,...(d.cfg||{})};P.barberos=d.barberos||[];P.ocupados=d.ocupados||[];hero()}catch(e){$('#hero').innerHTML='<div class="logo">💈</div><div><h1>Estado de tu cita</h1></div>'}
+ try{const d=await API.publico();P.cfg={dias:[1,2,3,4,5,6],apertura:'09:00',cierre:'20:00',refIni:'13:00',refFin:'14:00',anticipacion:0,ventana:14,...DEF_ESCENA,...(d.cfg||{}),narr:{...VOZ.FRASES,...(d.cfg?.narr||{})}};P.barberos=d.barberos||[];P.ocupados=d.ocupados||[];hero();
+  Escena.iniciar({cfg:P.cfg,hoy,audio:k=>API.audio(k),foto:async k=>API.foto(k)})}
+ catch(e){Escena.error();$('#hero').innerHTML='<div class="logo">💈</div><div><h1>Estado de tu cita</h1></div>'}
  const c=(new URLSearchParams(location.search).get('c')||'').trim().toUpperCase();
  if(/^[A-Z0-9]{6}$/.test(c))cargar(c);else pedirCodigo('');
 })();

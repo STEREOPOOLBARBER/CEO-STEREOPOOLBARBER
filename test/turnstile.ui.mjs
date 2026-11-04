@@ -11,7 +11,7 @@ let ok = 0, bad = 0; const check = (n, c, x = '') => { c ? ok++ : bad++; console
 const br = await chromium.launch(), p = await br.newPage({ viewport: { width: 400, height: 900 } });
 p.on('pageerror', e => console.log('PAGEERR', e.message));
 await p.route('https://challenges.cloudflare.com/**', r => r.fulfill({ contentType: 'text/javascript', body: `(()=>{let n=0;const w={};window.turnstile={render(el,o){const id='w'+(++n);w[id]=o;const e=typeof el==='string'?document.querySelector(el):el;e.innerHTML='<div>✅ Simulado</div>';setTimeout(()=>o.callback('bueno'+Date.now()+Math.random()),300);return id},reset(id){const o=w[id];if(!o)throw new Error('sin widget');setTimeout(()=>o.callback('bueno'+Date.now()+Math.random()),300)}}})()` }));
-await p.goto(B + '/reservar.html'); await p.waitForTimeout(1500);
+await p.goto(B + '/reservar.html'); await p.waitForSelector('#splash.listo', { timeout: 8000 }); await p.click('#splash'); await p.waitForSelector('#splash', { state: 'detached', timeout: 8000 });
 const lima = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date()); const d = new Date(lima + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 4); if (d.getUTCDay() === 0) d.setUTCDate(d.getUTCDate() + 1);
 await p.evaluate(f => { F.serv = P.servicios[0].id; F.barb = P.barberos[0].id; F.fecha = f; F.hora = '10:00'; go(3) }, d.toISOString().slice(0, 10));
 await p.waitForSelector('#ts >> text=Simulado');

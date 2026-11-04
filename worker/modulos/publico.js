@@ -1,4 +1,5 @@
 import { ACTIVOS, DEF, addD, ahoraLocal, codigo, fail, json, minutosHasta, reglaReprog, slotsDia, str, toMin, trabaja, uid } from '../comun.js';
+import { plazoCalificar, yaCalificada } from './calificaciones.js';
 import { audiosPublicos, bumpStmt, citaPorId, datos, expirar, filaCita, fotosPublicas, guardarCita, guardarFoto, insertarCita } from '../datos.js';
 import { auditar, sesion } from './auth.js';
 import { consultarDni } from './dni.js';
@@ -110,7 +111,18 @@ export async function rutasPublicas(c) {
     if (!r) fail(404, 'No encontramos una cita con ese código');
     const c = filaCita(r), d = await datos(env), b = d.barberos.find(y => y.id === c.barberoId);
     const cfg = { ...DEF, ...d.cfg }, rg = reglaReprog(env, cfg, c);
-    return json({ asistencia: !!c.asistencia, barberoId: c.barberoId, reprog: c.reprog || 0, puedeReprog: rg.ok, tolerancia: +cfg.tolerancia || 0, horasReprog: +cfg.horasReprog || 24, codigo: c.codigo, estado: c.estado, fecha: c.fecha, hora: c.hora, servicio: c.servicioNombre || '', precio: +c.precio || 0, adelanto: +c.adelanto || 0, adelantoOk: !!c.adelantoOk, barbero: b?.nombre || '', cliente: { nombre: c.cliente?.nombre || '', tel: '••• ••• ' + String(c.cliente?.tel || '').slice(-3) }, sinComprobante: c.estado === 'por_validar' && !c.yapeCaptura && !!c.expira, expira: c.expira ?? null });
+    const atendida = c.estado === 'atendida', hecha = atendida && await yaCalificada(env, c);
+    return json({ fotos: atendida ? { antes: !!c.fotoAntes, despues: !!c.fotoDespues } : null, calificacion: atendida ? { hecha, puede: !hecha && plazoCalificar(env, c) } : null, asistencia: !!c.asistencia, barberoId: c.barberoId, reprog: c.reprog || 0, puedeReprog: rg.ok, tolerancia: +cfg.tolerancia || 0, horasReprog: +cfg.horasReprog || 24, codigo: c.codigo, estado: c.estado, fecha: c.fecha, hora: c.hora, servicio: c.servicioNombre || '', precio: +c.precio || 0, adelanto: +c.adelanto || 0, adelantoOk: !!c.adelantoOk, barbero: b?.nombre || '', cliente: { nombre: c.cliente?.nombre || '', tel: '••• ••• ' + String(c.cliente?.tel || '').slice(-3) }, sinComprobante: c.estado === 'por_validar' && !c.yapeCaptura && !!c.expira, expira: c.expira ?? null });
+  }
+  // Fotos de antes y después: el cliente las ve con el código de su cita, solo cuando ya fue atendido.
+  if ((x = path.match(/^\/publico\/cita\/([A-Za-z0-9]{6})\/foto\/(antes|despues)$/)) && m === 'GET') {
+    await limitar(env, 'c:' + ipDe(req), 120, 15 * 60e3);
+    const r = await env.DB.prepare('SELECT * FROM citas WHERE codigo = ?').bind(x[1].toUpperCase()).first();
+    const c = r && filaCita(r), key = c?.estado === 'atendida' ? (x[2] === 'antes' ? c.fotoAntes : c.fotoDespues) : null;
+    if (!key || !/^f_[\w-]+$/.test(key)) fail(404, 'Foto no disponible');
+    if (!env.FOTOS) fail(503, 'Falta conectar el almacén de fotos (R2)');
+    const o = await env.FOTOS.get(key); if (!o) fail(404, 'Foto no disponible');
+    return new Response(o.body, { headers: { 'Content-Type': o.httpMetadata?.contentType || 'image/jpeg', 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff' } });
   }
   if ((x = path.match(/^\/publico\/cita\/([A-Za-z0-9]{6})\/reprogramar$/)) && m === 'POST') {
     await frenar(env, 'RL_RES', 'rp:' + ipDe(req));

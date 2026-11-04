@@ -66,8 +66,8 @@ const DEF_CFG={nombre:'Stereo Barber Pool',eslogan:'Barber · Pool · Lima',logo
  waVuelve:'Hola {cliente} 👋 ¡Te extrañamos en *{negocio}*, sobrino! Ya toca corte 💈\nReserva aquí: {link}',
  linkBase:'',
  waReserva:'💈 *NUEVA RESERVA* — #{codigo}\n\n👤 {cliente}\n📱 {telefono}\n📍 {ciudad}\n✂️ {servicio} — {precio}\n💈 {barbero}\n📅 {fecha} · {hora}\n💸 {pago}\n📝 {nota}\n\n🔎 Estado de la cita: {seguimiento}',
- narrOn:true,narrNombre:'Tío Stereo',narrImg:'',narrVoz:false,narrRate:1,narrTono:.5,narrAudio:{},splashOn:true,splashImg:'',splashMelt:true,
- narr:{holaLink:'¡Qué tal, sobrino {cliente}! Este link es solo para ti 💪 Elige tu corte.',hola:'¡Qué tal, sobrino! Soy el {narrador} 💪 Elige tu corte y yo te guío.',servicio:'¡Buena elección, sobrino! {servicio}, {precio}. Ahora elige a tu barbero.',barbero:'{barbero} te va a dejar fino, sobrino. {especialidad} 💪',cualquiera:'Tranqui sobrino, te asigno al primero que esté libre. Elige día y hora.',dia:'{fecha}. ¿A qué hora te acomoda, sobrino?',hora:'{fecha} a las {hora} ✅ Ese turno ya es casi tuyo, sobrino.',datos:'Listo {cliente}, yapea {adelanto} al {yape} y sube la captura, sobrino.',listo:'¡Reserva hecha, sobrino {cliente}! Nos vemos el {fecha} a las {hora} 🔥',ocupado:'Uy sobrino, te ganaron ese turno. Elige otro.',vencido:'Se acabó el tiempo, sobrino, pero tranqui: reserva de nuevo.',estado_por_validar:'Tranqui {cliente}, estamos validando tu Yape. En un ratito te confirmo, sobrino.',estado_confirmada:'¡Listo {cliente}! Tu cita está CONFIRMADA: {fecha} a las {hora} con {barbero}. Puntual, sobrino 💪',estado_en_silla:'{cliente}, ya estás en la silla. Relájate que te dejamos fino.',estado_atendida:'¡Corte terminado, {cliente}! Gracias por venir. Cuando quieras repetir, aquí estoy, sobrino.',estado_no_vino:'{cliente}, no llegaste a tu cita. Si quieres, reserva otra vez, sobrino.',estado_cancelada:'Tu cita fue cancelada. Si fue un error, escríbenos por WhatsApp.',estado_expirada:'Se acabó el tiempo para enviar el comprobante, {cliente}. Reserva de nuevo, sobrino.'},
+ narrOn:true,narrNombre:'Tío Stereo',narrImg:'',narrAudio:{},splashOn:true,splashImg:'',splashMelt:true,resenaUrl:'',
+ narr:{...VOZ.FRASES},
  est:{},adminPin:'1234',bloqueos:[]};
 const DEF_BARB=()=>[['Jhon','Fades y degradados'],['Brayan','Diseños y freestyle'],['Piero','Cortes clásicos'],['Alexis','Barba y perfilado'],['Renzo','Taper y mullet']].map(([n,e],i)=>({id:'b'+(i+1),nombre:n,esp:e,foto:'',color:COLORES[i],pin:String(i+1).repeat(4),comision:50,dias:[1,2,3,4,5,6],activo:true}));
 const DEF_SERV=()=>[
@@ -211,7 +211,8 @@ function renderTab(){({agenda:renderAgenda,compartir:renderCompartir,config:rend
 function hydrate(root=document){root.querySelectorAll('img[data-foto]').forEach(async im=>{if(im.dataset.ok)return;im.dataset.ok=1;const src=await API.foto(im.dataset.foto);if(src)im.src=src})}
 const avatar=(b,lg)=>b?.foto?`<img class="av ${lg?'lg':''}" data-foto="${b.foto}">`:`<span class="av ${lg?'lg':''}" style="background:${b?.color||'var(--card2)'}33">💈</span>`;
 function openModal(html){$('#mbody').innerHTML=html;$('#modal').classList.add('on');hydrate($('#mbody'))}
-function closeModal(){if(G){G=null;try{REC?.mr.stop()}catch(_){}}$('#modal').classList.remove('on')}
+/* Al cerrar una hoja: se detiene lo que estaba en marcha (grabación del guion, cámara del escáner…). */
+function closeModal(){if(G){G=null;try{REC?.mr.stop()}catch(_){}}const f=S.alCerrar;S.alCerrar=null;f?.();$('#modal').classList.remove('on')}
 let G=null;
 const mHead=t=>`<h3>${t}<button class="x" data-on-click="a5a8704f9">✕</button></h3>`;
 async function verFoto(k){const v=$('#viewer');v.innerHTML='<img alt=""><button class="x">✕</button>';v.classList.add('on');v.querySelector('img').src=await API.foto(k)}
