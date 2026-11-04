@@ -5,14 +5,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "node test/api.e2e.mjs",
-    "test:google": "node test/google.e2e.mjs",
-    "test:acceso": "node test/acceso.e2e.mjs",
-    "test:dni": "node test/dni.e2e.mjs",
-    "test:reprog": "node test/reprog.e2e.mjs",
-    "test:paginacion": "node test/paginacion.e2e.mjs",
-    "test:turnstile": "node test/turnstile.e2e.mjs",
-    "test:monitoreo": "node test/monitoreo.e2e.mjs"
+    "test": "node test/correr.mjs",
+    "test:una": "node test/correr.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.40.0"

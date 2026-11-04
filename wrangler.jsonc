@@ -31,5 +31,26 @@
   },
   // OWNER_EMAILS (correos de los dueños), ALLOW_PIN y TURNSTILE_* se configuran en el panel de Cloudflare.
   "keep_vars": true,
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // Entorno de desarrollo (staging): otro Worker con su propia base de datos y fotos, para probar antes de producción.
+  // Se despliega con: npx wrangler deploy --env staging   (rama «desarrollo», ver CLAUDE.md)
+  "env": {
+    "staging": {
+      "name": "ceo-stereopoolbarber-staging",
+      "d1_databases": [
+        { "binding": "DB", "database_name": "stereo-barber-db-staging" }
+      ],
+      "r2_buckets": [
+        { "binding": "FOTOS", "bucket_name": "stereo-barber-fotos-staging" }
+      ],
+      "ratelimits": [
+        { "name": "RL_PUB", "namespace_id": "4201", "simple": { "limit": 120, "period": 60 } },
+        { "name": "RL_DNI", "namespace_id": "4202", "simple": { "limit": 10, "period": 60 } },
+        { "name": "RL_RES", "namespace_id": "4203", "simple": { "limit": 6, "period": 60 } }
+      ],
+      "vars": {
+        "GOOGLE_CLIENT_ID": "186206646457-tu114jpn4uqdtpe2sb6v6l7g17shfq8b.apps.googleusercontent.com"
+      }
+    }
+  }
 }

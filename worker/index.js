@@ -396,6 +396,8 @@ async function anotarSeg(env, tipo, forzar) {
   try { await env.DB.batch(lote.map(([k, n]) => env.DB.prepare('INSERT INTO contadores(k, n) VALUES(?, ?) ON CONFLICT(k) DO UPDATE SET n = n + excluded.n').bind(k, n))) } catch { }
 }
 async function frenar(env, binding, clave, respaldo) {
+  // Solo en pruebas locales (modo PIN encendido) se pueden apagar los límites de Cloudflare para correr muchas pruebas seguidas.
+  if (env.SIN_LIMITES_CF === 'true' && pinPermitido(env)) binding = '_';
   if (env[binding]?.limit) { const { success } = await env[binding].limit({ key: clave }); if (!success) { await anotarSeg(env, 'limite_' + binding.slice(3).toLowerCase()); fail(429, 'Demasiadas solicitudes. Espera un minuto.') } return }
   if (respaldo) await limitar(env, binding + ':' + clave, respaldo[0], respaldo[1]);
 }

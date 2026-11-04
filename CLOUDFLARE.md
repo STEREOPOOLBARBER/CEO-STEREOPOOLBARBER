@@ -105,3 +105,9 @@ Página solo para consultar la cita: `estado.html?c=CODIGO` (o escribir el códi
 - **D1 Time Travel**: Cloudflare además guarda puntos de restauración de la base de datos. Para volver a un momento anterior: `npx wrangler d1 time-travel restore stereo-barber-db --timestamp=2026-11-04T08:00:00Z` (consulta antes con `npx wrangler d1 time-travel info stereo-barber-db`).
 - Errores del Worker: Workers & Pages → ceo-stereopoolbarber → **Observability** (logs activados en `wrangler.jsonc`).
 - Prueba: `npm run test:monitoreo` (arranque con `--test-scheduled --var RESPALDO_MIN:0`).
+
+### Desarrollo y producción (Fase 1 de la arquitectura)
+- `npm test` corre las 14 suites, cada una con un servidor limpio (`test/correr.mjs`). GitHub Actions las corre en cada push (`.github/workflows/pruebas.yml`).
+- Rama `desarrollo` → Worker **ceo-stereopoolbarber-staging** (base y fotos propias). Rama `main` → producción. Detalles y reglas en `CLAUDE.md`.
+- Configurar el staging en Cloudflare (una sola vez): Workers & Pages → **Create** → **Import a repository** → este repo → nombre `ceo-stereopoolbarber-staging` → en **Build settings**: rama de producción `desarrollo` y *Deploy command* `npx wrangler deploy --env staging`. Agregar al Worker de staging las variables `OWNER_EMAILS`, `SHALOM_API_KEY` (opcional) y Turnstile (o dejarlo sin Turnstile). En Google Cloud agregar el origen `https://ceo-stereopoolbarber-staging.stereophysique15.workers.dev`.
+- En el Worker de **producción** → Settings → Builds: desactivar **«Builds for non-production branches»**, para que la rama `desarrollo` no use la base de datos real.

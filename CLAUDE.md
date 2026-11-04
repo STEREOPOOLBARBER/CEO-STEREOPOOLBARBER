@@ -1,0 +1,56 @@
+# Stereo Barber Pool · guía del repositorio
+
+Sistema de reservas de una barbería en Puente Piedra (Lima, Perú). El dueño no es programador: habla en español, revisa desde el celular y aprueba cada fase antes de ejecutarla.
+
+## Reglas de la casa
+- **Idioma:** todo en español (código, comentarios, mensajes, commits, respuestas). Nombres de funciones cortos en español, como el código existente.
+- **Hora:** siempre la de Lima (`America/Lima`, UTC-5, sin horario de verano). En el Worker usar `ahoraLocal(env)`; nunca la hora del servidor.
+- **Nunca subir claves** (Shalom, Turnstile, Google secret, PIN) al repositorio ni pegarlas en mensajes. Van como *Secret* en Cloudflare.
+- **Probar antes de subir:** `npm test` debe quedar 14/14 en verde. Si una prueba falla, se arregla la causa; nunca se borra ni se salta la prueba.
+- **Primero el plan, luego el OK del dueño**, en fases. Explicar en palabras simples qué cambió y qué debe hacer él en Cloudflare.
+- No inventar resultados: decir qué se probó en local y qué solo se podrá ver en producción (Google real, Turnstile real, RENIEC real, celulares reales).
+
+## Ramas y entornos
+| Rama | Worker | Base de datos / fotos | Para qué |
+|---|---|---|---|
+| `desarrollo` | `ceo-stereopoolbarber-staging` (`--env staging`) | `stereo-barber-db-staging` / `stereo-barber-fotos-staging` | Probar cambios con datos de prueba |
+| `main` | `ceo-stereopoolbarber` (producción) | `stereo-barber-db` / `stereo-barber-fotos` | Clientes reales |
+
+Flujo: trabajar en `desarrollo` → `npm test` → push → el dueño prueba en staging → se pasa a `main` (merge) → Cloudflare despliega producción. GitHub Actions (`.github/workflows/pruebas.yml`) corre las pruebas en cada push.
+
+## Estructura
+- `index.html` — panel (dueño, barberos, personal). Un solo archivo con su JS; modo nube (`/api`) o local (localStorage, solo demo).
+- `reservar.html` — formulario público de reservas (con el narrador «Tío Stereo»).
+- `estado.html` — página pública para ver el estado de una cita (`?c=CODIGO`) y reprogramarla.
+- `worker/index.js` — API y tareas programadas (Cloudflare Worker). `worker/webauthn.js` — huella/llaves de acceso sin librerías.
+- `wrangler.jsonc` — bindings: D1 `DB`, R2 `FOTOS`, límites `RL_PUB`/`RL_DNI`/`RL_RES`, cron cada 5 min. `keep_vars: true`.
+- `_headers` — CSP y encabezados de seguridad de los archivos estáticos.
+- `CLOUDFLARE.md` — manual de despliegue y de cada función (para el dueño). Los `.md` no se publican (`.assetsignore`).
+- `test/` — pruebas de punta a punta. `test/correr.mjs` levanta un `wrangler dev` limpio por suite con sus variables y datos.
+
+## Flujo del negocio (lo que el código debe respetar)
+- **Cita:** `por_validar` (espera Yape, con `expira`) → `confirmada` → `en_silla` → `atendida`; o `no_vino`, `cancelada`, `expirada`. Índice único `ux_citas_turno` impide dos citas activas del mismo barbero a la misma hora.
+- **Turnos de 60 min** entre apertura y cierre, sin el refrigerio (`slotsDia`). Días y bloqueos por barbero (`trabaja`).
+- **Adelanto por Yape:** el cliente sube la captura; el dueño o quien tenga permiso `yape` valida.
+- **Política:** el cliente puede reprogramar solo si faltan ≥ `horasReprog` (24 h) y no pasó `maxReprog`; el servidor lo vuelve a comprobar.
+- **Entrada al panel:** Google abre la «puerta» del dispositivo (`brb_g`), luego se elige perfil: dueño con clave (arranque 1111) y barberos/personal con clave o huella. Permisos por rol (`permisos()`), siempre validados en el Worker.
+- **Datos personales** (DNI, celular): el barbero sin permiso `verTel` los ve ocultos; DNI se consulta a RENIEC vía Shalom solo desde el Worker, devolviendo solo el nombre.
+
+## Seguridad que no se debe romper
+- Toda decisión (horarios, precios, permisos, Turnstile, 24 h) se toma en el Worker; el navegador solo muestra.
+- Sesiones en D1 (cookie `brb_s` HttpOnly/Secure/SameSite=Lax), revalidadas en cada petición. POST/PUT/PATCH/DELETE exigen mismo origen.
+- DNI público: límite `RL_DNI` (10/min/IP) + ficha firmada `X-Ficha` (Turnstile) + tope diario (`dniTopeDia`). Caché 30 días en `dnis`.
+- Fotos `f_*` públicas solo si están en la configuración; respaldos en R2 `respaldos/` solo con sesión.
+- Consultas SQL siempre con `?` (bind). Escapar todo texto en HTML con `esc()`.
+
+## Rendimiento
+- `GET /api/panel` trae solo la ventana de citas (35 días atrás, 120 adelante, más Yape pendientes). Lo demás: `GET /api/citas/buscar` (filtros y páginas en D1). Clientes/Dashboard/Excel piden la historia completa con `historial()` solo al abrirse.
+
+## Comandos
+```bash
+npm test                      # todas las suites (≈3 min), cada una con servidor limpio
+npm test -- dni acceso        # solo las que contengan esos nombres
+npx wrangler dev              # servidor local en http://localhost:8787
+npx wrangler deploy --dry-run # validar configuración sin desplegar
+```
+Las pruebas de pantalla usan Playwright; si no está en el proyecto, definir `PW_PATH` con la ruta a un Playwright instalado.
