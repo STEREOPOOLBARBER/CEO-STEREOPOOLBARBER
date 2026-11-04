@@ -47,6 +47,9 @@ export const MIGRACIONES = [
     `CREATE TABLE IF NOT EXISTS wa_mensajes(id TEXT PRIMARY KEY, cita_id TEXT NOT NULL, tipo TEXT NOT NULL, ts INTEGER NOT NULL, estado TEXT NOT NULL DEFAULT 'enviado')`,
     `CREATE INDEX IF NOT EXISTS ix_wa_cita ON wa_mensajes(cita_id)`,
   ] },
+  { v: 4, nombre: 'reportes semanales', sql: [
+    `CREATE TABLE IF NOT EXISTS reportes(semana TEXT PRIMARY KEY, datos TEXT NOT NULL, creado INTEGER NOT NULL)`,
+  ] },
 ];
 export let schemaListo = null;
 export function asegurarSchema(env) { return schemaListo ||= aplicarMigraciones(env).catch(e => { schemaListo = null; throw e }) }

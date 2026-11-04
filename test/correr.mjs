@@ -29,6 +29,7 @@ const SUITES = [
   { n: 'clientes.e2e', vars: PIN, sql: ADMIN },
   { n: 'auditoria.e2e', vars: PIN, sql: ADMIN },
   { n: 'whatsapp.e2e', vars: { ...PIN, WHATSAPP_API_URL: 'http://127.0.0.1:8796' }, sql: ADMIN, extra: ['--test-scheduled'] },
+  { n: 'reportes.e2e', vars: { ...PIN, REPORTE_FORZAR: 'true' }, sql: ADMIN, extra: ['--test-scheduled'] },
   { n: 'privacidad.e2e', vars: PIN, sql: ADMIN, extra: ['--test-scheduled'] },
   { n: 'csp.ui', vars: PIN, sql: ADMIN, ui: true },
   { n: 'tiemporeal.ui', vars: PIN, sql: ADMIN, ui: true },

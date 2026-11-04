@@ -150,3 +150,8 @@ La estructura de la base de datos ahora es **versionada** (`MIGRACIONES` en `wor
 - **⏰ Recordatorios** (agenda): citas de mañana y de las próximas 3 horas; 💬 abre WhatsApp con el mensaje y el link de la cita. La 🔔 avisa desde las 5 p. m. si faltan recordar.
 - **El cliente confirma** desde el link de su cita («✅ Confirmo que voy») o respondiendo «sí» por WhatsApp → en la agenda: **👍 Confirmó que viene**.
 - **🤖 WhatsApp automático** (⚙️ Config): listo para conectar un **número nuevo** con la API oficial de Meta (guía de 9 pasos en la misma pantalla, con las plantillas para copiar). Recordatorio el día antes, 2 h antes y «cita confirmada» al validar el Yape. Meta cobra cada mensaje de plantilla.
+
+### Reporte semanal de caja
+- Cada **lunes desde las 8 a. m.** se arma solo el reporte de la semana anterior (lunes a domingo) y llega a la 🔔. También desde ☰ Menú → **📊 Reporte semanal de caja** o desde la Caja.
+- Incluye ingresos (↑↓ vs. semana anterior), cortes, ticket, % no vino, por barbero con **comisión** y lo que queda al local, por día, servicios top, Yape, reservas web, clientes nuevos, confirmaciones y por recuperar. Botones **💬 WhatsApp** y **📥 Excel**.
+- El reporte guardado es la «foto» del lunes; si corriges citas viejas, usa **rehacer**.

@@ -23,6 +23,7 @@ import { rutasAcceso, rutasAuth, sesion } from './modulos/auth.js';
 import { rutasCitas } from './modulos/citas.js';
 import { retencion, rutasClientes } from './modulos/clientes.js';
 import { rutasWhatsapp, rutasWhatsappPublicas, whatsappAuto } from './modulos/whatsapp.js';
+import { reporteSemanal, rutasReportes } from './modulos/reportes.js';
 import { rutasConfig } from './modulos/config.js';
 import { rutasDni } from './modulos/dni.js';
 import { rutasMonitoreo } from './modulos/monitoreo.js';
@@ -58,7 +59,7 @@ async function api(req, env, path) {
   const propia = c => { if (!s.perm.verTodas && c.barberoId !== s.barberoId) fail(403, 'No es tu cita') };
 
   Object.assign(c, { d, s, exigir, propia });
-  for (const r of [rutasTiempoReal, rutasWhatsapp, rutasDni, rutasAcceso, rutasMonitoreo, rutasClientes, rutasCitas, rutasConfig]) { const res = await r(c); if (res) return res }
+  for (const r of [rutasTiempoReal, rutasWhatsapp, rutasReportes, rutasDni, rutasAcceso, rutasMonitoreo, rutasClientes, rutasCitas, rutasConfig]) { const res = await r(c); if (res) return res }
   fail(404, 'Ruta no encontrada');
 }
 
@@ -86,6 +87,7 @@ export default {
     await expirar(env);
     if (await versionActual(env) !== v0) await avisar(env); // una reserva venció sin Yape: los paneles se enteran al toque
     try { await respaldoDiario(env) } catch (e) { console.error('respaldo', e) }
+    try { if (await reporteSemanal(env)) await avisar(env) } catch (e) { console.error('reporte', e) }
     try { const r = await whatsappAuto(env); if (r.enviados) await avisar(env) } catch (e) { console.error('whatsapp', e) }
     try { const r = await retencion(env, { ...DEF, ...(await datos(env)).cfg }); if (r.anonimizados || r.capturas) await avisar(env) } catch (e) { console.error('retención', e) }
     const corte = addD(ahoraLocal(env).fecha, -60);

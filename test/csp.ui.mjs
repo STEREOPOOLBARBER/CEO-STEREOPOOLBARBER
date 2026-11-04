@@ -41,6 +41,9 @@ check('permisos de usuario se cambian (togPermU)', await P.evaluate(() => S._u.r
 await P.evaluate(() => { goTab('agenda') }); await P.waitForTimeout(300);
 await P.click('button[title="Recordatorios por WhatsApp"]'); await P.waitForSelector('text=⏰ Recordatorios'); await revisar(P, 'Recordatorios'); await P.evaluate(() => closeModal());
 await P.evaluate(() => abrirMenu()); await P.waitForTimeout(300); await revisar(P, 'Menú'); await P.evaluate(() => closeModal());
+await P.evaluate(() => abrirReporte()); await P.waitForSelector('text=💬 Enviar por WhatsApp', { timeout: 8000 }); await revisar(P, 'Reporte semanal');
+check('el reporte semanal abre con sus botones (WhatsApp y Excel)', await P.locator('[data-on-click="repExcel"]').count() === 1);
+await P.selectOption('#mbody select', { index: 0 }); await P.waitForSelector('#mbody p.hint b >> text=en curso', { timeout: 8000 }); check('cambiar a «esta semana» funciona', true); await P.evaluate(() => closeModal());
 await P.evaluate(() => abrirCaja()); await P.waitForTimeout(400); await revisar(P, 'Caja'); await P.evaluate(() => closeModal());
 await P.evaluate(() => abrirDash()); await P.waitForSelector('.sheet .dsec', { timeout: 8000 }); await revisar(P, 'Dashboard'); await P.evaluate(() => closeModal());
 await P.evaluate(async () => { await API.req('POST', '/citas', { fecha: hoy(), hora: '19:00', barberoId: S.barberos[0].id, servicioId: S.servicios[0].id, precio: 30, cliente: { nombre: 'Ficha Prueba', tel: '987000555' }, estado: 'confirmada' }); await reload() });

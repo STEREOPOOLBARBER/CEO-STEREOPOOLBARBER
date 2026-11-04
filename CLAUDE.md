@@ -73,6 +73,10 @@ Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño pru
 - **Confirmar asistencia:** `POST /api/publico/cita/:codigo/confirmar` (botón en `estado.html`) → `cita.asistencia = {ts, via}`; en la agenda «👍 Confirmó que viene».
 - Pruebas con Meta simulado: `WHATSAPP_API_URL` (`test/whatsapp.e2e.mjs`).
 
+## Reporte semanal de caja
+- `modulos/reportes.js`: semana lunes–domingo (Lima). Cron: los lunes desde las 8 a. m. guarda el de la semana anterior en `reportes` (migración v4) y avisa en la 🔔 (`/api/alertas` con `accion: 'reporte'`). Montos con la misma regla que la Caja (`ingreso()`), comisiones si `modComision`, comparación con la semana previa. Solo `verMontos` + `verTodas`. `GET /api/reportes/:fecha` (en curso = al momento, sin guardar), `POST …/rehacer` (config).
+- Panel: 📊 en el menú, en la Caja y en la 🔔; WhatsApp (resumen de texto) y Excel (4 hojas).
+
 ## Rendimiento
 - `GET /api/panel` trae solo la ventana de citas (35 días atrás, 120 adelante, más Yape pendientes). Lo demás: `GET /api/citas/buscar` (filtros y páginas en D1). Clientes usa la ficha del servidor; el Dashboard pide solo el periodo elegido (`traerRango`) más retención y «por recuperar» desde `clientes`; solo el Excel de citas baja toda la historia.
 

@@ -99,7 +99,7 @@ function notifs(){const now=Date.now(),H=48*3600e3,out=[];
   if(c.estado==='confirmada'&&st>now&&st-now<=60*60e3)out.push({k:'p_'+c.id+'_'+c.fecha+c.hora,ts:st-60*60e3,i:'⏰',t:`Cita ${falta(st)} — ${nm}`,s:`${h12(c.hora)} · ${bn} · ✂️ ${c.servicioNombre||''}`,c,tipo:'prox'});
   if(['cancelada','no_vino'].includes(c.estado)&&(c.upd||0)>now-H&&st>now-24*3600e3)out.push({k:'x_'+c.id+'_'+c.estado,ts:c.upd,i:c.estado==='cancelada'?'🚫':'❌',t:(c.estado==='cancelada'?'Cita cancelada — ':'No vino — ')+nm,s:`${cu} · ${bn}`,c,tipo:'baja'})}
  {const h=new Date().getHours(),pend=citasARecordar().filter(c=>c.fecha!==hoy()&&!recordada(c)&&!c.asistencia);if(h>=17&&pend.length&&!(S.waOk&&S.waDiaAntes))out.push({k:'rec_'+hoy()+'_'+pend.length,ts:Date.now(),i:'⏰',t:`Recordar a ${pend.length} cliente(s) de mañana`,s:'Un toque por cliente: WhatsApp con el mensaje listo y el link para confirmar.',tipo:'rec'})}
- if(can('config'))(S.alertas||[]).forEach(a=>out.push({k:'a_'+a.k,ts:Date.now()+1,i:a.i,t:a.t,s:a.s,tipo:'alerta'}));
+ if(can('config'))(S.alertas||[]).forEach(a=>out.push({k:'a_'+a.k,ts:Date.now()+1,i:a.i,t:a.t,s:a.s,tipo:'alerta',accion:a.accion,semana:a.semana}));
  return out.sort((a,b)=>b.ts-a.ts)}
 function cargarAlertas(){if(!API.remote||!can('config')||Date.now()-(S.alT||0)<300e3)return;S.alT=Date.now();API.req('GET','/alertas').then(a=>{S.alertas=a;renderHeader()}).catch(()=>{})}
 function togNotif(e){e?.stopPropagation();let el=$('#notif');if(!el){el=document.createElement('div');el.id='notif';document.body.appendChild(el);
@@ -107,7 +107,7 @@ function togNotif(e){e?.stopPropagation();let el=$('#notif');if(!el){el=document
  if(el.classList.contains('on'))return el.classList.remove('on');pintaNotif();el.classList.add('on')}
 function pintaNotif(){const el=$('#notif'),l=notifs(),vis=l.filter(x=>!S.leidas.has(x.k)||x.tipo==='yape'||x.tipo==='prox');
  const wa=(x,key,txt)=>x.c.cliente?.tel&&(can('verTel')||isAdmin())?`<button class="btn sm" style="border-color:#25d366;color:#25d366" data-on-click="a94557f45" data-p0="${x.c.id}" data-p1="${key}" data-p2="${x.k}">💬 ${txt}</button>`:'';
- const acc=x=>{if(x.tipo==='rec')return `<button class="btn sm p" data-on-click="abrirRecordatorios">⏰ Abrir recordatorios</button>`;if(x.tipo==='alerta')return `<button class="btn sm" data-on-click="a74da319d" data-p0="${x.k}">🛡️ Ver seguridad</button>`;const v=`<button class="btn sm" data-on-click="ac80577bd" data-p0="${x.c.id}" data-p1="${x.k}">👁️ Ver</button>`;
+ const acc=x=>{if(x.tipo==='rec')return `<button class="btn sm p" data-on-click="abrirRecordatorios">⏰ Abrir recordatorios</button>`;if(x.tipo==='alerta'&&x.accion==='reporte')return `<button class="btn sm p" data-on-click="verReporteNotif" data-p0="${x.k}" data-p1="${x.semana}">📊 Ver reporte</button>`;if(x.tipo==='alerta')return `<button class="btn sm" data-on-click="a74da319d" data-p0="${x.k}">🛡️ Ver seguridad</button>`;const v=`<button class="btn sm" data-on-click="ac80577bd" data-p0="${x.c.id}" data-p1="${x.k}">👁️ Ver</button>`;
   if(x.tipo==='yape')return v+(x.c.yapeCaptura&&can('yape')?`<button class="btn sm p" data-on-click="a545db87c" data-p0="${x.k}" data-p1="${x.c.id}">✅ Validar Yape</button>`:wa(x,'waYape','Pedir Yape'));
   if(x.tipo==='prox')return v+wa(x,'waRecuerda','Recordar');
   if(x.tipo==='baja')return v+wa(x,'waVuelve','Reagendar');
