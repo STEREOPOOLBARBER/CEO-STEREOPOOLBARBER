@@ -14,10 +14,20 @@ async function loginExtras(ac){
 function elegirPerfil(suj){const p=(S.perf||[]).find(x=>x.sujeto===suj);if(!p)return;S.selP=suj;
  document.querySelectorAll('#pfGrid .btn').forEach(b=>b.style.outline=b.dataset.s===suj?'2px solid var(--blue)':'none');
  $('#pfAcc').style.display='flex';$('#hBtn').style.display=p.huella&&hayHuella()?'inline-flex':'none';
- $('#cBox').style.display=p.clave?'flex':'none';$('#nBox').style.display=p.crear?'flex':'none';$('#sinAcceso').style.display=!p.clave&&!p.crear&&!p.huella?'block':'none';
+ $('#cBox').style.display=p.clave?'flex':'none';$('#nBox').style.display=p.crear?'flex':'none';$('#tBox').style.display='none';$('#rBox').style.display='none';$('#olvBtn').style.display=p.clave&&GCFG?.google?'inline-flex':'none';$('#sinAcceso').style.display=!p.clave&&!p.crear&&!p.huella?'block':'none';
  setTimeout(()=>(p.clave?$('#cClave'):p.crear?$('#nClave'):null)?.focus(),50)}
 async function loginClave(){const q=S.selP,c=$('#cClave').value;if(!q)return toast('Elige quién eres');if(!c)return toast('Escribe tu clave');
- try{const r=await API.req('POST','/auth/clave',{sujeto:q,clave:c});$('#cClave').value='';lsSet('ultimoPerfil',q);await entrar(r)}catch(e){toast('❌ '+e.message);$('#cClave').value=''}}
+ try{const r=await API.req('POST','/auth/clave',{sujeto:q,clave:c});$('#cClave').value='';lsSet('ultimoPerfil',q);
+  if(r.cambiar){S._tmp=c;$('#cBox').style.display='none';$('#olvBtn').style.display='none';$('#tBox').style.display='flex';setTimeout(()=>$('#tClave').focus(),50);return}
+  await entrar(r)}catch(e){toast('❌ '+e.message);$('#cClave').value=''}}
+const dosClaves=(a,b)=>{const x=$(a).value;if(x.length<6){toast('La clave debe tener al menos 6 caracteres');return null}if(x!==$(b).value){toast('Las dos claves no coinciden');return null}return x};
+/* Clave temporal que puso el dueño → la persona crea la suya y entra. */
+ACC.cambiarTemporal=async function(){const n=dosClaves('#tClave','#tClave2');if(!n)return;
+ try{const r=await API.req('POST','/auth/clave/cambiar',{sujeto:S.selP,actual:S._tmp,nueva:n});S._tmp=null;await entrar(r)}catch(e){toast('❌ '+e.message)}};
+/* ¿Olvidaste tu clave? → clave nueva + confirmar con su propio Google. */
+ACC.olvideClave=function(){$('#cBox').style.display='none';this.style.display='none';$('#rBox').style.display='flex';gPintar('#rG',recuperarConGoogle).catch(e=>toast('❌ '+e.message))};
+async function recuperarConGoogle(g){const n=dosClaves('#rClave','#rClave2');if(!n)return gPintar('#rG',recuperarConGoogle).catch(()=>{});
+ try{const r=await API.req('POST','/auth/clave/recuperar',{sujeto:S.selP,credential:g.credential,nueva:n});await entrar(r)}catch(e){toast('❌ '+e.message);gPintar('#rG',recuperarConGoogle).catch(()=>{})}}
 async function crearClave(){const a=$('#nClave').value,b=$('#nClave2').value;if(a.length<6)return toast('La clave debe tener al menos 6 caracteres');if(a!==b)return toast('Las dos claves no coinciden');
  try{const r=await API.req('POST','/auth/clave/crear',{sujeto:S.selP,clave:a});lsSet('ultimoPerfil',S.selP);await entrar(r)}catch(e){toast('❌ '+e.message)}}
 ACC.crearClave=function(){crearClave()};
@@ -51,20 +61,42 @@ async function activarHuella(cod){
 const accHTML=(suj)=>API.remote&&suj&&can('config')?`<div class="card" id="acc" style="margin-top:16px;padding:12px"><b>🔐 Acceso propio</b><p class="hint" style="margin-top:4px">Cargando…</p></div>`:'';
 async function accCargar(suj){const el=$('#acc');if(!el)return;
  let a;try{a=await API.req('GET','/acceso')}catch(e){el.innerHTML='<b>🔐 Acceso propio</b><p class="hint">❌ '+esc(e.message)+'</p>';return}
- const tiene=a.claves.includes(suj),hs=a.huellas.filter(h=>h.sujeto===suj);
- el.innerHTML=`<b>🔐 Acceso propio</b><p class="hint" style="margin-top:4px">Su clave es solo suya: tú puedes ponerle una nueva o quitarla, pero nunca verla.</p>
- <label class="lb">Clave ${tiene?'<span class="tag" style="margin-left:6px">activa</span>':''}</label>
+ const tiene=a.claves.includes(suj),hs=a.huellas.filter(h=>h.sujeto===suj),tmp=(a.temporales||[]).includes(suj),bloq=(a.bloqueados||[]).includes(suj);
+ if(suj===S.ses?.sujeto){el.innerHTML=`<b>🔐 Tu acceso</b><p class="hint" style="margin-top:4px">Tu clave la cambias tú en ☰ Menú → <b>🔑 Mi clave</b>.</p>`;return}
+ el.innerHTML=`<b>🔐 Acceso propio</b><p class="hint" style="margin-top:4px">La clave que pongas es <b>temporal</b>: al entrar, la persona crea la suya (tú nunca la sabrás).</p>
+ ${bloq?`<div class="banner" style="margin-top:8px">🔒 Bloqueado por intentos fallidos. <button class="btn sm" data-on-click="accDesbloquear" data-p0="${suj}">🔓 Desbloquear</button></div>`:''}
+ <label class="lb">Clave ${tiene?`<span class="tag" style="margin-left:6px">${tmp?'temporal (aún no la cambia)':'activa'}</span>`:''}</label>
  <input class="in" id="accC" type="text" autocomplete="off" placeholder="${tiene?'Escribe una nueva para cambiarla':'Mínimo 6 caracteres'}">
- <div class="g2" style="margin-top:8px"><button class="btn sm" data-on-click="a24ebc3ff">🎲 Generar</button><button class="btn sm p" data-on-click="aa9971596" data-p0="${suj}">💾 ${tiene?'Cambiar':'Poner'} clave</button></div>
+ <div class="g2" style="margin-top:8px"><button class="btn sm" data-on-click="a24ebc3ff">🎲 Generar</button><button class="btn sm p" data-on-click="aa9971596" data-p0="${suj}">💾 Dar clave temporal</button></div>
  ${tiene?`<button class="btn sm r w" style="margin-top:8px" data-on-click="a6d74157b" data-p0="${suj}">Quitar clave</button>`:''}
  <label class="lb">Huella / Face ID</label>
  ${hs.length?hs.map(h=>`<div class="li"><div class="t"><b>👆 ${esc(h.etiqueta)}</b><small>${new Date(h.creada).toLocaleDateString('es-PE')}</small></div><button class="btn sm r" data-on-click="a0e985dcd" data-p0="${h.id}" data-p1="${suj}">Quitar</button></div>`).join(''):'<p class="hint" style="margin-top:0">Sin dispositivos registrados.</p>'}
  <button class="btn w" style="margin-top:8px" data-on-click="aa6a3b664" data-p0="${suj}">👆 Invitar a activar huella</button><div id="accInv"></div>`}
 function accGenerar(){const a='abcdefghjkmnpqrstuvwxyz23456789',r=crypto.getRandomValues(new Uint8Array(8));$('#accC').value=[...r].map(x=>a[x%a.length]).join('')}
 async function accClave(suj){const c=$('#accC').value;if(c.length<6)return toast('Mínimo 6 caracteres');
- try{await API.req('PUT','/acceso/'+suj+'/clave',{clave:c});toast('✅ Clave guardada. Pásasela por WhatsApp: '+c);prompt('Clave (cópiala y envíala; no se vuelve a mostrar):',c);accCargar(suj)}catch(e){toast('❌ '+e.message)}}
+ try{await API.req('PUT','/acceso/'+suj+'/clave',{clave:c});toast('✅ Clave temporal lista');prompt('Clave temporal (pásasela; al entrar creará la suya):',c);accCargar(suj)}catch(e){toast('❌ '+e.message)}}
 async function accQuitar(suj){if(!confirm('¿Quitar la clave? Se cierra su sesión.'))return;try{await API.req('DELETE','/acceso/'+suj+'/clave');accCargar(suj)}catch(e){toast('❌ '+e.message)}}
 async function accHuellaDel(id,suj){if(!confirm('¿Quitar este dispositivo?'))return;try{await API.req('DELETE','/acceso/huella/'+id);accCargar(suj)}catch(e){toast('❌ '+e.message)}}
 async function accInvitar(suj){try{const r=await API.req('POST','/acceso/'+suj+'/invitacion'),url=location.origin+location.pathname+'?huella='+r.codigo;
  $('#accInv').innerHTML=`<p class="hint">Link de un solo uso, vale 24 horas. Que lo abra en <b>Safari o Chrome</b> (no dentro de WhatsApp).</p><input class="in" readonly value="${esc(url)}" data-on-click="a5c3a010b"><div class="g2" style="margin-top:8px"><button class="btn sm" data-on-click="a71d0100d" data-p0="${url}">📋 Copiar</button><a class="btn sm" style="text-decoration:none;text-align:center" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent('Activa tu huella para entrar al panel: '+url)}">💬 WhatsApp</a></div>`}catch(e){toast('❌ '+e.message)}}
 
+ACC.accDesbloquear=async function(){try{await API.req('POST','/acceso/'+this.dataset.p0+'/desbloquear');toast('🔓 Desbloqueado');accCargar(this.dataset.p0)}catch(e){toast('❌ '+e.message)}};
+
+/* ---------- 🔑 Mi clave (cada persona cambia la suya) ---------- */
+function miClave(){openModal(mHead('🔑 Mi clave')+`<p class="hint" style="margin-top:0">Solo tú la sabes. Al cambiarla se cierran tus otras sesiones abiertas.</p>
+ <label class="lb">Clave actual</label><input class="in" id="mcA" type="password" autocomplete="current-password">
+ <label class="lb">Clave nueva</label><input class="in" id="mcN" type="password" autocomplete="new-password" placeholder="Mínimo 6, que nadie más sepa">
+ <label class="lb">Repite la nueva</label><input class="in" id="mcN2" type="password" autocomplete="new-password">
+ <button class="btn p w" style="margin-top:14px;padding:14px" data-on-click="miClaveGuardar">💾 Cambiar mi clave</button>`)}
+ACC.miClave=function(){closeModal();miClave()};
+ACC.miClaveGuardar=async function(){const n=dosClaves('#mcN','#mcN2');if(!n)return;this.disabled=true;
+ try{const r=await API.req('POST','/auth/clave/cambiar',{actual:$('#mcA').value,nueva:n});S.ses={...S.ses,...r};lsSet('ses',S.ses);closeModal();toast('✅ Clave cambiada')}catch(e){this.disabled=false;toast('❌ '+e.message)}};
+
+/* ---------- 📱 Aparatos autorizados ---------- */
+const fechaCorta=t=>t?new Date(t).toLocaleString('es-PE',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}):'—';
+async function abrirAparatos(){let l;try{l=await API.req('GET','/acceso/aparatos')}catch(e){return toast('❌ '+e.message)}
+ openModal(mHead('📱 Aparatos autorizados')+`<p class="hint" style="margin-top:0">Celulares, tablets y computadoras que entraron con Google. Si uno se perdió, quítalo: se cierran al instante todas sus sesiones.</p>`+
+ (l.length?l.map(a=>`<div class="li"><span class="av">${/iPhone|Android/.test(a.aparato)?'📱':/iPad/.test(a.aparato)?'📲':'💻'}</span><div class="t"><b>${esc(a.aparato)}${a.actual?' · <span style="color:var(--grn)">este aparato</span>':''}</b><small>${esc(a.quien)} · desde ${fechaCorta(a.creado)} · último uso ${fechaCorta(a.uso)}</small></div><button class="btn sm r" data-on-click="apQuitar" data-p0="${a.id}" data-p1="${a.actual?1:''}">Quitar</button></div>`).join(''):'<div class="empty">No hay aparatos autorizados</div>'))}
+ACC.abrirAparatos=function(){abrirAparatos()};
+ACC.apQuitar=async function(){const yo=!!this.dataset.p1;if(!confirm(yo?'Es ESTE aparato: se cerrará tu sesión aquí. ¿Seguir?':'¿Quitar este aparato? Se cierran sus sesiones al instante.'))return;
+ try{await API.req('DELETE','/acceso/aparatos/'+this.dataset.p0);if(yo){localStorage.removeItem('brb_ses');return location.reload()}toast('✅ Aparato quitado');abrirAparatos()}catch(e){toast('❌ '+e.message)}};

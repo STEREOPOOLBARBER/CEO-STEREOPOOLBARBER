@@ -31,6 +31,7 @@ function editPersona(id){const p=id?D().equipo.find(x=>x.id===id):{id:'',nombre:
  <label class="lb">Permisos</label><div id="pPerms"></div>
  ${accHTML(id&&'p_'+id)}
  <button class="btn p w" style="margin-top:16px;padding:14px" data-on-click="eqGuardar">💾 Listo</button>
+ ${id&&API.remote&&id!==S.ses?.pid&&p.activo!==false?`<button class="btn r w" style="margin-top:8px" data-on-click="eqBaja" data-p0="${id}">🚫 Dar de baja (ya no trabaja aquí)</button>`:''}
  ${id?`<button class="btn r w" style="margin-top:8px" data-on-click="eqBorrar" data-p0="${id}">🗑️ Eliminar persona</button>`:''}`);
  pintarAtiende();pintarPermisos();if(id)accCargar('p_'+id)}
 function pintarAtiende(){const p=S._p,el=$('#pAtiBox');$('#pAti').classList.toggle('on',p.atiende);if(!p.atiende){el.innerHTML='';return}
@@ -66,3 +67,8 @@ ACC.eqBorrar=function(){const id=this.dataset.p0,p=D().equipo.find(x=>x.id===id)
  const fut=p.atiende?S.citas.filter(c=>c.barberoId===id&&c.fecha>=hoy()&&activa(c)).length:0;
  if(!confirm(fut?`Tiene ${fut} cita(s) próximas. Mejor desactívala con el interruptor. ¿Eliminar igual?`:`¿Eliminar a ${p.nombre}? Ya no podrá entrar.`))return;
  D().equipo=D().equipo.filter(x=>x.id!==id);closeModal();dirty();renderConfig()};
+/* Dar de baja: deja de entrar en todos sus aparatos al instante (sin correo, sin clave ni huellas). Sus citas e historial se conservan. */
+ACC.eqBaja=async function(){const id=this.dataset.p0,p=D().equipo.find(x=>x.id===id);if(!p)return;
+ if(S.dirty)return toast('Primero guarda los cambios de Config');
+ if(!confirm(`¿Dar de baja a ${p.nombre}? Se cierra su sesión en todos sus aparatos y ya no podrá entrar. Sus citas quedan.`))return;
+ try{await API.req('POST','/acceso/p_'+id+'/baja');closeModal();S.draft=null;await reload();renderConfig();toast('🚫 '+p.nombre+' dado de baja')}catch(e){toast('❌ '+e.message)}};

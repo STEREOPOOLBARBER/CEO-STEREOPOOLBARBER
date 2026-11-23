@@ -8,7 +8,7 @@ import { filtrosCitas, MONTO, ordenCitas } from './filtros.js';
 // El equipo completo (con correos) solo lo ve quien configura; el PIN solo existe en pruebas locales.
 export function vistaPanel(d, citas, s, env) {
   const sinPin = p => { if (pinPermitido(env)) return p; const { pin, ...x } = p; return x };
-  return { cfg: d.cfg, barberos: d.barberos.map(({ pin, email, ...b }) => s.perm.config ? { ...b, email } : b), servicios: d.servicios, equipo: s.perm.config ? d.equipo.map(sinPin) : [], yo: { ...identDe(personaDe(d, s.pid)), perm: s.perm }, citas: enmascarar(s, citas) };
+  return { cfg: d.cfg, barberos: d.barberos.map(({ pin, email, ...b }) => s.perm.config ? { ...b, email } : b), servicios: d.servicios, equipo: s.perm.config ? d.equipo.map(sinPin) : [], yo: { ...identDe(personaDe(d, s.pid)), perm: s.perm, bloqueo: s.bloqueo || 0 }, citas: enmascarar(s, citas) };
 }
 // Lo que cada persona puede ver de las citas: solo las suyas si no ve todas, y el teléfono oculto si no tiene permiso.
 export function enmascarar(s, citas) {

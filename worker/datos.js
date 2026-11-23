@@ -68,6 +68,8 @@ export const MIGRACIONES = [
   ] },
   // Una sola lista de personas (equipo): barberos y usuarios se juntan; claves y huellas pasan a 'p_' + id.
   { v: 7, nombre: 'equipo único', sql: [], despues: unirEquipo },
+  // Clave temporal: la que pone el dueño sirve solo para que la persona cree la suya.
+  { v: 8, nombre: 'clave temporal', sql: [`ALTER TABLE claves ADD COLUMN temporal INTEGER NOT NULL DEFAULT 0`] },
 ];
 export let schemaListo = null;
 export function asegurarSchema(env) { return schemaListo ||= aplicarMigraciones(env).catch(e => { schemaListo = null; throw e }) }

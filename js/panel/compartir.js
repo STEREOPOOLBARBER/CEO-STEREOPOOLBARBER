@@ -90,6 +90,7 @@ function abrirMenu(){openModal(`<div class="grab"></div>${mHead('☰ Menú')}
  ${can('dash')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="aba7c1122">📈 Dashboard del negocio</button>`:''}
  ${can('excel')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="a62e261c1">📊 Excel y respaldo</button>`:''}
  ${can('config')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="a465d46a3">👥 Equipo y permisos</button>`:''}
+ ${API.remote?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="miClave">🔑 Mi clave</button>`:''}
  <button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="a127fcd5a">📖 Cómo funciona</button>
  <button class="btn r w" style="padding:14px" data-on-click="a973cd47a">🚪 Cerrar sesión</button>
  <p class="hint" style="text-align:center">👆👆 Doble toque en el nombre → Dashboard · Toca el logo → Excel y respaldo</p>`)}

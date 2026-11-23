@@ -60,7 +60,12 @@ check('«¿Quién eres?» muestra a cada persona una vez, con quién tiene clave
 r = await call('POST', '/auth/clave', { sujeto: 'admin', clave: '1111' }); check('ya no existe la clave de arranque 1111 ni el perfil «admin»', r.s === 403);
 r = await call('GET', '/auth/config'); check('config avisa que hay claves', r.j.clave === true);
 
-let ses = await call('POST', '/auth/clave', { sujeto: 'p_b2', clave: 'ClaveBrayan1' });
+r = await call('POST', '/auth/clave', { sujeto: 'p_b2', clave: 'ClaveBrayan1' });
+check('la clave que puso el admin es temporal: no abre el panel, pide crear la propia', r.s === 200 && r.j.cambiar === true && !/brb_s=/.test(r.cookie), JSON.stringify(r));
+r = await call('POST', '/auth/clave/cambiar', { sujeto: 'p_b2', actual: 'otra-cosa', nueva: 'BrayanPropia9' }); check('cambiarla exige la clave actual correcta', r.s === 403);
+r = await call('POST', '/auth/clave/cambiar', { sujeto: 'p_b2', actual: 'ClaveBrayan1', nueva: 'ClaveBrayan1' }); check('la nueva debe ser distinta', r.s === 400);
+let ses = await call('POST', '/auth/clave/cambiar', { sujeto: 'p_b2', actual: 'ClaveBrayan1', nueva: 'BrayanPropia9' });
+r = await call('GET', '/acceso', null, adm.cookie); check('al crear la suya deja de ser temporal (el admin ya no la sabe)', !r.j.temporales.includes('p_b2') && r.j.claves.includes('p_b2'));
 check('el barbero entra con su clave', ses.s === 200 && ses.j.rol === 'barbero' && ses.j.barberoId === 'b2' && /brb_s=/.test(ses.cookie), JSON.stringify(ses));
 const panelB = await call('GET', '/panel', null, ses.cookie);
 check('y ve solo lo suyo (sin PIN ni correos ni config)', panelB.s === 200 && !JSON.stringify(panelB.j).match(/"pin"|adminPin|"email"/));
@@ -71,9 +76,16 @@ r = await call('POST', '/auth/clave', { sujeto: 'p_b2', clave: 'otra-cosa' }); c
 r = await call('POST', '/auth/clave', { sujeto: 'p_b1', clave: 'ClaveBrayan1' }); check('la clave de uno no abre a otro', r.s === 403);
 
 await call('PUT', '/acceso/p_b2/clave', { clave: 'ClaveNueva77' }, adm.cookie);
-r = await call('GET', '/panel', null, ses.cookie); check('si el admin cambia la clave, la sesión anterior se cierra', r.s === 401);
-r = await call('POST', '/auth/clave', { sujeto: 'p_b2', clave: 'ClaveBrayan1' }); check('la clave vieja ya no sirve', r.s === 403);
-ses = await call('POST', '/auth/clave', { sujeto: 'p_b2', clave: 'ClaveNueva77' }); check('la nueva sí', ses.s === 200);
+r = await call('GET', '/panel', null, ses.cookie); check('si el admin le da una clave temporal (olvidó la suya), la sesión anterior se cierra', r.s === 401);
+r = await call('POST', '/auth/clave', { sujeto: 'p_b2', clave: 'BrayanPropia9' }); check('la clave vieja ya no sirve', r.s === 403);
+r = await call('POST', '/auth/clave', { sujeto: 'p_b2', clave: 'ClaveNueva77' }); check('la temporal pide crear la propia', r.j.cambiar === true);
+ses = await call('POST', '/auth/clave/cambiar', { sujeto: 'p_b2', actual: 'ClaveNueva77', nueva: 'BrayanOtra88' }); check('y con la propia entra', ses.s === 200 && /brb_s=/.test(ses.cookie));
+// 🔑 Mi clave: con la sesión abierta, cambia la suya
+r = await call('POST', '/auth/clave/cambiar', { actual: 'mala-clave', nueva: 'BrayanMia99' }, ses.cookie); check('«Mi clave» exige la actual', r.s === 403);
+r = await call('POST', '/auth/clave/cambiar', { actual: 'BrayanOtra88', nueva: 'BrayanMia99' }, ses.cookie);
+check('«Mi clave»: el barbero cambia la suya y sigue dentro', r.s === 200 && (await call('GET', '/panel', null, r.cookie)).s === 200);
+check('la sesión con la clave anterior se cierra', (await call('GET', '/panel', null, ses.cookie)).s === 401);
+ses = r;
 await call('DELETE', '/acceso/p_b2/clave', null, adm.cookie);
 r = await call('GET', '/panel', null, ses.cookie); check('si el admin quita la clave, se cierra su sesión', r.s === 401);
 
@@ -82,6 +94,10 @@ await call('PUT', '/acceso/p_b1/clave', { clave: 'ClaveJhon2026' }, adm.cookie);
 const cods = []; for (let i = 0; i < 8; i++) cods.push((await call('POST', '/auth/clave', { sujeto: 'p_b1', clave: 'mala-' + i })).s);
 check('tras varios intentos fallidos se bloquea (429)', cods.includes(429) && cods.slice(0, 5).every(c => c === 403), cods.join());
 r = await call('POST', '/auth/clave', { sujeto: 'p_b1', clave: 'ClaveJhon2026' }); check('bloqueado: ni con la clave buena entra', r.s === 429, String(r.s));
+r = await call('GET', '/acceso', null, adm.cookie); check('el admin ve que está bloqueado', r.j.bloqueados.includes('p_b1'), JSON.stringify(r.j.bloqueados));
+r = await call('POST', '/acceso/p_b1/desbloquear', {}); check('sin sesión de admin no se puede desbloquear', r.s === 401);
+r = await call('POST', '/acceso/p_b1/desbloquear', {}, adm.cookie); check('el admin lo desbloquea', r.s === 200);
+r = await call('POST', '/auth/clave', { sujeto: 'p_b1', clave: 'ClaveJhon2026' }); check('desbloqueado, ya puede entrar', r.s === 200 && r.j.cambiar === true, JSON.stringify(r));
 await call('DELETE', '/acceso/p_b1/clave', null, adm.cookie);
 
 /* ---------------- HUELLA ---------------- */
@@ -140,11 +156,11 @@ r = await entrarHuella(cel); check('y ya no puede entrar con esa huella', r.s ==
 
 // si el barbero se desactiva, pierde todo acceso
 await call('PUT', '/acceso/p_b2/clave', { clave: 'ClaveBrayan1' }, adm.cookie);
-const s2 = await call('POST', '/auth/clave', { sujeto: 'p_b2', clave: 'ClaveBrayan1' });
+const s2 = await call('POST', '/auth/clave/cambiar', { sujeto: 'p_b2', actual: 'ClaveBrayan1', nueva: 'ClaveBrayan2' });
 const pn = (await call('GET', '/panel', null, adm.cookie)).j;
 await call('PUT', '/config', { cfg: pn.cfg, equipo: pn.equipo.map(b => b.id === 'b2' ? { ...b, activo: false } : b), servicios: pn.servicios }, adm.cookie);
 r = await call('GET', '/panel', null, s2.cookie); check('si se desactiva al barbero, se cierra su sesión', r.s === 401);
-r = await call('POST', '/auth/clave', { sujeto: 'p_b2', clave: 'ClaveBrayan1' }); check('y no puede entrar aunque tenga clave', r.s === 403);
+r = await call('POST', '/auth/clave', { sujeto: 'p_b2', clave: 'ClaveBrayan2' }); check('y no puede entrar aunque tenga clave', r.s === 403);
 await call('PUT', '/config', { cfg: pn.cfg, equipo: pn.equipo, servicios: pn.servicios }, adm.cookie);
 await call('DELETE', '/acceso/p_b2/clave', null, adm.cookie);
 

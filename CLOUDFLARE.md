@@ -177,3 +177,12 @@ La estructura de la base de datos ahora es **versionada** (`MIGRACIONES` en `wor
 - **Barbero con su propio celular:** pon su correo en el Equipo; la primera vez él crea su clave. **En la tablet del local:** tú le pones una clave en Equipo → su nombre → Acceso propio.
 - Si alguien aparece repetido (por ejemplo Leandro como barbero y como usuario ligados), se juntó solo al actualizar. Si quedan dos con el mismo nombre sin estar ligados, sale un aviso en el Equipo para que elijas cuál queda.
 - **Importante:** al actualizar se cierran todas las sesiones abiertas (cambió el formato de acceso): todos vuelven a entrar una vez.
+
+### Accesos: olvidos, bajas y aparatos
+- **Barbero olvidó su clave:** Equipo → su nombre → «Dar clave temporal». Al entrar con ella, el sistema le pide **crear la suya** (tú nunca la sabrás).
+- **¿Olvidaste tu clave?** (botón en «¿Quién eres?»): la persona crea una nueva y confirma con **su Google**. Sirve también para ti (dueño).
+- **🔑 Mi clave** (☰ Menú): cada uno cambia la suya; se cierran sus otras sesiones.
+- **Bloqueado por intentos:** Equipo → su nombre → «🔓 Desbloquear».
+- **Ya no trabaja aquí:** Equipo → su nombre → «🚫 Dar de baja»: deja de entrar al instante en todos sus aparatos; sus citas quedan.
+- **Celular o tablet perdido:** ⚙️ Config → 🔐 Seguridad → **📱 Aparatos autorizados** → «Quitar».
+- **Tablet del local:** si un barbero entra en un aparato que no es suyo, se cierra solo tras **15 minutos sin uso**.

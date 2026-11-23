@@ -144,8 +144,46 @@ check('la clave anterior deja de valer', r.s === 403);
 r = await call('POST', '/auth/clave', { sujeto: 'p_dueno', clave: 'NuevaDueno77' }, puertaD);
 check('la nueva clave entra', r.s === 200);
 const dueno2 = r.cookie;
-r = await call('POST', '/auth/logout', {}, dueno2);
-r = await call('GET', '/panel', null, dueno2);
+// ---- Fase 2: clave temporal, aparato compartido con bloqueo, recuperar con Google, aparatos y dar de baja
+const pnD = (await call('GET', '/panel', null, dueno2)).j;
+await call('PUT', '/config', { cfg: pnD.cfg, equipo: pnD.equipo.map(b => b.id === 'b1' ? { ...b, email: 'jhon@gmail.com', activo: true } : b), servicios: pnD.servicios }, dueno2);
+r = await call('PUT', '/acceso/p_b2/clave', { clave: 'TemporalB2x' }, dueno2);
+check('el dueño da una clave temporal', r.s === 200 && r.j.temporal === true, JSON.stringify(r.j));
+r = await call('POST', '/auth/clave', { sujeto: 'p_b2', clave: 'TemporalB2x' }, puertaD);
+check('en la tablet del local, la temporal pide crear la propia', r.j.cambiar === true && !/brb_s=/.test(r.cookie));
+r = await call('POST', '/auth/clave/cambiar', { sujeto: 'p_b2', actual: 'TemporalB2x', nueva: 'BrayanTablet7' }, puertaD);
+check('el barbero crea la suya; en un aparato ajeno queda con bloqueo automático', r.s === 200 && r.j.bloqueo === 15, JSON.stringify(r.j));
+const tablet = r.cookie;
+check('en su propio aparato el dueño no tiene bloqueo', (await call('GET', '/panel', null, dueno2)).j.yo?.bloqueo === 0);
+check('la sesión de la tablet funciona', (await call('GET', '/panel', null, tablet)).s === 200);
+const recuperar = async (email, sujeto, pc) => call('POST', '/auth/clave/recuperar', { sujeto, nueva: 'Recuperada55', credential: await token({ nonce: await nonce(), email }) }, pc);
+r = await recuperar('jhon@gmail.com', 'p_dueno', puertaD); check('el Google de otra persona no recupera la clave del dueño', r.s === 403);
+r = await recuperar('dueno@gmail.com', 'p_dueno', puertaD); check('el dueño olvidó su clave: la recupera confirmando con su Google', r.s === 200 && r.j.rol === 'dueno', JSON.stringify(r.j));
+const duenoR = r.cookie;
+check('su clave anterior deja de valer', (await call('POST', '/auth/clave', { sujeto: 'p_dueno', clave: 'NuevaDueno77' }, puertaD)).s === 403);
+r = await entrar({ email: 'jhon@gmail.com' }); const puertaJ = r.cookie;
+r = await recuperar('jhon@gmail.com', 'p_b1', puertaJ); check('un barbero recupera la suya con su propio Google', r.s === 200 && r.j.barberoId === 'b1', JSON.stringify(r.j));
+const jhon = r.cookie;
+r = await call('GET', '/acceso/aparatos', null, duenoR);
+const apJ = r.j.find(a => a.quien === 'jhon@gmail.com');
+check('el dueño ve los aparatos autorizados (quién y qué aparato)', r.s === 200 && apJ && r.j.some(a => a.quien === 'dueno@gmail.com'), JSON.stringify(r.j).slice(0, 300));
+check('los aparatos solo los ve quien configura', (await call('GET', '/acceso/aparatos', null, jhon)).s === 403);
+r = await call('DELETE', '/acceso/aparatos/' + apJ.id, null, duenoR);
+check('quitar un aparato cierra su sesión al instante', r.s === 200 && (await call('GET', '/panel', null, jhon)).s === 401);
+check('y ese aparato ya no puede elegir perfil', (await call('GET', '/auth/perfiles', null, puertaJ)).j.puerta === false);
+r = await call('POST', '/acceso/p_dueno/baja', {}, duenoR); check('nadie se da de baja a sí mismo', r.s === 400);
+r = await call('POST', '/acceso/p_b2/baja', {}, duenoR); check('dar de baja a un barbero', r.s === 200);
+check('su sesión se cierra al instante', (await call('GET', '/panel', null, tablet)).s === 401);
+const pnB = (await call('GET', '/panel', null, duenoR)).j;
+check('queda desactivado y sin correo, sin clave (sus citas se conservan)', pnB.equipo.find(p => p.id === 'b2')?.activo === false && !(await call('GET', '/acceso', null, duenoR)).j.claves.includes('p_b2'));
+await call('PUT', '/acceso/p_b3/clave', { clave: 'TemporalB3x' }, duenoR);
+r = await call('POST', '/auth/clave/cambiar', { sujeto: 'p_b3', actual: 'TemporalB3x', nueva: 'PieroTablet7' }, puertaD); const piero = r.cookie;
+await new Promise(ok => setTimeout(ok, 5500));
+check('en un aparato ajeno, tras el tiempo sin uso la sesión se cierra sola', (await call('GET', '/panel', null, piero)).s === 401);
+check('en su propio aparato no se cierra', (await call('GET', '/panel', null, duenoR)).s === 200);
+
+r = await call('POST', '/auth/logout', {}, duenoR);
+r = await call('GET', '/panel', null, duenoR);
 check('cerrar sesión invalida la cookie', r.s === 401);
 
 let limite = 0; for (let i = 0; i < 25; i++) { const x = await call('POST', '/auth/google', { credential: 'x.y.z' }); if (x.s === 429) { limite = x.s; break } }

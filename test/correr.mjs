@@ -16,7 +16,7 @@ const SUITES = [
   { n: 'api.e2e', vars: PIN, sql: 'file:test/sembrar.sql' },
   { n: 'acceso.e2e', vars: PIN, sql: ADMIN },
   { n: 'acceso.ui', vars: PIN, sql: ADMIN, ui: true },
-  { n: 'google.e2e', vars: GOOGLE },
+  { n: 'google.e2e', vars: { ...GOOGLE, BLOQUEO_SEG: '4' } },
   { n: 'perfiles.ui', vars: GOOGLE, ui: true },
   { n: 'dni.e2e', vars: { ...PIN, ...DNI, SIN_LIMITES_CF: 'false' }, sql: ADMIN },
   { n: 'turnstile.e2e', vars: { ...PIN, ...DNI, ...TS }, sql: ADMIN },
@@ -42,7 +42,7 @@ const SUITES = [
 ];
 const filtro = process.argv.slice(2), lista = SUITES.filter(s => !filtro.length || filtro.some(f => s.n.includes(f)));
 const wr = (...a) => execFileSync('npx', ['wrangler', ...a], { stdio: 'pipe', maxBuffer: 64e6 });
-const esperar = async url => { for (let i = 0; i < 90; i++) { try { const r = await fetch(url); if (r.ok) return } catch { } await new Promise(r => setTimeout(r, 1000)) } throw new Error('wrangler dev no arrancó') };
+const esperar = async url => { for (let i = 0; i < 90; i++) { try { const r = await fetch(url, { signal: AbortSignal.timeout(3000) }); if (r.ok) return } catch { } await new Promise(r => setTimeout(r, 1000)) } throw new Error('wrangler dev no arrancó') };
 const tmp = mkdtempSync(join(tmpdir(), 'brb-'));
 let hist = null;
 const res = [];

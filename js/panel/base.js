@@ -167,15 +167,16 @@ async function logoHTML(el,c){el.innerHTML=c.logoImg?`<img data-foto="${c.logoIm
 async function doLogin(){const pin=$('#pin').value.trim();try{await entrar(await API.login(pin))}catch(e){toast('❌ '+e.message);$('#pin').value=''}}
 async function entrar(s){S.ses=s;lsSet('ses',s);$('#login').style.display='none';await boot()}
 let GCFG=null;
-async function gPintar(){const n=(await API.req('GET','/auth/nonce')).nonce;
- google.accounts.id.initialize({client_id:GCFG.google,callback:loginGoogle,nonce:n,ux_mode:'popup',auto_select:false});
- $('#gbtn').innerHTML='';google.accounts.id.renderButton($('#gbtn'),{theme:'filled_black',size:'large',shape:'pill',text:'signin_with',locale:'es'})}
+/* Botón de Google: abrir la puerta del aparato (#gbtn) o confirmar «soy yo» al recuperar la clave (#rG). */
+function cargarGoogle(){return window.google?.accounts?Promise.resolve():new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.async=true;s.onload=ok;s.onerror=()=>no(new Error('No se pudo cargar Google'));document.head.appendChild(s)})}
+async function gPintar(el='#gbtn',cb=loginGoogle){await cargarGoogle();const n=(await API.req('GET','/auth/nonce')).nonce;
+ google.accounts.id.initialize({client_id:GCFG.google,callback:cb,nonce:n,ux_mode:'popup',auto_select:false});
+ $(el).innerHTML='';google.accounts.id.renderButton($(el),{theme:'filled_black',size:'large',shape:'pill',text:'signin_with',locale:'es'})}
 async function loginGoogle(r){try{const x=await API.google(r.credential);if(x.puerta){await initLoginNube();return}await entrar(x)}catch(e){toast('❌ '+e.message);gPintar().catch(()=>{})}}
 async function initLoginNube(){let ac={google:'',pin:true};try{ac=await API.authCfg()}catch(e){}
  GCFG=ac;$('#pinBox').style.display=ac.pin?'flex':'none';await loginExtras(ac);if($('#pfBox').style.display==='flex')return;
  $('#lgHint').innerHTML=ac.google?'Entra con la cuenta de Google que el dueño autorizó.':'⚠️ Falta configurar GOOGLE_CLIENT_ID en Cloudflare.';
- if(!ac.google)return;const r=()=>gPintar().catch(e=>toast('❌ '+e.message));
- if(window.google?.accounts)return r();const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.async=true;s.onload=r;document.head.appendChild(s)}
+ if(ac.google)gPintar().catch(e=>toast('❌ '+e.message))}
 async function logout(){if(S.dirty&&!confirm('Tienes cambios sin guardar en Config. ¿Salir igual?'))return;if(!confirm('¿Cerrar sesión?'))return;await API.logout();localStorage.removeItem('brb_ses');location.reload()}
 /* ---------- tiempo real: WebSocket con el Durable Object «Avisos» ----------
    El aviso no trae datos: solo dice «algo cambió» y el panel vuelve a pedir lo suyo (con sus permisos). */
@@ -187,8 +188,12 @@ function conectarTR(){if(!API.remote||!S.ses||TR.ws)return;let ws;try{ws=new Web
  ws.onmessage=e=>{if(e.data==='pong')return;clearTimeout(TR.t);TR.t=setTimeout(()=>reload(true),250)};
  ws.onclose=()=>{TR.ws=null;marcarVivo();if(!S.ses)return;setTimeout(conectarTR,Math.min(30e3,1e3*2**TR.intentos++))};ws.onerror=()=>{}}
 setInterval(()=>{if(trVivo())TR.ws.send('ping')},25e3);
+/* Bloqueo automático en un aparato que no es de la persona (la tablet del local): sin uso → vuelve a «¿Quién eres?». El Worker también lo exige. */
+function vigilarInactividad(){const min=+S.ses?.bloqueo||0;if(!min||S._vig)return;S._vig=true;let ult=Date.now();
+ ['pointerdown','keydown','scroll'].forEach(t=>addEventListener(t,()=>{ult=Date.now()},{passive:true,capture:true}));
+ setInterval(async()=>{if(Date.now()-ult>min*60e3){await API.logout();localStorage.removeItem('brb_ses');location.reload()}},20e3)}
 async function boot(){
- await reload();
+ await reload();vigilarInactividad();
  const tabs=[['agenda','📅 Agenda']];if(can('links'))tabs.push(['compartir','🔗 Compartir']);if(can('config'))tabs.push(['config','⚙️ Config']);
  $('#tabs').innerHTML=tabs.map(([k,t])=>`<button data-t="${k}" data-on-click="a48f04866" data-p0="${k}">${t}</button>`).join('');
  goTab('agenda');

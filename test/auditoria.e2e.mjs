@@ -8,7 +8,8 @@ check('la cookie de sesión usa el prefijo __Host-', /^__Host-brb_s=/.test(adm) 
 check('una cookie con el nombre viejo sigue sirviendo (transición)', (await call('GET', '/panel', null, adm.replace('__Host-brb_s', 'brb_s'))).s === 200);
 const pn = (await call('GET', '/panel', null, adm)).j;
 // clave para un barbero y doble ingreso → la sesión anterior se cierra
-await call('PUT', '/acceso/p_b1/clave', { clave: 'clave-segura-1' }, adm);
+await call('PUT', '/acceso/p_b1/clave', { clave: 'clave-temporal-0' }, adm); // temporal: el barbero crea la suya
+await call('POST', '/auth/clave/cambiar', { sujeto: 'p_b1', actual: 'clave-temporal-0', nueva: 'clave-segura-1' });
 const s1 = (await call('POST', '/auth/clave', { sujeto: 'p_b1', clave: 'clave-segura-1' })).cookie;
 const s2 = (await call('POST', '/auth/clave', { sujeto: 'p_b1', clave: 'clave-segura-1' }, null)).cookie;
 check('dos ingresos dan sesiones distintas', s1 && s2 && s1 !== s2);
@@ -31,7 +32,7 @@ check('registra la edición de hora', r.j.items.some(x => x.accion === 'Editó c
 check('registra qué se cambió en la configuración', r.j.items.some(x => x.accion === 'Configuración' && /eslogan/.test(x.detalle)));
 check('registra la reserva y la reprogramación del cliente', r.j.items.some(x => x.accion === 'Reservó' && x.quien === 'Cliente') && r.j.items.some(x => x.accion === 'Reprogramó' && x.objeto === pub.j.codigo));
 check('registra la eliminación', r.j.items.some(x => x.accion === 'Eliminó cita' && x.objeto === c.codigo));
-check('registra el cambio de clave (sin guardar la clave)', r.j.items.some(x => x.accion === 'Cambió clave') && !txt.includes('clave-segura-1'));
+check('registra el cambio de clave (sin guardar la clave)', r.j.items.some(x => x.accion === 'Dio clave temporal') && r.j.items.some(x => x.accion === 'Cambió su clave') && !txt.includes('clave-segura-1') && !txt.includes('clave-temporal-0'));
 r = await call('GET', '/auditoria?objeto=' + c.codigo, null, adm);
 check('historial de una sola cita', r.j.total === 4 && r.j.items.every(x => x.objeto === c.codigo), JSON.stringify(r.j));
 r = await call('GET', '/auditoria', null, s3); check('un barbero no puede ver la bitácora', r.s === 403);

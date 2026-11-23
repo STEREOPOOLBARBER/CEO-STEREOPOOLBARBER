@@ -44,6 +44,9 @@ await P.click('#pAti'); await P.waitForTimeout(150); check('«Atiende clientes»
 await P.fill('#pNom', 'Kiara'); await P.click('text=💾 Listo'); await P.waitForTimeout(200);
 check('la persona nueva queda en el equipo', await P.evaluate(() => D().equipo.some(p => p.nombre === 'Kiara' && p.atiende)));
 await P.evaluate(() => closeModal());
+await P.evaluate(() => miClave()); await P.waitForSelector('#mcA'); await revisar(P, 'Mi clave'); await P.evaluate(() => closeModal());
+await P.evaluate(() => abrirAparatos()); await P.waitForSelector('#mbody h3'); await revisar(P, 'Aparatos autorizados'); await P.evaluate(() => closeModal());
+await P.evaluate(() => { S.draft = null; S.dirty = false; renderConfig() }); await P.click('[data-on-click="eqEditar"][data-p0="b2"]'); await P.waitForSelector('[data-on-click="eqBaja"]'); await revisar(P, 'Persona con «Dar de baja»'); await P.evaluate(() => closeModal());
 await P.evaluate(() => { goTab('agenda') }); await P.waitForTimeout(300);
 await P.click('button[title="Recordatorios por WhatsApp"]'); await P.waitForSelector('text=⏰ Recordatorios'); await revisar(P, 'Recordatorios'); await P.evaluate(() => closeModal());
 await P.evaluate(() => abrirMenu()); await P.waitForTimeout(300); await revisar(P, 'Menú'); await P.evaluate(() => closeModal());

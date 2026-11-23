@@ -287,6 +287,19 @@ th{color:var(--mu);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
         <input class="in" id="cClave" type="password" autocomplete="current-password" placeholder="Tu clave" data-on-keydown="a92851ba0">
         <button class="btn" style="padding:12px" data-on-click="af606fcfd">🔑 Entrar con clave</button>
       </div>
+      <button class="btn sm" id="olvBtn" style="display:none" data-on-click="olvideClave">¿Olvidaste tu clave?</button>
+      <div id="tBox" style="display:none;flex-direction:column;gap:8px;width:100%">
+        <p class="hint" style="margin:0;text-align:center">🔐 Esa clave es <b>temporal</b>. Crea ahora <b>la tuya</b> (mínimo 6, que nadie más sepa).</p>
+        <input class="in" id="tClave" type="password" autocomplete="new-password" placeholder="Tu nueva clave">
+        <input class="in" id="tClave2" type="password" autocomplete="new-password" placeholder="Repítela">
+        <button class="btn p" style="padding:12px" data-on-click="cambiarTemporal">💾 Guardar mi clave y entrar</button>
+      </div>
+      <div id="rBox" style="display:none;flex-direction:column;gap:8px;width:100%">
+        <p class="hint" style="margin:0;text-align:center">Crea una clave nueva y confirma con <b>tu Google</b> que eres tú.</p>
+        <input class="in" id="rClave" type="password" autocomplete="new-password" placeholder="Tu nueva clave">
+        <input class="in" id="rClave2" type="password" autocomplete="new-password" placeholder="Repítela">
+        <div id="rG" style="display:flex;justify-content:center"></div>
+      </div>
       <div id="nBox" style="display:none;flex-direction:column;gap:8px;width:100%">
         <p class="hint" style="margin:0;text-align:center">Es tu primera vez: crea <b>tu propia clave</b> (mínimo 6, que nadie más sepa).</p>
         <input class="in" id="nClave" type="password" autocomplete="new-password" placeholder="Tu nueva clave">

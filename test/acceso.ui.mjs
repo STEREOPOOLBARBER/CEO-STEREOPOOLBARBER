@@ -22,10 +22,10 @@ await A.evaluate(() => { S.open = 'equipo'; renderConfig() }); await A.waitForTi
 await A.click('[data-on-click="eqEditar"][data-p0="b1"]'); await A.waitForSelector('#acc');
 await A.waitForSelector('#accC');
 check('bloque Acceso visible en el barbero', await A.locator('#acc').isVisible());
-await A.fill('#accC', 'abc'); await A.click('text=Poner clave'); await A.waitForTimeout(300);
+await A.fill('#accC', 'abc'); await A.click('text=Dar clave temporal'); await A.waitForTimeout(300);
 check('clave corta rechazada', await A.locator('#toast').textContent().then(t => /Mínimo/.test(t)));
 await A.click('text=🎲 Generar'); const clave = await A.inputValue('#accC'); check('generar clave', clave.length === 8);
-await A.click('text=Poner clave'); await A.waitForTimeout(500);
+await A.click('text=Dar clave temporal'); await A.waitForTimeout(500);
 await A.waitForSelector('text=activa');
 check('clave marcada como activa', true);
 await A.click('text=👆 Invitar a activar huella'); await A.waitForSelector('#accInv input');
@@ -49,8 +49,10 @@ check('barbero sin pestaña Config', !(await B.locator('text=⚙️ Config').cou
 // barbero con clave
 const C = await (await br.newContext()).newPage(); await C.goto(BASE + '/index.html'); await C.waitForSelector('#pfGrid .btn'); await C.click('#pfGrid .btn:has-text("Jhon")'); await C.waitForSelector('#cBox', { state: 'visible' }); await C.fill('#cClave', 'incorrecta1'); await C.click('text=🔑 Entrar con clave'); await C.waitForTimeout(500);
 check('clave mala rechazada', await C.locator('#login').isVisible());
-await C.fill('#cClave', clave); await C.click('text=🔑 Entrar con clave'); await C.waitForSelector('#login', { state: 'hidden' });
-check('entra con clave', true);
+await C.fill('#cClave', clave); await C.click('text=🔑 Entrar con clave'); await C.waitForSelector('#tBox', { state: 'visible' });
+check('la clave que dio el admin es temporal: pide crear la propia', !(await C.locator('#cBox').isVisible()));
+await C.fill('#tClave', 'JhonPropia77'); await C.fill('#tClave2', 'JhonPropia77'); await C.click('text=💾 Guardar mi clave y entrar'); await C.waitForSelector('#login', { state: 'hidden' });
+check('crea su clave y entra', true);
 // admin ve el dispositivo y lo quita
 await A.evaluate(() => accCargar('p_b1')); await A.waitForSelector('#acc .li');
 check('admin ve el dispositivo', await A.locator('#acc .li').count() === 1);
