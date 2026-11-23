@@ -23,8 +23,10 @@ const tokenGoogle = async email => {
   return `${h}.${pl}.${Buffer.from(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', par.privateKey, new TextEncoder().encode(`${h}.${pl}`))).toString('base64url')}`;
 };
 
-await P.goto(BASE + '/index.html'); await P.waitForSelector('#lgHint:has-text("Dueño")');
-check('la entrada explica: el dueño entra con su Google', /dueño:.*google/i.test(await P.locator('#lgHint').innerText()));
+await P.goto(BASE + '/index.html'); await P.waitForSelector('#gLbl', { state: 'visible' });
+check('entrada limpia: «Soy el dueño» + Google, y el equipo pide su QR', /soy el dueño/i.test(await P.locator('#gLbl').innerText()) && /QR/.test(await P.locator('#lgEquipo').innerText()));
+await P.click('#ayuda summary');
+check('«¿Problemas para entrar?» abre los pasos (dueño, barbero, clave, bloqueo, iPhone)', /olvidaste tu clave/i.test(await P.locator('#ayuda').innerText()) && /safari/i.test(await P.locator('#ayuda').innerText()));
 check('sin huellas registradas aún, no aparece «Entrar con huella»', !(await P.locator('#hTop').isVisible()));
 // El botón de Google real no carga en pruebas: se llama a lo mismo que llama él, con un token firmado como Google.
 const cred = await tokenGoogle('dueno@gmail.com');
@@ -44,5 +46,14 @@ await P.click('#hTop'); await P.waitForSelector('#login', { state: 'hidden', tim
 check('entra solo con la huella: sin Google y sin clave', await P.evaluate(() => S.ses?.rol) === 'dueno');
 check('en su aparato no tiene bloqueo automático', await P.evaluate(async () => (await (await fetch('/api/panel')).json()).yo?.bloqueo) === 0);
 check('en ☰ Menú está «Huella / Face ID» para activarla en otro aparato', await P.evaluate(() => { abrirMenu(); return !!document.querySelector('[data-on-click="miHuella"]') }));
+// Celular de un barbero activado con su QR: pantalla simple «Hola, Jhon» (sin cuadrícula ni Google)
+const cod = await P.evaluate(async () => { await API.req('PUT', '/acceso/p_b1/clave', { clave: 'ClaveJhon55' }); return (await API.req('POST', '/acceso/p_b1/invitacion')).codigo });
+const Q = await (await br.newContext({ viewport: { width: 390, height: 844 } })).newPage(); Q.on('pageerror', e => errores.push(e.message));
+await Q.goto(BASE + '/?activar=' + cod); await Q.waitForSelector('#login a.btn'); await Q.click('#login a.btn');
+await Q.waitForSelector('#pfHola', { state: 'visible' });
+check('su celular muestra «Hola, <su nombre>» y solo su clave', /hola,/i.test(await Q.locator('#pfHola').innerText()) && !(await Q.locator('#pfGrid').isVisible()) && await Q.locator('#cClave').isVisible() && !(await Q.locator('#gbtn').isVisible()));
+check('y la opción «No soy …» por si no es él', /^no soy /i.test(await Q.locator('#pfSalir').innerText()));
+await Q.fill('#cClave', 'ClaveJhon55'); await Q.press('#cClave', 'Enter'); await Q.waitForSelector('#login', { state: 'hidden' });
+check('con Enter entra con su clave', await Q.evaluate(() => S.ses?.barberoId) === 'b1');
 check('sin errores ni violaciones de CSP', !errores.length, errores.join(' | '));
 console.log(`\n${ok} OK · ${bad} fallos`); srv.close(); await br.close(); process.exit(bad ? 1 : 0);

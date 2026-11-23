@@ -180,6 +180,8 @@ textarea.in{resize:vertical;font-size:14px}
 .login{position:fixed;inset:0;z-index:70;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
 .login .logo{width:80px;height:80px;font-size:42px;border-radius:24px;margin-bottom:14px}
 .login h2{font:800 26px 'Syne'}
+.login{overflow-y:auto}.login .lgsep{color:var(--mu);font-size:13px;margin-top:18px}
+.login .ayuda{margin-top:18px;max-width:320px;text-align:left;font-size:13.5px;color:var(--mu)}.login .ayuda summary{text-align:center;cursor:pointer;color:var(--blue);font-weight:700;padding:10px;min-height:44px;list-style:none}.login .ayuda ul{padding-left:18px;display:flex;flex-direction:column;gap:8px}
 .pin{font:800 28px 'Syne';letter-spacing:.4em;text-align:center;max-width:260px;margin:22px 0 12px}
 table{width:100%;border-collapse:collapse;font-size:14px}
 td,th{padding:9px 5px;border-bottom:1px solid var(--line);text-align:left}
@@ -303,9 +305,12 @@ main{max-width:none;padding-bottom:calc(120px + env(safe-area-inset-bottom))}
   <div class="logo" id="lgLogo">💈</div>
   <h2 id="lgNombre">Barbería</h2>
   <button class="btn p" id="hTop" style="display:none;width:280px;max-width:100%;padding:14px;margin-top:14px" data-on-click="entrarHuella">👆 Entrar con huella / Face ID</button>
-  <div id="gbtn" style="min-height:0;margin-top:12px"></div>
+  <p class="lgsep" id="gLbl" style="display:none">Soy el dueño</p>
+  <div id="gbtn" style="min-height:0;margin-top:8px"></div>
+  <p class="hint" id="lgEquipo" style="display:none;max-width:300px;margin-top:16px">¿Eres del equipo? Pide al dueño que <b>active tu celular con un QR</b>. Luego entras con tu clave o tu huella.</p>
   <div id="pfBox" style="display:none;width:100%;max-width:340px;flex-direction:column;align-items:center;gap:10px;margin-top:6px">
-    <p style="color:var(--mu)">¿Quién eres?</p>
+    <p style="color:var(--mu)" id="pfTit">¿Quién eres?</p>
+    <div id="pfHola" style="display:none;flex-direction:column;align-items:center;gap:8px"></div>
     <div id="pfGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;width:100%"></div>
     <div id="pfAcc" style="display:none;flex-direction:column;align-items:center;gap:8px;width:100%">
       <button class="btn" id="hBtn" style="width:100%;padding:14px" data-on-click="ad5fbfacc">👆 Entrar con huella</button>
@@ -334,7 +339,7 @@ main{max-width:none;padding-bottom:calc(120px + env(safe-area-inset-bottom))}
       </div>
       <p class="hint" id="sinAcceso" style="display:none;margin:0;text-align:center">Aún no tienes clave: pídesela al dueño (la pone en el Equipo).</p>
     </div>
-    <button class="btn sm" style="margin-top:6px" data-on-click="a49d0af14">Cambiar cuenta de Google</button>
+    <button class="btn sm" id="pfSalir" style="margin-top:6px" data-on-click="a49d0af14">Cambiar cuenta de Google</button>
   </div>
   <div id="pinBox" style="display:flex;flex-direction:column;align-items:center;gap:inherit">
   <p style="color:var(--mu);margin-top:4px">Ingresa tu PIN</p>
@@ -342,6 +347,16 @@ main{max-width:none;padding-bottom:calc(120px + env(safe-area-inset-bottom))}
   <button class="btn p" style="width:260px;padding:14px" data-on-click="a869dfeb8">Entrar</button>
   </div>
   <p class="hint" id="lgHint" style="max-width:300px"></p>
+  <details class="ayuda" id="ayuda">
+    <summary>¿Problemas para entrar?</summary>
+    <ul>
+      <li><b>Dueño:</b> toca el botón de <b>Google</b> y elige tu correo. Después activa tu huella o Face ID y ya no necesitas Google.</li>
+      <li><b>Barbero nuevo o celular nuevo:</b> pide al dueño el QR de «Activar su celular» y ábrelo con la cámara. Luego entra con tu clave.</li>
+      <li><b>¿Olvidaste tu clave?</b> Pídele al dueño una nueva (Equipo → tu nombre → Acceso).</li>
+      <li><b>¿Dice bloqueado?</b> Espera 15 minutos o pide al dueño que te desbloquee.</li>
+      <li><b>iPhone:</b> abre el link en <b>Safari</b>, no dentro de WhatsApp. Para huella o Face ID, instala la app (Compartir → Agregar a inicio).</li>
+    </ul>
+  </details>
 </div>
 
 <header class="top">

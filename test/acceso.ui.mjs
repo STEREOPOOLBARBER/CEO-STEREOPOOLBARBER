@@ -28,7 +28,7 @@ check('clave corta rechazada', await A.locator('#toast').textContent().then(t =>
 await A.click('text=🎲 Generar'); const clave = await A.inputValue('#accC'); check('generar clave', clave.length === 8);
 await A.click('text=💾 Guardar clave'); await A.waitForSelector('#accInv b.syne');
 check('el dueño pone la clave y la ve para pasársela', (await A.locator('#accInv b.syne').innerText()) === clave);
-await A.waitForSelector('text=activa');
+await A.waitForSelector('#acc .tag');
 check('clave marcada como activa (fija, no temporal)', !(await A.locator('#acc').innerText()).includes('temporal (aún'));
 await A.click('text=📲 Activar su celular (QR)'); await A.waitForSelector('#accInv input');
 const link = await A.inputValue('#accInv input'); check('«Activar su celular» da un link de un solo uso', /\/\?activar=/.test(link), link);

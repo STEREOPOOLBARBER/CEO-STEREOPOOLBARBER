@@ -178,7 +178,9 @@ async function initLoginNube(){let ac={google:'',pin:true};try{ac=await API.auth
  // Huella / Face ID: sin escribir nada (la passkey dice quién es). Sale primero si este aparato ya la tiene.
  $('#hTop').style.display=ac.huella&&hayHuella()?'inline-flex':'none';$('#hTop').classList.toggle('p',!!lsGet('huellaAqui',''));
  await loginExtras(ac);if($('#pfBox').style.display==='flex'){$('#hTop').style.display='none';return}
- $('#lgHint').innerHTML=ac.google?'<b>Dueño:</b> entra con tu Google. <b>Equipo:</b> con el Google que el dueño autorizó.':'⚠️ Falta configurar GOOGLE_CLIENT_ID en Cloudflare.';
+ $('#lgHint').innerHTML=ac.google?'':'⚠️ Falta configurar GOOGLE_CLIENT_ID en Cloudflare.';
+ // Aparato sin activar: «Soy el dueño» + Google, y para el equipo, que pida su QR.
+ $('#gLbl').style.display=$('#lgEquipo').style.display=ac.google?'block':'none';
  if(ac.google)gPintar().catch(e=>toast('❌ '+e.message))}
 async function logout(){if(S.dirty&&!confirm('Tienes cambios sin guardar en Config. ¿Salir igual?'))return;if(!confirm('¿Cerrar sesión?'))return;await API.logout();localStorage.removeItem('brb_ses');location.reload()}
 /* ---------- tiempo real: WebSocket con el Durable Object «Avisos» ----------

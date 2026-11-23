@@ -34,7 +34,7 @@ await P.click('text=⚙️ Config'); await P.evaluate(() => { S.open = 'equipo';
 const nombresEq = await P.locator('#t-config .li b').allInnerTexts();
 check('el Equipo muestra a cada persona una vez (dueño + barberos)', nombresEq.includes('Dueño') && new Set(nombresEq).size === nombresEq.length, nombresEq.join());
 await P.click('[data-on-click="eqEditar"][data-p0="b1"]'); await P.waitForSelector('#accC');
-await P.fill('#accC', 'claveJhon7'); await P.check('#accTmp'); await P.click('text=💾 Guardar clave'); await P.waitForSelector('text=activa');
+await P.fill('#accC', 'claveJhon7'); await P.check('#accTmp'); await P.click('text=💾 Guardar clave'); await P.waitForSelector('#acc .tag');
 check('dueño pone clave al barbero', true);
 const nom = await P.evaluate(() => D().equipo.find(p => p.id === 'b1').nombre);
 await P.evaluate(() => API.logout()); await P.evaluate(() => localStorage.removeItem('brb_ses')); await P.reload({ waitUntil: 'domcontentloaded' }); await P.waitForSelector('#pfGrid .btn');

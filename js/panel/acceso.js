@@ -5,15 +5,19 @@ const hayHuella=()=>!!(window.PublicKeyCredential&&navigator.credentials);
 async function loginExtras(ac){
  let r={puerta:false};try{r=await API.req('GET','/auth/perfiles')}catch(e){}
  if(!r.puerta)return;
- $('#gbtn').style.display='none';$('#lgHint').textContent='';$('#pfBox').style.display='flex';S.perf=r.perfiles;
+ $('#gbtn').style.display='none';$('#gLbl').style.display=$('#lgEquipo').style.display='none';$('#lgHint').textContent='';$('#pfBox').style.display='flex';S.perf=r.perfiles;
  const ini=n=>esc((n||'?').trim()[0]||'?').toUpperCase();
  $('#pfGrid').innerHTML=r.perfiles.map(p=>`<button class="btn" data-s="${esc(p.sujeto)}" data-on-click="a30bb08e9" data-p0="${esc(p.sujeto)}" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px"><span style="width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-size:22px;font-weight:800;overflow:hidden;background:${esc(p.color||'var(--blue)')}">${p.rol==='dueno'?'👑':p.foto?`<img data-foto="${esc(p.foto)}" style="width:100%;height:100%;object-fit:cover">`:ini(p.nombre)}</span><b>${esc(p.nombre)}</b><small style="color:var(--mu)">${p.huella?'👆 ':''}${p.clave?'🔑':p.crear?'🆕 crear clave':''}</small></button>`).join('');
  hydrate($('#pfGrid'));
+ // Celular de una sola persona (activado con su QR o con su Google): «Hola, Jhon», sin cuadrícula.
+ const uno=r.perfiles.length===1?r.perfiles[0]:null;$('#pfGrid').style.display=$('#pfTit').style.display=uno?'none':'';$('#pfHola').style.display=uno?'flex':'none';
+ if(uno){$('#pfHola').innerHTML=`<span style="width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-size:26px;font-weight:800;overflow:hidden;background:${esc(uno.color||'var(--blue)')}">${uno.foto?`<img data-foto="${esc(uno.foto)}" style="width:100%;height:100%;object-fit:cover" alt="">`:ini(uno.nombre)}</span><b style="font-size:18px">Hola, ${esc(uno.nombre)}</b>`;hydrate($('#pfHola'));$('#pfSalir').textContent='No soy '+uno.nombre;elegirPerfil(uno.sujeto);return}
+ $('#pfSalir').textContent=r.email?'Cambiar cuenta de Google':'Salir de este aparato';
  const ult=lsGet('ultimoPerfil','');if(ult&&r.perfiles.some(p=>p.sujeto===ult))elegirPerfil(ult)}
 /* Cada persona entra con SU clave o su huella. Si aún no tiene clave y puede crearla (su Google abrió el aparato, o es el dueño), la crea aquí. */
 function elegirPerfil(suj){const p=(S.perf||[]).find(x=>x.sujeto===suj);if(!p)return;S.selP=suj;
  document.querySelectorAll('#pfGrid .btn').forEach(b=>b.style.outline=b.dataset.s===suj?'2px solid var(--blue)':'none');
- $('#pfAcc').style.display='flex';$('#hBtn').style.display=p.huella&&hayHuella()?'inline-flex':'none';
+ $('#pfAcc').style.display='flex';$('#hBtn').style.display=p.huella&&hayHuella()?'inline-flex':'none';$('#hBtn').classList.toggle('p',!!p.huella);$('#hBtn').textContent='👆 Entrar con huella / Face ID';
  $('#cBox').style.display=p.clave?'flex':'none';$('#nBox').style.display=p.crear?'flex':'none';$('#tBox').style.display='none';$('#rBox').style.display='none';$('#olvBtn').style.display=p.clave&&GCFG?.google?'inline-flex':'none';$('#sinAcceso').style.display=!p.clave&&!p.crear&&!p.huella?'block':'none';
  setTimeout(()=>(p.clave?$('#cClave'):p.crear?$('#nClave'):null)?.focus(),50)}
 async function loginClave(){const q=S.selP,c=$('#cClave').value;if(!q)return toast('Elige quién eres');if(!c)return toast('Escribe tu clave');
