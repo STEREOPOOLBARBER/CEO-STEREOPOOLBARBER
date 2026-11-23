@@ -31,7 +31,7 @@ check('registra el cambio de estado con antes → después', r.j.items.some(x =>
 check('registra la edición de hora', r.j.items.some(x => x.accion === 'Editó cita' && /hora: 10:00 → 11:00/.test(x.detalle)));
 check('registra qué se cambió en la configuración', r.j.items.some(x => x.accion === 'Configuración' && /eslogan/.test(x.detalle)));
 check('registra la reserva y la reprogramación del cliente', r.j.items.some(x => x.accion === 'Reservó' && x.quien === 'Cliente') && r.j.items.some(x => x.accion === 'Reprogramó' && x.objeto === pub.j.codigo));
-check('registra la eliminación', r.j.items.some(x => x.accion === 'Eliminó cita' && x.objeto === c.codigo));
+check('registra la eliminación (a la papelera)', r.j.items.some(x => x.accion === 'Movió a la papelera' && x.objeto === c.codigo));
 check('registra el cambio de clave (sin guardar la clave)', r.j.items.some(x => x.accion === 'Dio clave temporal') && r.j.items.some(x => x.accion === 'Cambió su clave') && !txt.includes('clave-segura-1') && !txt.includes('clave-temporal-0'));
 r = await call('GET', '/auditoria?objeto=' + c.codigo, null, adm);
 check('historial de una sola cita', r.j.total === 4 && r.j.items.every(x => x.objeto === c.codigo), JSON.stringify(r.j));

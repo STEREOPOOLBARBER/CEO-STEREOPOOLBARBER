@@ -76,6 +76,11 @@ export const MIGRACIONES = [
     `CREATE TABLE IF NOT EXISTS suscripciones(id TEXT PRIMARY KEY, endpoint TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, tipo TEXT NOT NULL, ref TEXT NOT NULL, pu TEXT NOT NULL DEFAULT '', origen TEXT NOT NULL DEFAULT '', estado TEXT NOT NULL DEFAULT '{}', creado INTEGER NOT NULL)`,
     `CREATE INDEX IF NOT EXISTS ix_susc_ref ON suscripciones(tipo, ref)`,
   ] },
+  // Papelera: las citas eliminadas quedan 7 días (data = la cita completa) y luego se borran solas (cron).
+  { v: 10, nombre: 'papelera', sql: [
+    `CREATE TABLE IF NOT EXISTS papelera(id TEXT PRIMARY KEY, tel TEXT NOT NULL DEFAULT '', barbero_id TEXT NOT NULL DEFAULT '', borrada INTEGER NOT NULL, quien TEXT NOT NULL DEFAULT '', data TEXT NOT NULL)`,
+    `CREATE INDEX IF NOT EXISTS ix_papelera_borrada ON papelera(borrada)`,
+  ] },
 ];
 export let schemaListo = null;
 export function asegurarSchema(env) { return schemaListo ||= aplicarMigraciones(env).catch(e => { schemaListo = null; throw e }) }

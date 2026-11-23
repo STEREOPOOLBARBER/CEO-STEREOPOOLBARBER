@@ -77,6 +77,10 @@ export async function anonimizarCliente(env, tel, quien, motivo) {
   for (const l of ls.results) { const d = JSON.parse(l.data); if (String(d.cliente?.tel || '').replace(/\D/g, '').slice(-9) === tel) { d.cliente = { nombre: 'Cliente anónimo', tel: '' }; cambios.push(env.DB.prepare('UPDATE links SET data = ? WHERE id = ?').bind(JSON.stringify(d), l.id)) } }
   for (const n of nombres) if (n.length >= 3) cambios.push(env.DB.prepare("UPDATE auditoria SET detalle = replace(detalle, ?1, 'Cliente anónimo'), objeto = replace(objeto, ?1, 'Cliente anónimo') WHERE instr(detalle, ?1) > 0 OR instr(objeto, ?1) > 0").bind(n));
   for (const d of dnis) cambios.push(env.DB.prepare('DELETE FROM dnis WHERE dni = ?').bind(d));
+  // Lo que esté en la papelera con ese celular también se borra (con sus fotos).
+  const pap = await env.DB.prepare('SELECT data FROM papelera WHERE tel = ?').bind(tel).all();
+  for (const x of pap.results) { const d = JSON.parse(x.data); for (const k of FOTOS_CITA) if (typeof d[k] === 'string' && /^f_[\w-]+$/.test(d[k])) fotos.push(d[k]) }
+  cambios.push(env.DB.prepare('DELETE FROM papelera WHERE tel = ?').bind(tel));
   cambios.push(env.DB.prepare('DELETE FROM clientes WHERE tel = ?').bind(tel), bumpStmt(env));
   for (let i = 0; i < cambios.length; i += 50) await env.DB.batch(cambios.slice(i, i + 50));
   if (env.FOTOS && fotos.length) for (let i = 0; i < fotos.length; i += 100) { try { await env.FOTOS.delete(fotos.slice(i, i + 100)) } catch (e) { console.error('fotos', e) } }

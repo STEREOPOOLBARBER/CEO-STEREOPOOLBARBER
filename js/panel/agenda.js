@@ -29,10 +29,10 @@ function renderAgenda(){const v=S.vista,chx=$('#agChips')?.scrollLeft;
   ${v.per.t==='mes'?`<div class="row" style="margin-top:10px;justify-content:space-between"><button class="btn sm" data-on-click="fMesMover" data-p0="-1">‹</button><b style="text-transform:capitalize;text-align:center;flex:1">${textoPer(v.per)}${v.per.m!==hoy().slice(0,7)?` <button class="btn sm" data-on-click="fMesMover" data-p0="0">Este mes</button>`:''}</b><button class="btn sm" data-on-click="fMesMover" data-p0="1">›</button></div>`:''}
   <div class="chips" id="agChips"></div>
   <p class="hint" style="margin-top:4px;font-size:11px">Toca 2 veces una etiqueta para ver su orden y sus filtros${v.per.t==='dia'?' · toca otra vez el día para ver todo el mes':''}</p>
-  <div class="tools"><button class="tool" title="Recordatorios por WhatsApp" data-on-click="abrirRecordatorios">⏰${(()=>{const n=citasARecordar().filter(c=>!recordada(c)&&!c.asistencia).length;return n?`<i class="cc" style="position:absolute;margin:-18px 0 0 18px">${n}</i>`:''})()}</button>${can('dash')?`<button class="tool" title="Clientes" data-on-click="a9f1c1a7e">👥</button>`:''}${can('verMontos')?`<button class="tool" title="Caja" data-on-click="a0211b28c">📊</button>`:''}<button class="tool" title="Actualizar" data-on-click="a1d5ed7f2">🔄</button><button class="tool" title="Ayuda" data-on-click="a6f742281">📖</button>${isAdmin()&&can('crear')?`<button class="tool" title="Mover citas a otro día" data-on-click="a9080fa1d">📅</button>`:''}${can('crear')?`<button class="tool p" title="Nueva cita" data-on-click="ab17bc635">➕</button>`:''}${S.cfg.modWalkin&&can('crear')?`<button class="tool pu" title="Cliente sin cita" data-on-click="adb1da1e1">⚡</button>`:''}</div>
+  <div class="tools"><button class="tool" title="Recordatorios por WhatsApp" data-on-click="abrirRecordatorios">⏰${(()=>{const n=citasARecordar().filter(c=>!recordada(c)&&!c.asistencia).length;return n?`<i class="cc" style="position:absolute;margin:-18px 0 0 18px">${n}</i>`:''})()}</button>${can('dash')?`<button class="tool" title="Clientes" data-on-click="a9f1c1a7e">👥</button>`:''}${can('verMontos')?`<button class="tool" title="Caja" data-on-click="a0211b28c">📊</button>`:''}<button class="tool" title="Actualizar" data-on-click="a1d5ed7f2">🔄</button><button class="tool" title="Ayuda" data-on-click="a6f742281">📖</button>${isAdmin()&&can('crear')?`<button class="tool" title="Mover citas a otro día" data-on-click="a9080fa1d">📅</button>`:''}${can('crear')?`<button class="tool p" title="Nueva cita" data-on-click="ab17bc635">➕</button>`:''}${S.cfg.modWalkin&&can('crear')?`<button class="tool pu" title="Cliente sin cita" data-on-click="adb1da1e1">⚡</button>`:''}${navFlechasHTML()}${API.remote&&can('cancelar')?`<button class="tool" title="Papelera (7 días)" data-on-click="abrirPapelera">🗑️${S.papelera?`<i class="cc" style="position:absolute;margin:-18px 0 0 18px">${S.papelera}</i>`:''}</button>`:''}</div>
  </div>
  <div id="lista"></div>`;
- $('#t-agenda').insertAdjacentHTML('afterbegin','<div id="nextBox"></div>');renderNext();renderConteos(chx);renderLista();
+ $('#t-agenda').insertAdjacentHTML('afterbegin','<div id="nextBox"></div>');vigilarFlechas();renderNext();renderConteos(chx);renderLista();
 }
 /* x: desplazamiento previo de las etiquetas (se conserva para que un segundo toque caiga en la misma etiqueta). */
 function renderConteos(x){const v=S.vista,cnt=conteos(v),st=$('#agStats'),ch=$('#agChips');if(!st||!ch)return;const prev=x??ch.scrollLeft;
@@ -144,7 +144,7 @@ function cardCita(c,vis){
   ${c.nota?`<div class="nota">📝 ${esc(c.nota)}</div>`:''}
   <div class="tags"><span class="tag">#${esc(c.codigo||'')}</span>${c.promo?`<span class="tag" style="color:var(--pur);border-color:var(--pur)" title="Reservó con la promoción «${esc(c.promo.titulo||'')}»">🏷️ ${esc(c.promo.titulo||'Promo')}</span>`:''}${c.asistencia?`<span class="tag" style="color:#3fb950;border-color:#3fb950" title="Confirmó ${c.asistencia.via==='whatsapp'?'respondiendo por WhatsApp':'desde el link de su cita'}">👍 Confirmó que viene</span>`:''}${recInfo(c)}${c.reprog?`<span class="tag" style="color:var(--blue);border-color:var(--blue)" title="Antes: ${c.reprogDe?esc(fLarga(c.reprogDe.fecha)+' · '+h12(c.reprogDe.hora)):''}">🔁 Reprogramada${c.reprogDe?' (antes '+esc(fLarga(c.reprogDe.fecha).split(' ').slice(0,2).join(' ')+' '+h12(c.reprogDe.hora))+')':''}</span>`:''}${v?`<span class="tag">⭐ ${v} visita${v>1?'s':''}</span>`:''}${gratis?'<span class="tag" style="color:var(--pur);border-color:var(--pur)">🎁 Le toca gratis</span>':''}${(c.links||[]).slice(0,1).map(l=>`<span class="tag lk" style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-on-click="a7df36ca4" data-p0="${c.id}">🔗 ${esc(l.url.replace(/^https?:\/\//,'').slice(0,22))}…</span>`).join('')}${(c.links||[]).length>1?`<span class="tag">+${c.links.length-1}</span>`:''}${c.origen==='web'?'<span class="tag">🌐 Web</span>':c.origen==='walkin'?'<span class="tag">⚡ Sin cita</span>':''}</div>
   ${pagoBox}${S.cfg.modFotos&&(['confirmada','en_silla','atendida'].includes(c.estado)||c.fotoAntes||c.fotoDespues||c.refFoto)?`<div class="box"><h5>📷 <span>Fotos del corte</span>${c.adelantoOk?`<span class="pill" style="color:var(--grn);border-color:var(--grn)">✔ Adelanto ${soles(c.adelanto)}</span>`:''}</h5><div class="phs3">${ph(c,'antes')}${ph(c,'despues')}${ph(c,'ref')}</div></div>`:''}
-  <div class="acts"><button class="big" style="color:${ac?ac.c:e.c};border-color:${ac?ac.c:e.c};background:${ac?ac.c:e.c}1a" data-on-click="afa8ec677" data-p0="${c.id}">${ac?ac.t:`${e.i} ${esc(e.t)} 🔒`}</button>${can('crear')?`<button class="sq" data-on-click="a1b96555c" data-p0="${c.id}">✏️</button>`:''}${can('cancelar')?`<button class="sq r" data-on-click="a42b723aa" data-p0="${c.id}">🗑️</button>`:''}</div>
+  <div class="acts"><button class="big" style="color:${ac?ac.c:e.c};border-color:${ac?ac.c:e.c};background:${ac?ac.c:e.c}1a" data-on-click="afa8ec677" data-p0="${c.id}">${ac?ac.t:`${e.i} ${esc(e.t)} 🔒`}</button>${can('crear')?`<button class="sq" data-on-click="a1b96555c" data-p0="${c.id}">✏️</button>`:''}${can('cancelar')?(['cancelada','expirada'].includes(c.estado)?`<button class="sq r" title="Mover a la papelera" data-on-click="a42b723aa" data-p0="${c.id}">🗑️</button>`:`<button class="etqcan" title="Cancelar la cita (el horario queda libre)" data-on-click="a42b723aa" data-p0="${c.id}">🚫 Cancelar</button>`):''}</div>
  </div>`}
 function ph(c,k){const key=k==='antes'?c.fotoAntes:k==='ref'?c.refFoto:c.fotoDespues,lbl=k==='antes'?'ANTES':k==='ref'?'REFERENCIA':'DESPUÉS',inp=`<input type="file" accept="image/*" ${k==='ref'?'':'capture="environment"'} data-on-change="a6646ca8f" data-p0="${c.id}" data-p1="${k}">`;
  return key?`<div class="ph"><span class="tg">${lbl}</span><img data-foto="${key}" data-on-click="adb395fd1" data-p0="${key}"><label class="re">↻${inp}</label></div>`:`<label class="ph">📷<br>Foto ${lbl.toLowerCase()}${inp}</label>`}
@@ -180,7 +180,7 @@ async function terminar(id,auto){const c=cita(id);if(!c)return;if(!auto&&S.cfg.m
  await setEstado(id,'atendida',extra,'✔️ Corte terminado');
  if(w){if(cita(id)?.estado==='atendida')irA(w,waUrl(waNum(c.cliente.tel),tpl(S.cfg.waGracias,cita(id))));else w.close()}}
 async function quitar(id){const c=cita(id);if(!c)return;
- if(['cancelada','expirada'].includes(c.estado)){if(can('cancelar')&&confirm('¿Eliminar la cita para siempre?')){await API.borrarCita(id);await reload();toast('🗑️ Eliminada')}return}
+ if(['cancelada','expirada'].includes(c.estado)){if(can('cancelar')&&confirm(API.remote?'¿Mover la cita a la papelera? Podrás recuperarla durante 7 días.':'¿Eliminar la cita para siempre?')){await API.borrarCita(id);await reload();toast(API.remote?'🗑️ En la papelera (7 días)':'🗑️ Eliminada')}return}
  if(!confirm('¿Cancelar esta cita? El horario queda libre.'))return;await setEstado(id,'cancelada')}
 function menuWA(id){const c=cita(id);if(!c)return;
  const o=[['waConfirma','✅ Confirmación de cita'],['waRecuerda','⏰ Recordatorio'],['waYape','💸 Pedir adelanto Yape'],['waGracias','🙏 Agradecimiento + link'],['','✉️ Mensaje libre']];
@@ -238,7 +238,7 @@ async function guardarCita(id){const s=S.servicios.find(x=>x.id===$('#fServ').va
 /* «❌ No vino» desde el aviso de la próxima cita atrasada. */
 const noVino=id=>cambiarEstado(id,'no_vino');
 async function cambiarEstado(id,k){const c=cita(id);if(ACTIVOS.includes(k)&&!activa(c)&&ocupado(S.citas,c.barberoId,c.fecha,c.hora,id))return toast('❌ Ese horario ya lo tomó otra cita');closeModal();await setEstado(id,k,k==='confirmada'&&c.adelanto>0?{adelantoOk:true}:{})}
-async function eliminar(id){if(!confirm('¿Eliminar la cita para siempre?'))return;closeModal();try{await API.borrarCita(id);await reload();toast('🗑️ Eliminada')}catch(e){toast('❌ '+e.message)}}
+async function eliminar(id){if(!confirm(API.remote?'¿Mover la cita a la papelera? Su horario queda libre y podrás recuperarla durante 7 días.':'¿Eliminar la cita para siempre?'))return;closeModal();try{await API.borrarCita(id);await reload();toast(API.remote?'🗑️ En la papelera (7 días)':'🗑️ Eliminada')}catch(e){toast('❌ '+e.message)}}
 function walkIn(){const bid=isAdmin()?(S.vista.barb[0]||S.barberos.find(b=>b.activo!==false)?.id||''):S.ses.barberoId;
  const bOpts=(isAdmin()?S.barberos.filter(b=>b.activo!==false):S.barberos.filter(b=>b.id===S.ses.barberoId)).map(b=>`<option value="${b.id}" ${b.id===bid?'selected':''}>${esc(b.nombre)}</option>`).join('');
  openModal(mHead('⚡ Cliente sin cita')+`<p class="hint" style="margin-top:0">Llegó sin reservar: entra directo a la silla.</p>
@@ -278,3 +278,24 @@ ACC.recManual=function(){recordar(this.dataset.p0);setTimeout(abrirRecordatorios
 ACC.recAuto=async function(){this.disabled=true;try{await API.req('POST','/whatsapp/enviar',{id:this.dataset.p0,tipo:'recordatorio'});await reload();toast('🤖 Recordatorio enviado');abrirRecordatorios()}catch(e){this.disabled=false;toast('❌ '+e.message)}};
 ACC.recTodos=async function(){this.disabled=true;let n=0,err=0;for(const c of citasARecordar().filter(c=>!recordada(c)&&!c.asistencia)){try{await API.req('POST','/whatsapp/enviar',{id:c.id,tipo:'recordatorio'});n++}catch(e){err++}}await reload();toast(`🤖 ${n} enviado(s)${err?` · ${err} con error`:''}`);abrirRecordatorios()};
 ACC.abrirRecordatorios=function(){abrirRecordatorios()};
+
+/* ---------- ▲ ▼ tarjeta por tarjeta (como Total Tools) ----------
+   Toma la tarjeta más cercana al borde de arriba (debajo de la cabecera fija) y se desliza suave a la anterior
+   o a la siguiente, dejándola alineada arriba. Cuando la fila de herramientas sale de la pantalla, las flechas
+   quedan flotando abajo a la derecha (al alcance del pulgar). */
+const navFlechasHTML=(cl='tool fl')=>`<button class="${cl}" title="Tarjeta anterior" aria-label="Tarjeta anterior" data-on-click="irTarjeta" data-p0="-1">▲</button><button class="${cl}" title="Tarjeta siguiente" aria-label="Tarjeta siguiente" data-on-click="irTarjeta" data-p0="1">▼</button>`;
+const altoFijo=()=>{const t=document.querySelector('.tabs')||document.querySelector('.top');return t?Math.max(0,t.getBoundingClientRect().bottom):0};
+function irTarjeta(dir){const cs=[...document.querySelectorAll('#lista .cita')].filter(x=>x.offsetParent);if(!cs.length)return;const tope=altoFijo()+8;
+ let i=0,mejor=Infinity;cs.forEach((c,k)=>{const d=Math.abs(c.getBoundingClientRect().top-tope);if(d<mejor){mejor=d;i=k}});
+ const y=cs[i].getBoundingClientRect().top;let j=i+dir;
+ if(dir>0&&y>tope+4)j=i;   // aún no llegamos a esa tarjeta: ▼ va a ella
+ if(dir<0&&y<tope-4)j=i;   // estamos a mitad de esa tarjeta: ▲ vuelve a su inicio
+ j=Math.max(0,Math.min(cs.length-1,j));
+ scrollTo({top:Math.max(0,scrollY+cs[j].getBoundingClientRect().top-tope),behavior:'smooth'});
+ cs[j].classList.add('foco');setTimeout(()=>cs[j].classList.remove('foco'),800)}
+ACC.irTarjeta=function(){irTarjeta(+this.dataset.p0)};
+let NAVIO=null;
+function vigilarFlechas(){let f=$('#navFl');if(!f){document.body.insertAdjacentHTML('beforeend',`<div class="navfl" id="navFl">${navFlechasHTML('')}</div>`);f=$('#navFl')}
+ const t=$('#t-agenda .tools');if(!t||!('IntersectionObserver' in window))return;NAVIO?.disconnect();
+ // Lo que queda debajo de la cabecera fija no se ve: se descuenta su alto.
+ NAVIO=new IntersectionObserver(([e])=>f.classList.toggle('on',!e.isIntersecting&&S.tab==='agenda'&&document.querySelectorAll('#lista .cita').length>1),{rootMargin:`-${Math.round(altoFijo())}px 0px 0px 0px`});NAVIO.observe(t)}

@@ -111,6 +111,12 @@ main{padding:14px;max-width:760px;margin:0 auto;padding-bottom:120px}
 .big{flex:1;border-radius:14px;padding:13px 10px;font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:.02em;border:1.5px solid;text-align:center;line-height:1.25}
 .sq{width:54px;border-radius:14px;border:1px solid var(--line);background:var(--bg);font-size:20px;display:grid;place-items:center;flex:none}
 .sq.r{border-color:#f8514966;background:rgba(248,81,73,.08)}
+.etqcan{flex:none;border-radius:14px;border:1.5px solid #f8514966;background:rgba(248,81,73,.08);color:#f85149;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.02em;padding:0 12px;min-height:48px}
+.tool.fl{font-size:20px}
+.cita.foco{outline:2px solid var(--pur);outline-offset:2px;transition:outline-color .3s}
+.navfl{position:fixed;right:calc(var(--lado,0px) + 14px);bottom:calc(86px + env(safe-area-inset-bottom));z-index:35;display:flex;flex-direction:column;gap:8px;opacity:0;pointer-events:none;transform:translateY(8px);transition:.2s}
+.navfl.on{opacity:1;pointer-events:auto;transform:none}
+.navfl button{width:48px;height:48px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--tx);font-size:20px;box-shadow:0 6px 18px rgba(0,0,0,.45)}
 .empty{text-align:center;color:var(--mu);padding:36px 10px}
 .empty b{display:block;font-size:42px;margin-bottom:8px}
 .banner{border-radius:14px;padding:12px;font-size:14px;margin-bottom:12px;border:1px solid var(--yel);color:var(--yel);background:rgba(210,153,34,.08)}
@@ -387,6 +393,7 @@ main{max-width:none;padding-bottom:calc(120px + env(safe-area-inset-bottom))}
 <script src="js/panel/clientes.js"></script>
 <script src="js/panel/calificaciones.js"></script>
 <script src="js/panel/promos.js"></script>
+<script src="js/panel/papelera.js"></script>
 <script src="js/panel/compartir.js"></script>
 <script src="js/panel/dashboard.js"></script>
 <script src="js/panel/config.js"></script>

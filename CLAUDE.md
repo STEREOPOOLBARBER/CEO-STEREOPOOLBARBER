@@ -21,7 +21,7 @@ Sistema de reservas de una barbería en Puente Piedra (Lima, Perú). El dueño n
 Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño prueba en staging → se pasa a `main` (merge) → Cloudflare despliega producción. GitHub Actions (`.github/workflows/pruebas.yml`) corre las pruebas en cada push.
 
 ## Estructura
-- `index.html` — panel (dueño, barberos, personal): solo HTML y estilos. Su JS está en `js/panel/` por pantalla (`base`, `agenda`, `filtros`, `escaner`, `clientes`, `calificaciones`, `promos`, `compartir`, `dashboard`, `config`, `equipo`, `voz`, `acceso`, `app`, `avisos`, `inicio`), después de `js/voz.js`, cargados en ese orden como scripts clásicos (comparten el ámbito global). Modo nube (`/api`) o local (localStorage, solo demo).
+- `index.html` — panel (dueño, barberos, personal): solo HTML y estilos. Su JS está en `js/panel/` por pantalla (`base`, `agenda`, `filtros`, `escaner`, `clientes`, `calificaciones`, `promos`, `papelera`, `compartir`, `dashboard`, `config`, `equipo`, `voz`, `acceso`, `app`, `avisos`, `inicio`), después de `js/voz.js`, cargados en ese orden como scripts clásicos (comparten el ámbito global). Modo nube (`/api`) o local (localStorage, solo demo).
 - `js/reservar.js`, `js/estado.js` — JS del formulario y de la página de estado.
 - `js/voz.js` (guion de voz, frases originales, piezas de fecha y hora; lo usan las 3 páginas) · `js/escena.js` + `css/escena.css` (pantalla «Toca para entrar», narrador y reproductor de la voz grabada; reservar y estado) · `img/` (narrador y logo Stereo).
 - `js/eventos.js` — **despachador de eventos** y registro `ACC` de acciones (generado a partir de los antiguos `onclick`).
@@ -33,6 +33,7 @@ Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño pru
   - `comun.js` — constantes, utilidades, hora de Lima y reglas de agenda (`slotsDia`, `trabaja`, `reglaReprog`). Sin dependencias.
   - `datos.js` — D1: **migraciones versionadas** (`MIGRACIONES`), kv, citas (insertar/guardar/expirar), fotos y audios en R2.
   - `modulos/filtros.js` — filtros y órdenes de la agenda (los usan `/citas/buscar` y `/citas/conteo`).
+  - `modulos/papelera.js` — **papelera** (migración v10): `DELETE /citas/:id` mueve la cita a la tabla `papelera` 7 días (horario libre); `GET /papelera`, `POST /papelera/:id/recuperar` (si su horario se ocupó, vuelve como `cancelada`), `DELETE /papelera/:id`; cron `purgarPapelera` borra lo de más de 7 días con sus fotos. Anonimizar también la vacía para ese celular. `/panel` trae `papelera` (conteo).
   - `modulos/push.js` — avisos al celular (Web Push sin librerías: VAPID ES256 + cifrado RFC 8291). Ver «Avisos al celular».
   - `modulos/promos.js` — promociones: kv `promos` (máx. 12), `GET/PUT /promos` (permiso `config`), `promosPublicas` (en `/publico`), `promoPara` (precio al reservar), `POST /publico/promos/visto` (contadores `promo:<id>:v|c`, sin avisar a los paneles).
   - `modulos/calificaciones.js` — calificación anónima (`POST /publico/cita/:c/calificar`, migración v6) y resumen del panel (`GET /calificaciones`).
@@ -106,6 +107,10 @@ Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño pru
 ## Después del corte (/cita/CODIGO)
 - QR con `/cita/CODIGO` mientras la cita está por validar o confirmada; el 📷 del panel (`js/panel/escaner.js`: BarcodeDetector o `vendor/jsqr.min.js` con SRI) abre la cita (`codigoDeQR` entiende `/cita/X`, `?c=X` y el código solo).
 - Atendida: fotos por `GET /publico/cita/:c/foto/(antes|despues)`; calificación anónima (sin nombre/celular/código, solo el mes; huella aparte en `calif_hechas`; 7 días; una vez); el panel la muestra por barbero con 3 o más. Reseña (`cfg.resenaUrl`) **a todos** (Google prohíbe pedirla solo a los contentos).
+
+## Tarjetas de la agenda
+- Cita activa: etiqueta **«🚫 Cancelar»** (`.etqcan`, pasa a CANCELADA); cancelada/expirada: 🗑️ (a la papelera). Herramientas: ⏰ 👥 📊 🔄 📖 📅 ➕ ⚡ **▲ ▼** 🗑️ (papelera con conteo).
+- ▲ ▼ (`irTarjeta` en `js/panel/agenda.js`, como Total Tools): la tarjeta más cercana al borde de arriba (debajo de `.tabs`, `altoFijo()`) → la anterior o la siguiente, alineada arriba. Si la fila de herramientas queda tapada, flotan abajo a la derecha (`#navFl`, IntersectionObserver con `rootMargin` = alto de la cabecera).
 
 ## Filtros de la agenda
 - Una sola vista `S.vista` (`js/panel/filtros.js`): periodo (`dia` | `mes` | `rango`), etiqueta, texto, filtros (`barb`, `serv`, `pago`, `origen`, `cli`, `wa` y los propios de una etiqueta: `captura`, `foto`, `tipo`) y `orden`. `VISTA_DEF()` es lo predeterminado y «Limpiar» vuelve a eso.

@@ -3,6 +3,7 @@ import { PERMS, ROLES, addD, ahoraLocal, codigo, fail, json, norm, str, uid } fr
 import { bumpStmt, citaPorId, datos, expirar, filaCita, guardarCita, insertarCita, kvStmt, leerKV } from '../datos.js';
 import { auditar, identDe, personaDe, pinPermitido, quienEs } from './auth.js';
 import { filtrosCitas, MONTO, ordenCitas } from './filtros.js';
+import { contarPapelera, moverAPapelera } from './papelera.js';
 
 /* ---------- vistas según permisos ---------- */
 // El equipo completo (con correos) solo lo ve quien configura; el PIN solo existe en pruebas locales.
@@ -75,7 +76,8 @@ export async function rutasCitas(c) {
       env.DB.prepare(`SELECT MIN(fecha) AS f FROM citas WHERE 1 = 1${sb}`).bind(...ab).first(),
     ]);
     const vis = await visitasPorCliente(env, s, r.results.map(x => x.tel)), wa = (await leerKV(env, ['whatsappApi'])).whatsappApi || {};
-    return json({ ...vistaPanel(d, r.results.map(filaCita), s, env), v: ver, ventana: { desde, hasta }, visitas: vis, primeraFecha: pri?.f || null, wa: { ok: !!wa.conectado?.ok, diaAntes: !!wa.auto?.diaAntes } });
+    const papelera = await contarPapelera(env, s);
+    return json({ ...vistaPanel(d, r.results.map(filaCita), s, env), papelera, v: ver, ventana: { desde, hasta }, visitas: vis, primeraFecha: pri?.f || null, wa: { ok: !!wa.conectado?.ok, diaAntes: !!wa.auto?.diaAntes } });
   }
   if (path === '/citas/conteo' && m === 'GET') return json(await conteoCitas(env, s, Object.fromEntries(new URL(req.url).searchParams)));
   if (path === '/citas/buscar' && m === 'GET') {
@@ -104,7 +106,7 @@ export async function rutasCitas(c) {
   }
   if ((x = path.match(/^\/citas\/([\w-]+)$/)) && (m === 'PATCH' || m === 'DELETE')) {
     const c = await citaPorId(env, x[1]); if (!c) fail(404, 'La cita ya no existe'); propia(c);
-    if (m === 'DELETE') { exigir('cancelar'); await env.DB.batch([env.DB.prepare('DELETE FROM citas WHERE id = ?').bind(c.id), bumpStmt(env)]); await actualizarCliente(env, telDe(c)); await auditar(env, quienEs(s), 'Eliminó cita', c.codigo, `${c.cliente?.nombre || ''} · ${c.fecha} ${c.hora}`); return json({ ok: true }) }
+    if (m === 'DELETE') { exigir('cancelar'); await moverAPapelera(env, c, s); return json({ ok: true, papelera: true }) } // se puede recuperar 7 días
     const { id, codigo: _c, creada, ...patch } = await body();
     if (['cancelada', 'no_vino'].includes(patch.estado)) exigir('cancelar');
     else if ('adelantoOk' in patch) { if (!s.perm.yape && !s.perm.crear) fail(403, 'No tienes permiso para validar pagos') }

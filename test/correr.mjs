@@ -34,6 +34,8 @@ const SUITES = [
   { n: 'privacidad.e2e', vars: PIN, sql: ADMIN, extra: ['--test-scheduled'] },
   { n: 'filtros.e2e', vars: PIN, sql: ADMIN },
   { n: 'promos.e2e', vars: PIN, sql: ADMIN },
+  { n: 'papelera.ui', vars: PIN, sql: ADMIN, ui: true },
+  { n: 'papelera.e2e', vars: { ...PIN, PAPELERA_PRUEBA: 'true' }, sql: ADMIN, extra: ['--test-scheduled'] },
   { n: 'promos.ui', vars: PIN, sql: ADMIN, ui: true },
   { n: 'push.ui', vars: { ...PIN, PUSH_PERMITIR_LOCAL: 'true' }, sql: ADMIN, ui: true },
   { n: 'push.e2e', vars: { ...PIN, PUSH_PERMITIR_LOCAL: 'true', PUSH_HORA_DIA: '00:00' }, sql: ADMIN, extra: ['--test-scheduled'] },

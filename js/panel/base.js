@@ -212,7 +212,7 @@ async function boot(){
 }
 async function reload(notify){
  let d0;try{const d=d0=await API.load();Object.assign(S,{cfg:mergeCfg(d.cfg),equipo:d.equipo||[],barberos:d.barberos||[],servicios:d.servicios||[],citas:(d.citas||[]).map(c=>c.estado==='pendiente_pago'?{...c,estado:'por_validar'}:c)})}catch(e){toast('⚠️ '+e.message);return}
- if(API.remote){const v=API._v;if(v!==S._vPrev){S._vPrev=v;S.extra=new Map();S.rangosOk=new Set();S.hist=null}S.ventana=API._d?.ventana||null;S.visitas=API._d?.visitas||null;S.primeraFecha=API._d?.primeraFecha||null;S.waOk=!!API._d?.wa?.ok;S.waDiaAntes=!!API._d?.wa?.diaAntes;mezclar([])}
+ if(API.remote){const v=API._v;if(v!==S._vPrev){S._vPrev=v;S.extra=new Map();S.rangosOk=new Set();S.hist=null}S.ventana=API._d?.ventana||null;S.papelera=API._d?.papelera||0;S.visitas=API._d?.visitas||null;S.primeraFecha=API._d?.primeraFecha||null;S.waOk=!!API._d?.wa?.ok;S.waDiaAntes=!!API._d?.wa?.diaAntes;mezclar([])}
  if(API.remote&&d0.yo?.pid){const{perm,...yo}=d0.yo;S.ses={...S.ses,...yo};lsSet('ses',S.ses)}
  const pm=API.remote?d0.yo?.perm||null:permisosLocal(S.ses);if(pm===null){toast('Tu usuario fue desactivado');localStorage.removeItem('brb_ses');return setTimeout(()=>location.reload(),900)}S.perm=pm;
  if(notify&&S.loaded){const nuevas=S.citas.filter(c=>!S.known.has(c.id)&&mine(c)&&c.origen==='web');if(nuevas.length){toast(`🔔 ${nuevas.length} reserva(s) nueva(s)`);navigator.vibrate?.([120,60,120]);beep()}
@@ -228,7 +228,7 @@ function renderHeader(){
  $('#hSub').innerHTML=`${S.cfg.whatsapp?esc(S.cfg.whatsapp):esc(S.cfg.eslogan||'')} <span class="pill" style="color:var(--pur);border-color:var(--pur)">${(ROLES[S.ses.rol]?.t||'👤').split(' ')[0]} ${esc(S.ses.nombre||'')}</span>`;
  const n=notifs().filter(x=>!S.leidas.has(x.k)).length;const d=$('#hDot');d.style.display=n?'grid':'none';d.textContent=n>99?'99+':n;if($('#notif')?.classList.contains('on'))pintaNotif();
 }
-function goTab(t){S.tab=t;$$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));$$('.sec').forEach(s=>s.classList.toggle('on',s.id==='t-'+t));renderTab();scrollTo(0,0)}
+function goTab(t){S.tab=t;if(t!=='agenda')$('#navFl')?.classList.remove('on');$$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));$$('.sec').forEach(s=>s.classList.toggle('on',s.id==='t-'+t));renderTab();scrollTo(0,0)}
 function renderTab(){({agenda:renderAgenda,compartir:renderCompartir,config:renderConfig})[S.tab]?.()}
 function hydrate(root=document){root.querySelectorAll('img[data-foto]').forEach(async im=>{if(im.dataset.ok)return;im.dataset.ok=1;const src=await API.foto(im.dataset.foto);if(src)im.src=src})}
 const avatar=(b,lg)=>b?.foto?`<img class="av ${lg?'lg':''}" data-foto="${b.foto}">`:`<span class="av ${lg?'lg':''}" style="background:${b?.color||'var(--card2)'}33">💈</span>`;

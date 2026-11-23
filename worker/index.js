@@ -31,6 +31,7 @@ import { rutasMonitoreo } from './modulos/monitoreo.js';
 import { rutasPublicas } from './modulos/publico.js';
 import { rutasPromos, rutasPromosPublicas } from './modulos/promos.js';
 import { pushAuto, rutasPush, rutasPushPublicas } from './modulos/push.js';
+import { purgarPapelera, rutasPapelera } from './modulos/papelera.js';
 import { respaldoDiario } from './modulos/respaldos.js';
 import { frenar, ipDe } from './modulos/seguridad.js';
 import { conVistaPrevia } from './vista-previa.js';
@@ -63,7 +64,7 @@ async function api(req, env, path, ctx) {
   const propia = c => { if (!s.perm.verTodas && c.barberoId !== s.barberoId) fail(403, 'No es tu cita') };
 
   Object.assign(c, { d, s, exigir, propia });
-  for (const r of [rutasTiempoReal, rutasWhatsapp, rutasReportes, rutasCalificaciones, rutasPromos, rutasPush, rutasDni, rutasAcceso, rutasMonitoreo, rutasClientes, rutasCitas, rutasConfig]) { const res = await r(c); if (res) return res }
+  for (const r of [rutasTiempoReal, rutasWhatsapp, rutasReportes, rutasCalificaciones, rutasPromos, rutasPush, rutasPapelera, rutasDni, rutasAcceso, rutasMonitoreo, rutasClientes, rutasCitas, rutasConfig]) { const res = await r(c); if (res) return res }
   fail(404, 'Ruta no encontrada');
 }
 
@@ -95,6 +96,7 @@ export default {
     try { if (await reporteSemanal(env)) await avisar(env) } catch (e) { console.error('reporte', e) }
     try { const r = await whatsappAuto(env); if (r.enviados) await avisar(env) } catch (e) { console.error('whatsapp', e) }
     try { await pushAuto(env) } catch (e) { console.error('push', e) }
+    try { await purgarPapelera(env) } catch (e) { console.error('papelera', e) }
     try { const r = await retencion(env, { ...DEF, ...(await datos(env)).cfg }); if (r.anonimizados || r.capturas) await avisar(env) } catch (e) { console.error('retención', e) }
     const corte = addD(ahoraLocal(env).fecha, -60);
     await env.DB.batch([

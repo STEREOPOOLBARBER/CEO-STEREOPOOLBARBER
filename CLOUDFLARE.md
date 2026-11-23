@@ -95,6 +95,11 @@ El link que recibe el cliente ahora es **`tudominio/cita/CODIGO`** (WhatsApp, QR
 - **iPhone:** solo funcionan con la app instalada en la pantalla de inicio (regla de Apple). Android y PC: siempre.
 - **No hay que configurar nada en Cloudflare:** la clave de firma se crea sola. (Opcional: secreto `VAPID_PRIVADA` si algún día quieres fijarla tú.) Los recordatorios de WhatsApp siguen igual, como respaldo.
 
+### Agenda: cancelar, papelera y flechas
+- En cada cita activa, **«🚫 Cancelar»** (etiqueta): la cita pasa a CANCELADA y su horario queda libre.
+- **🗑️ Papelera:** en una cita cancelada, el 🗑️ la mueve a la papelera. El botón 🗑️ de herramientas (con el número) la abre: **Recuperar** (vuelve a la agenda; si su horario ya lo tomó otra, vuelve como cancelada) o **Eliminar ya**. A los **7 días** se borra sola, con sus fotos.
+- **▲ ▼** al costado del ⚡: saltan de tarjeta en tarjeta. Al bajar en la lista, quedan flotando abajo a la derecha.
+
 ### Promociones
 En el panel: **☰ Menú → 🏷️ Promociones → Nueva promoción**. Eliges el servicio, el precio promo (menor al normal), desde/hasta y, si quieres, solo ciertos días (ej.: martes y miércoles). Puedes pausarla, ordenarla o borrarla.
 - El cliente la ve en su app «Mi cita» y en el formulario (servicio con precio tachado y días marcados «Promo»). Al reservar ese servicio un día válido, **el sistema pone el precio promo solo**; en la agenda la cita sale con la etiqueta 🏷️.
