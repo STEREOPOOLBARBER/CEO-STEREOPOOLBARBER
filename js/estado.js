@@ -103,6 +103,7 @@ function pintar(){const c=P.cfg,i=E.info;clearInterval(E.timer);
  </section>
  ${viva&&confirmable(i)?`<section class="card qr"><p class="h3" style="justify-content:center">${ic('qr')}Muéstralo al llegar</p><div id="qrCita"></div><p>Tu barbero lo escanea y encuentra tu cita al instante.</p></section>`:''}
  ${i.estado==='atendida'?atendidaHTML(i):''}
+ ${promosHTML(i)}
  ${instalada()?'':`<section class="card instalar"><div class="t"><b>Ten tu cita a la mano</b><small>Agrégala a tu pantalla de inicio: se abre directo, sin buscar el mensaje.</small></div><button class="btn p" data-on-click="instalarApp">${ic('descargar')}Descargar</button></section>`}
  <section class="card"><p class="h3">${ic('info')}Detalles</p><div class="datos">
   <div class="dato">${ic('tijera')}<div><b>${esc(i.servicio||'')}</b><small>${soles(i.precio)}</small></div></div>
@@ -113,7 +114,7 @@ function pintar(){const c=P.cfg,i=E.info;clearInterval(E.timer);
  ${mapaHTML(c)}
  ${c.politicaTxt?`<section class="card"><details><summary>Política de la barbería</summary><div>${esc(c.politicaTxt)}</div></details></section>`:''}`,
  `${c.whatsapp?`<button class="btn wa" data-on-click="escribirBarberia">${ic('mensaje')}WhatsApp</button>`:''}<button class="btn" data-on-click="actualizarCita" aria-label="Actualizar">${ic('actualizar')}Actualizar</button>`);
- qrCita(i);
+ qrCita(i);promosVistas();
  let n=0;E.timer=setInterval(async()=>{const x=$('#fl');if(x)x.textContent=fl();if(++n%30)return;try{const nuevo=await API.estado(E.codigo);const cambio=nuevo.estado!==E.info.estado||nuevo.fecha!==E.info.fecha||nuevo.hora!==E.info.hora;E.info=nuevo;if(cambio){pintar();hablar(nuevo)}}catch(_){}},1000)}
 function mapaHTML(c){const la=parseFloat(c.lat),lo=parseFloat(c.lng),dir=esc(c.direccion||c.ciudad||''),hay=isFinite(la)&&isFinite(lo)&&(la||lo);
  const ir=hay?`https://www.google.com/maps/dir/?api=1&destination=${la},${lo}`:c.maps||'';if(!dir&&!ir)return'';
@@ -127,6 +128,21 @@ ACC.actualizarCita=function(){cargar(E.codigo)};
 ACC.escribirBarberia=function(){const i=E.info;window.open(waUrl(waNum(P.cfg.whatsapp),`Hola, soy ${(i.cliente?.nombre||'').split(' ')[0]}. Mi código de cita es ${i.codigo}.`),'_blank')};
 /* Confirmar asistencia (reduce los «no vino»). */
 ACC.confirmarAsistencia=async function(){this.disabled=true;try{await API.confirmar(E.codigo);toast('¡Listo! Te esperamos');await cargar(E.codigo)}catch(e){this.disabled=false;toast(e.message)}};
+
+/* ---------- promociones (las pone el dueño en el panel; el precio lo aplica el servidor al reservar) ---------- */
+const DIAS_L=['domingos','lunes','martes','miércoles','jueves','viernes','sábados'];
+const fCorta=f=>{const d=pYmd(f);return `${d.getDate()} ${MESC[d.getMonth()]}`};
+function vigencia(p){const dias=p.dias?.length&&p.dias.length<7?'Solo '+p.dias.map(x=>DIAS_L[x]).join(', ').replace(/, ([^,]*)$/,' y $1'):'';
+ const fe=p.desde>hoy()?`Desde el ${fCorta(p.desde)}`:`Hasta el ${fCorta(p.hasta)}`;return dias?`${dias} · ${fe.toLowerCase()}`:fe}
+function promosHTML(i){const L=P.promos||[];if(!L.length)return'';
+ return `<p class="promos-t">${ic('etiqueta')}${i.estado==='atendida'?'Vuelve con una promo':'Promociones'}</p><div class="promos" role="list">${L.map(p=>`<article class="promo" role="listitem">
+  <div class="img">${p.foto?`<img src="${esc(API.foto(p.foto))}" alt="" loading="lazy">`:ic('etiqueta')}</div>
+  <div class="cu"><b>${esc(p.titulo)}</b>${p.texto?`<small>${esc(p.texto)}</small>`:''}<span class="vig">${esc(p.servicio)} · ${vigencia(p)}</span><span class="pre"><s>${soles(p.precioNormal)}</s>${soles(p.precio)}</span></div>
+  <button class="btn" data-on-click="promoReservar" data-p0="${esc(p.id)}">Reservar ${ic('flecha')}</button></article>`).join('')}</div>`}
+/* Cuenta una vista por promo y por visita (sin datos personales). */
+function promosVistas(){const ids=(P.promos||[]).map(p=>p.id).filter(id=>{try{if(sessionStorage.getItem('pv_'+id))return false;sessionStorage.setItem('pv_'+id,1)}catch(e){}return true});
+ if(ids.length)API.req('POST','/publico/promos/visto',{ids,tipo:'v'}).catch(()=>{})}
+ACC.promoReservar=function(){const id=this.dataset.p0;API.req('POST','/publico/promos/visto',{ids:[id],tipo:'c'}).catch(()=>{}).finally(()=>{location.href='/reservar.html?promo='+encodeURIComponent(id)})};
 
 /* ---------- descargar la app: el aviso del navegador o los pasos (iPhone no deja instalar con un botón) ---------- */
 ACC.instalarApp=async function(){
@@ -179,7 +195,7 @@ ACC.repOk=async function(){const i=E.info;if(!E.rf||!E.rh)return;if(!confirm(`¿
 
 /* ---------- inicio: el código viene en la ruta (/cita/CODIGO) ---------- */
 (async function(){
- try{const d=await API.publico();P.cfg={dias:[1,2,3,4,5,6],apertura:'09:00',cierre:'20:00',refIni:'13:00',refFin:'14:00',anticipacion:0,ventana:14,...DEF_ESCENA,...(d.cfg||{}),narr:sinEmojis({...VOZ.FRASES,...(d.cfg?.narr||{})})};P.barberos=d.barberos||[];P.ocupados=d.ocupados||[];cab();
+ try{const d=await API.publico();P.cfg={dias:[1,2,3,4,5,6],apertura:'09:00',cierre:'20:00',refIni:'13:00',refFin:'14:00',anticipacion:0,ventana:14,...DEF_ESCENA,...(d.cfg||{}),narr:sinEmojis({...VOZ.FRASES,...(d.cfg?.narr||{})})};P.barberos=d.barberos||[];P.ocupados=d.ocupados||[];P.promos=d.promos||[];cab();
   Escena.iniciar({cfg:P.cfg,hoy,audio:k=>API.audio(k),foto:async k=>API.foto(k)})}
  catch(e){Escena.error()}
  const c=((location.pathname.match(/^\/cita\/([A-Za-z0-9]{6})$/)||[])[1]||new URLSearchParams(location.search).get('c')||'').trim().toUpperCase();

@@ -67,6 +67,14 @@ main{flex:1;padding:16px 16px calc(110px + env(safe-area-inset-bottom))}
 .in{width:100%;background:#fff;border:1px solid var(--bd);border-radius:12px;padding:12px 13px;outline:none}.in:focus{border-color:var(--blue)}
 .nota{font-size:12.5px;color:var(--mu);text-align:center;margin-top:6px}
 /* instalar */
+/* Promociones: fila que se desliza con el dedo (tarjetas de 152 px, como en Total Tools). */
+.promos{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 -16px 12px;padding:2px 16px 4px;scrollbar-width:none}.promos::-webkit-scrollbar{display:none}
+.promo{flex:0 0 152px;scroll-snap-align:start;background:#fff;border:1px solid var(--bd);border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+.promo .img{height:96px;background:linear-gradient(135deg,var(--blue),var(--pur));display:grid;place-items:center;color:#fff}.promo .img img{width:100%;height:100%;object-fit:cover}.promo .img .ic{width:34px;height:34px}
+.promo .cu{padding:10px;display:flex;flex-direction:column;gap:4px;flex:1}.promo b{font-size:14px;line-height:1.25}.promo small{font-size:12px;color:var(--mu);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.promo .pre{margin-top:auto;font-weight:800;color:var(--blue)}.promo .pre s{color:var(--mu);font-weight:500;margin-right:4px}.promo .vig{font-size:11.5px;color:var(--mu)}
+.promo .btn{min-height:44px;padding:8px;font-size:13px;border-radius:0;border:0;border-top:1px solid var(--bd);color:var(--blue)}
+.promos-t{display:flex;align-items:center;gap:8px;font:800 17px 'Syne',sans-serif;margin:6px 0 10px}.promos-t .ic{color:var(--blue)}
 .instalar{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#f2ebff,#ffe7f8)}
 .instalar .t{flex:1;min-width:0}.instalar b{display:block;font-size:14px}.instalar small{display:block;font-size:12.5px;color:var(--mu)}
 .instalar .btn{width:auto;min-height:44px;padding:10px 14px;font-size:13.5px}

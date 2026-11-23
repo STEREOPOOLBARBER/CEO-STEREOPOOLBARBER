@@ -87,6 +87,7 @@ function abrirMenu(){openModal(`<div class="grab"></div>${mHead('☰ Menú')}
  <div class="card" style="padding:12px 14px"><div class="row"><span class="av lg">👤</span><div style="flex:1"><b>${esc(S.ses.nombre||'')}</b><p class="hint" style="margin:0">${ROLES[S.ses.rol]?.t||''} · ${Object.values(S.perm).filter(Boolean).length}/${PERMS.length} permisos</p></div></div>${misCitas()}</div>
  ${API.remote&&can('verMontos')&&can('verTodas')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="abrirReporte">📊 Reporte semanal de caja</button>`:''}
  ${API.remote&&can('dash')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="abrirCalificaciones">⭐ Calificaciones de los clientes</button>`:''}
+ ${API.remote&&can('config')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="abrirPromos">🏷️ Promociones</button>`:''}
  ${can('dash')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="aba7c1122">📈 Dashboard del negocio</button>`:''}
  ${can('excel')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="a62e261c1">📊 Excel y respaldo</button>`:''}
  ${can('config')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="a465d46a3">👥 Equipo y permisos</button>`:''}

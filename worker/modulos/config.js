@@ -2,6 +2,7 @@ import { rehacerClientes } from './clientes.js';
 import { codigo, fail, json } from '../comun.js';
 import { INSERT_CITA, bump, equipoDesde, filaCita, guardarAudio, guardarFoto, kvStmt, paramsCita } from '../datos.js';
 import { validarEquipo } from './citas.js';
+import { validarPromos } from './promos.js';
 import { auditar, quienEs } from './auth.js';
 
 /* Links personales, fotos y audios del panel, exportar e importar todo el sistema. */
@@ -40,7 +41,7 @@ export async function rutasConfig(c) {
     for (const [k, v] of Object.entries(b.fotos || {})) if (/^f_[\w-]+$/.test(k)) { try { await guardarFoto(env, v, k); fotos++ } catch { } }
     await env.DB.batch([
       env.DB.prepare('DELETE FROM citas'), env.DB.prepare('DELETE FROM links'),
-      kvStmt(env, 'cfg', cfg), kvStmt(env, 'equipo', equipo), kvStmt(env, 'servicios', b.servicios || []),
+      kvStmt(env, 'cfg', cfg), kvStmt(env, 'equipo', equipo), kvStmt(env, 'servicios', b.servicios || []), ...(Array.isArray(b.promos) ? [kvStmt(env, 'promos', validarPromos(b.promos, { servicios: b.servicios || [] }))] : []),
     ]);
     let n = 0, err = 0;
     const citas = b.citas.filter(c => !c.demo && c.id && c.fecha);

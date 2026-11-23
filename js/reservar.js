@@ -134,6 +134,14 @@ const F={step:0,serv:null,barb:null,fecha:null,hora:null,cli:{nombre:'',tel:'',c
 const PASOS=['Servicio','Barbero','Día y hora','Tus datos','Adelanto','Listo'];
 let timerInt=null;
 const serv=()=>P.servicios.find(s=>s.id===F.serv);
+/* Promociones: misma regla que el Worker (worker/modulos/promos.js → promoPara). Aquí solo se MUESTRA; el precio lo pone el servidor. */
+const dowDe=f=>pYmd(f).getDay();
+const promoVale=(p,f)=>p.desde<=f&&f<=p.hasta&&(!p.dias?.length||p.dias.includes(dowDe(f)));
+const promosDe=sid=>F.link?[]:(P.promos||[]).filter(p=>p.servicioId===sid);
+const promoEl=(sid,f)=>f?promosDe(sid).filter(p=>promoVale(p,f)).sort((a,b)=>a.precio-b.precio)[0]||null:null;
+const precioF=()=>{const s=serv(),p=promoEl(F.serv,F.fecha);return p?p.precio:+s?.precio||0};
+const DIAS_PL=['domingos','lunes','martes','miércoles','jueves','viernes','sábados'];
+const diasTxt=p=>p.dias?.length&&p.dias.length<7?'solo '+p.dias.map(x=>DIAS_PL[x]).join(', '):'todos los días';
 const barbNom=id=>id==='any'?'El primero disponible':(P.barberos.find(b=>b.id===id)?.nombre||'');
 
 function hero(){const c=P.cfg;document.title='Reservar · '+c.nombre;applyTheme(c);
@@ -151,7 +159,7 @@ function render(){clearInterval(timerInt);[s0,s1,s2,s3,s4,s5][F.step]()}
 /* paso 0: servicio */
 function s0(){if(!P.servicios.length)return shell('<div class="empty">✂️<br>La barbería aún no publicó sus servicios.</div>');
  const u=lsGet('ultima',null),prev=u&&u.codigo&&u.fecha>=hoy()?`<a class="warn" style="display:block;text-decoration:none;border-color:var(--pur);color:var(--tx);background:rgba(138,63,252,.12)" href="/cita/${encodeURIComponent(u.codigo)}">📋 Tienes una cita el <b>${fLarga(u.fecha)}</b> · ${h12(u.hora)}<br><small style="color:var(--mu)">Toca para ver su estado</small></a>`:'';
- shell(`${prev}<h2>${esc(P.cfg.txtBienvenida||'¿Qué te hacemos hoy?')}</h2>${P.servicios.map(s=>`<button class="opt ${F.serv===s.id?'on':''}" data-on-click="aab7eb6b8" data-p0="${s.id}"><span class="em">${s.foto?`<img data-foto="${s.foto}" alt="">`:s.emoji}</span><span class="t"><b>${esc(s.nombre)}</b><small>${esc(s.desc||'')} · ⏱️ 1 h</small></span><span class="pr">${soles(s.precio)}</span></button>`).join('')}`)}
+ shell(`${prev}<h2>${esc(P.cfg.txtBienvenida||'¿Qué te hacemos hoy?')}</h2>${P.servicios.map(s=>`<button class="opt ${F.serv===s.id?'on':''}" data-on-click="aab7eb6b8" data-p0="${s.id}"><span class="em">${s.foto?`<img data-foto="${s.foto}" alt="">`:s.emoji}</span><span class="t"><b>${esc(s.nombre)}</b><small>${esc(s.desc||'')} · ⏱️ 1 h</small></span><span class="pr">${(()=>{const p=promosDe(s.id).sort((a,b)=>a.precio-b.precio)[0];return p?`<s style="color:var(--mu);font-weight:400;font-size:12px">${soles(s.precio)}</s><br>${soles(p.precio)}<br><small style="font-size:10.5px;color:var(--pur)">🏷️ Promo</small>`:soles(s.precio)})()}</span></button>`).join('')}`)}
 /* paso 1: barbero */
 function s1(){shell(`<h2>Elige tu barbero</h2>
  <button class="opt ${F.barb==='any'?'on':''}" data-on-click="aae95d490"><span class="em round">🎲</span><span class="t"><b>El primero disponible</b><small>Más horarios para elegir</small></span></button>
@@ -171,15 +179,18 @@ async function s2(){
  if(!F.fecha||!dias.find(d=>d.f===F.fecha&&d.ok))F.fecha=dias.find(d=>d.ok)?.f||null;
  const sl=F.fecha?libres(F.fecha):[];if(F.hora&&!sl.find(x=>x.h===F.hora&&x.ok))F.hora=null;
  shell(`<h2>¿Qué día y a qué hora?</h2>
- ${dias.some(d=>d.ok)?`<div class="days">${dias.map(d=>{const x=pYmd(d.f);return `<button class="day ${F.fecha===d.f?'on':''}" ${d.ok?'':'disabled'} data-on-click="aca2472e3" data-p0="${d.f}"><small>${d.f===hoy()?'Hoy':DIAS[x.getDay()]}</small><b>${x.getDate()}</b><small>${MESC[x.getMonth()]}</small></button>`}).join('')}</div>
- <p class="pt" style="margin-bottom:8px">${fLarga(F.fecha)} · ${esc(barbNom(F.barb))}</p>
+ ${dias.some(d=>d.ok)?`<div class="days">${dias.map(d=>{const x=pYmd(d.f);return `<button class="day ${F.fecha===d.f?'on':''}" ${d.ok?'':'disabled'} data-on-click="aca2472e3" data-p0="${d.f}"><small>${d.f===hoy()?'Hoy':DIAS[x.getDay()]}</small><b>${x.getDate()}</b><small>${MESC[x.getMonth()]}</small>${promoEl(F.serv,d.f)?'<small class="dpromo">Promo</small>':''}</button>`}).join('')}</div>
+ <p class="pt" style="margin-bottom:8px">${fLarga(F.fecha)} · ${esc(barbNom(F.barb))}</p>${promoAviso()}
  <div class="slots">${sl.map(x=>`<button class="slot ${F.hora===x.h?'on':''}" ${x.ok?'':'disabled'} data-on-click="aa1001b6c" data-p0="${x.h}">${h12(x.h)}</button>`).join('')}</div>`
  :`<div class="empty">😕 No hay horarios libres en los próximos días${F.barb!=='any'?' con este barbero.<br><br><button class="btn" style="margin:auto" data-on-click="aae95d490">Ver con cualquier barbero</button>':'.'}</div>`}`,
  `<button class="btn" data-on-click="af5d7adc5">←</button><button class="btn p" ${F.hora?'':'disabled'} data-on-click="a093b2e36">Continuar →</button>`)}
+function promoAviso(){const L=promosDe(F.serv);if(!L.length||!F.fecha)return'';const p=promoEl(F.serv,F.fecha),s=serv();
+ return p?`<div class="warn" style="border-color:var(--pur);background:rgba(255,63,210,.1);color:var(--tx)">🏷️ <b>${esc(p.titulo)}</b>: este día pagas <b>${soles(p.precio)}</b> <s style="color:var(--mu)">${soles(s.precio)}</s></div>`
+  :`<div class="warn" style="color:var(--tx)">🏷️ La promo vale ${diasTxt(L[0])}, del ${fLarga(L[0].desde).toLowerCase()} al ${fLarga(L[0].hasta).toLowerCase()}. Elige un día marcado con «Promo» para pagar menos.</div>`}
 /* paso 3: datos */
 function s3(){const s=serv(),np=sinPagoF();
  shell(`<h2>Tus datos</h2>
- <div class="card"><div class="res"><span>✂️</span><span><b>${esc(s.nombre)}</b> · ${soles(s.precio)}</span><span>💈</span><span>${esc(barbNom(F.barb))}</span><span>📅</span><span>${fLarga(F.fecha)} · ${h12(F.hora)}</span></div></div>
+ <div class="card"><div class="res"><span>✂️</span><span><b>${esc(s.nombre)}</b> · ${soles(precioF())}${promoEl(F.serv,F.fecha)?' 🏷️':''}</span><span>💈</span><span>${esc(barbNom(F.barb))}</span><span>📅</span><span>${fLarga(F.fecha)} · ${h12(F.hora)}</span></div></div>
  <label class="lb">DNI <small style="color:var(--mu)">(opcional · llena tus datos solo)</small></label><input class="in" id="cDni" inputmode="numeric" maxlength="8" placeholder="8 dígitos" autocomplete="off" value="${esc(F.cli.dni||'')}" data-on-input="a5d5818b0"><small id="dniEst" style="color:var(--mu);display:block;min-height:16px;margin-top:4px"></small><small style="color:var(--mu);display:block;font-size:11px">Si lo escribes, consultamos tu nombre en RENIEC para llenarlo por ti. <a href="privacidad.html" target="_blank" rel="noopener" style="color:var(--blue)">Privacidad</a></small>
  <label class="lb">Nombre y apellido *</label><input class="in" id="cNom" autocomplete="name" value="${esc(F.cli.nombre)}">
  <label class="lb">WhatsApp *</label><div class="pre"><span>+51</span><input class="in" id="cTel" inputmode="tel" autocomplete="tel" placeholder="9XXXXXXXX" maxlength="11" value="${esc(F.cli.tel)}"></div>
@@ -220,7 +231,7 @@ async function reservar(){if(F.busy)return;guardaCli();const e=$('#err'),c=F.cli
  catch(err){e.textContent='❌ '+err.message;b.disabled=false;b.textContent='Reintentar';if(/link/i.test(err.message)){F.link=null}if(/ocupa/i.test(err.message)){say('ocupado');F.hora=null;setTimeout(()=>go(2),1400)}}
  finally{F.busy=false;if(CONFIG.TURNSTILE_SITEKEY)tsNuevo()}}
 /* paso 4: adelanto Yape */
-function s4(){const cfg=P.cfg,s=serv(),resto=Math.max(0,(+s.precio||0)-adel());
+function s4(){const cfg=P.cfg,s=serv(),resto=Math.max(0,precioF()-adel());
  shell(`<h2>Confirma con tu adelanto</h2>
  <div class="pay"><p style="color:var(--mu)">Yapea el adelanto a</p><div class="ynum">${esc(cfg.yapeNum.replace(/(\d{3})(\d{3})(\d{3})/,'$1 $2 $3'))}</div><button class="copy" data-on-click="a71d0100d" data-p0="${esc(cfg.yapeNum)}">📋 Copiar número</button>
  ${cfg.yapeTitular?`<p style="margin-top:8px">a nombre de <b>${esc(cfg.yapeTitular)}</b></p>`:''}
@@ -240,9 +251,9 @@ function vencido(){clearInterval(timerInt);say('vencido');$('#app').innerHTML=`<
 /* paso 5: listo */
 function s5(){const cfg=P.cfg,s=serv(),c=F.cita,np=!c.expira&&sinPagoF();lsSet('ultima',{codigo:c.codigo,fecha:F.fecha,hora:F.hora});
  const base=(cfg.linkBase||'').trim()||location.origin+location.pathname,seg=(()=>{try{return new URL(base,location.href).origin+'/cita/'+c.codigo}catch(e){return location.origin+'/cita/'+c.codigo}})(),plant=(cfg.waReserva||'')+((cfg.waReserva||'').includes('{seguimiento}')?'':'\n\n🔎 Estado de la cita: {seguimiento}');
- const msg=tpl(plant,{seguimiento:seg,cliente:F.cli.nombre,telefono:F.cli.tel,ciudad:F.cli.ciudad,servicio:s.nombre,precio:soles(s.precio),barbero:barbNom(c.barberoId),fecha:fLarga(F.fecha),hora:h12(F.hora),codigo:c.codigo,negocio:cfg.nombre,direccion:cfg.direccion||cfg.ciudad,nota:F.nota,adelanto:soles(adel()),pago:np?'':`Adelanto ${soles(adel())} enviado por Yape (adjunto captura)`});
+ const msg=tpl(plant,{seguimiento:seg,cliente:F.cli.nombre,telefono:F.cli.tel,ciudad:F.cli.ciudad,servicio:s.nombre,precio:soles(F.cita?.precio??precioF()),barbero:barbNom(c.barberoId),fecha:fLarga(F.fecha),hora:h12(F.hora),codigo:c.codigo,negocio:cfg.nombre,direccion:cfg.direccion||cfg.ciudad,nota:F.nota,adelanto:soles(adel()),pago:np?'':`Adelanto ${soles(adel())} enviado por Yape (adjunto captura)`});
  shell(`<div class="ok"><b>✅</b><h2>${esc(cfg.txtFinal||'¡Reserva recibida!')}</h2><p style="color:var(--mu)">Tu código</p><div class="code">${esc(c.codigo)}</div></div>
- <div class="card"><div class="res"><span>✂️</span><span><b>${esc(s.nombre)}</b> · ${soles(s.precio)}</span><span>💈</span><span>${esc(barbNom(c.barberoId))}</span><span>📅</span><span>${fLarga(F.fecha)} · ${h12(F.hora)}</span><span>📍</span><span>${esc(cfg.direccion||cfg.ciudad)}</span></div></div>
+ <div class="card"><div class="res"><span>✂️</span><span><b>${esc(s.nombre)}</b> · ${soles(precioF())}${promoEl(F.serv,F.fecha)?' 🏷️':''}</span><span>💈</span><span>${esc(barbNom(c.barberoId))}</span><span>📅</span><span>${fLarga(F.fecha)} · ${h12(F.hora)}</span><span>📍</span><span>${esc(cfg.direccion||cfg.ciudad)}</span></div></div>
  <div class="warn">⏳ ${np?'La barbería confirmará tu cita por WhatsApp.':'Validaremos tu Yape y te confirmamos por WhatsApp.'} Toca el botón verde para avisarnos ahora.</div>`,
  `${cfg.whatsapp?`<button class="btn g" data-on-click="ac8f245b7" data-p0="${waNum(cfg.whatsapp)}">💬 Avisar por WhatsApp</button>`:''}<button class="btn" data-on-click="a79618d45">＋ Otra</button>`);
  window.MSG=msg}
@@ -264,7 +275,9 @@ async function cargarLink(){const t=new URLSearchParams(location.search).get('l'
  F.link=l;if(l.cliente?.nombre)F.cli={...F.cli,nombre:l.cliente.nombre,...(l.cliente.tel?{tel:l.cliente.tel}:{})};
  if(l.servicioId&&P.servicios.find(x=>x.id===l.servicioId))F.serv=l.servicioId;if(l.barberoId&&P.barberos.find(x=>x.id===l.barberoId))F.barb=l.barberoId;
  F.step=F.serv&&F.barb?2:F.serv?1:0;return true}
+/* «Reservar con esta promo» (desde la app «Mi cita»): llega con ?promo=ID y el servicio ya elegido. */
+function cargarPromo(){const id=new URLSearchParams(location.search).get('promo'),p=id&&!F.link&&(P.promos||[]).find(x=>x.id===id);if(p&&P.servicios.find(x=>x.id===p.servicioId)){F.serv=p.servicioId;F.step=1}}
 (async function(){if(new URLSearchParams(location.search).get('c'))return;
- try{P=await API.publico();if(P.ts)CONFIG.TURNSTILE_SITEKEY=P.ts;hero();const ok=await cargarLink();if(ok)render();
+ try{P=await API.publico();if(P.ts)CONFIG.TURNSTILE_SITEKEY=P.ts;hero();const ok=await cargarLink();if(ok){cargarPromo();render()}
   Escena.iniciar({cfg:P.cfg,hoy,audio:k=>API.audio(k),foto:k=>API.foto(k)});if(ok)say(F.link?.cliente?.nombre?'holaLink':'hola')}
  catch(e){Escena.error();$('#app').innerHTML=`<div class="empty">⚠️ No pudimos cargar la agenda.<br>${esc(e.message)}<br><br><button class="btn" style="margin:auto" data-on-click="a59c74e0f">Reintentar</button></div>`}})();

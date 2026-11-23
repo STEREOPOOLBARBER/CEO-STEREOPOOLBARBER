@@ -29,6 +29,7 @@ import { rutasConfig } from './modulos/config.js';
 import { rutasDni } from './modulos/dni.js';
 import { rutasMonitoreo } from './modulos/monitoreo.js';
 import { rutasPublicas } from './modulos/publico.js';
+import { rutasPromos, rutasPromosPublicas } from './modulos/promos.js';
 import { respaldoDiario } from './modulos/respaldos.js';
 import { frenar, ipDe } from './modulos/seguridad.js';
 import { conVistaPrevia } from './vista-previa.js';
@@ -51,7 +52,7 @@ async function api(req, env, path) {
   await sembrar(env);
 
   const c = { req, env, path, m, body };
-  for (const r of [rutasPublicas, rutasCalificacionPublica, rutasWhatsappPublicas, rutasAuth]) { const res = await r(c); if (res) return res }
+  for (const r of [rutasPublicas, rutasCalificacionPublica, rutasPromosPublicas, rutasWhatsappPublicas, rutasAuth]) { const res = await r(c); if (res) return res }
 
   /* ----- panel (requiere sesión) ----- */
   const d = await datos(env);
@@ -61,7 +62,7 @@ async function api(req, env, path) {
   const propia = c => { if (!s.perm.verTodas && c.barberoId !== s.barberoId) fail(403, 'No es tu cita') };
 
   Object.assign(c, { d, s, exigir, propia });
-  for (const r of [rutasTiempoReal, rutasWhatsapp, rutasReportes, rutasCalificaciones, rutasDni, rutasAcceso, rutasMonitoreo, rutasClientes, rutasCitas, rutasConfig]) { const res = await r(c); if (res) return res }
+  for (const r of [rutasTiempoReal, rutasWhatsapp, rutasReportes, rutasCalificaciones, rutasPromos, rutasDni, rutasAcceso, rutasMonitoreo, rutasClientes, rutasCitas, rutasConfig]) { const res = await r(c); if (res) return res }
   fail(404, 'Ruta no encontrada');
 }
 
@@ -75,7 +76,7 @@ export default {
     try {
       const path = url.pathname.slice(4), res = await api(req, env, path);
       // Tiempo real: si algo se guardó con éxito, avisar a los paneles abiertos (sin datos; ellos vuelven a pedir lo suyo).
-      if (req.method !== 'GET' && req.method !== 'HEAD' && res.ok && !/^\/(auth|passkey)\b|^\/publico\/ficha$/.test(path)) ctx.waitUntil(avisar(env));
+      if (req.method !== 'GET' && req.method !== 'HEAD' && res.ok && !/^\/(auth|passkey)\b|^\/publico\/(ficha|promos\/visto)$/.test(path)) ctx.waitUntil(avisar(env));
       return res;
     }
     catch (e) {

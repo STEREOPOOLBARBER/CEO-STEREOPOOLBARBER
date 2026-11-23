@@ -146,8 +146,8 @@ export async function leerKV(env, keys) {
 export const kvStmt = (env, k, v) => env.DB.prepare('INSERT INTO kv(k, v) VALUES(?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v').bind(k, JSON.stringify(v));
 /* Datos del negocio. «barberos» no se guarda: sale del equipo (las personas que atienden). */
 export async function datos(env) {
-  const d = await leerKV(env, ['cfg', 'equipo', 'servicios']), equipo = d.equipo || [];
-  return { cfg: d.cfg || {}, equipo, barberos: equipo.filter(p => p.atiende).map(barberoDe), servicios: d.servicios || [] };
+  const d = await leerKV(env, ['cfg', 'equipo', 'servicios', 'promos']), equipo = d.equipo || [];
+  return { cfg: d.cfg || {}, equipo, barberos: equipo.filter(p => p.atiende).map(barberoDe), servicios: d.servicios || [], promos: d.promos || [] };
 }
 // Cada cambio sube la versión; el panel solo descarga todo cuando la versión cambia.
 export const bumpStmt = env => kvStmt(env, 'ver', Date.now());
@@ -222,6 +222,6 @@ export function audiosPublicos(d) { const s = new Set(); for (const v of Object.
 export function fotosPublicas(d) {
   const s = new Set();
   for (const v of Object.values(d.cfg)) if (typeof v === 'string' && /^f_[\w-]+$/.test(v)) s.add(v);
-  for (const x of [...d.barberos, ...d.servicios]) if (x.foto) s.add(x.foto);
+  for (const x of [...d.barberos, ...d.servicios, ...(d.promos || []).filter(p => p.activo !== false)]) if (x.foto) s.add(x.foto);
   return s;
 }

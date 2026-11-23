@@ -32,6 +32,8 @@ const SUITES = [
   { n: 'reportes.e2e', vars: { ...PIN, REPORTE_FORZAR: 'true' }, sql: ADMIN, extra: ['--test-scheduled'] },
   { n: 'privacidad.e2e', vars: PIN, sql: ADMIN, extra: ['--test-scheduled'] },
   { n: 'filtros.e2e', vars: PIN, sql: ADMIN },
+  { n: 'promos.e2e', vars: PIN, sql: ADMIN },
+  { n: 'promos.ui', vars: PIN, sql: ADMIN, ui: true },
   { n: 'filtros.ui', vars: PIN, sql: ADMIN, ui: true },
   { n: 'calificaciones.e2e', vars: PIN, sql: ADMIN },
   { n: 'escena.ui', vars: PIN, sql: ADMIN, ui: true },

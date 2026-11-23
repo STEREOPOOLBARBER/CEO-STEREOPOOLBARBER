@@ -1,13 +1,15 @@
 import { ACTIVOS, DEF, addD, ahoraLocal, codigo, fail, json, minutosHasta, reglaReprog, slotsDia, str, toMin, trabaja, uid } from '../comun.js';
 import { plazoCalificar, yaCalificada } from './calificaciones.js';
+import { promoPara, promosPublicas } from './promos.js';
 import { audiosPublicos, bumpStmt, citaPorId, datos, expirar, filaCita, fotosPublicas, guardarCita, guardarFoto, insertarCita } from '../datos.js';
 import { auditar, sesion } from './auth.js';
 import { consultarDni } from './dni.js';
 import { anotarSeg, fichaValida, frenar, ipDe, limitar, nuevaFicha, turnstileOk } from './seguridad.js';
 
-export function vistaPublica(d) {
+export function vistaPublica(d, hoy) {
   return {
     cfg: d.cfg,
+    promos: promosPublicas(d, hoy),
     barberos: d.barberos.filter(b => b.activo !== false).map(({ pin, comision, email, ...b }) => b),
     servicios: d.servicios.filter(s => s.activo !== false),
   };
@@ -61,15 +63,17 @@ export async function reservar(req, env, b) {
   const sinPago = !(cfg.modAdelanto && cfg.yapeNum && ad > 0);
   const refFoto = b.refFoto ? await guardarFoto(env, b.refFoto) : '';
   let nota = str(b.nota, 300); if (link?.nota) nota = '🎁 ' + link.nota + (nota ? ' · ' + nota : '');
+  // Promoción: el Worker la aplica sola si vale para ese servicio ESE día (el navegador solo la muestra).
+  const pr = link ? null : promoPara(d, s.id, fecha);
   const base = {
-    fecha, hora, servicioId: s.id, servicioNombre: s.nombre, precio: +s.precio || 0, cliente, nota, refFoto,
+    fecha, hora, servicioId: s.id, servicioNombre: s.nombre, precio: pr ? +pr.precio : +s.precio || 0, ...(pr ? { promo: { id: pr.id, titulo: pr.titulo, precioNormal: +s.precio || 0 } } : {}), cliente, nota, refFoto,
     adelanto: sinPago ? 0 : ad, linkId: link?.id || '', adelantoOk: false,
     estado: 'por_validar', expira: sinPago ? null : Date.now() + (+cfg.holdMin || 20) * 60e3, origen: link ? 'link' : 'web',
   };
   for (const barb of candidatos) {
     const c = { id: uid(), codigo: codigo(), creada: Date.now(), ...base, barberoId: barb.id, consentimiento: { ts: Date.now(), aviso: 'privacidad.html', version: 1 } };
     const extra = link ? [env.DB.prepare('UPDATE links SET data = ? WHERE id = ?').bind(JSON.stringify({ ...link, estado: 'usado', citaId: c.id, usado: Date.now() }), link.id)] : [];
-    try { await insertarCita(env, c, extra); await auditar(env, 'Cliente', 'Reservó', c.codigo, `${c.cliente?.nombre || ''} · ${c.fecha} ${c.hora}`); return json({ id: c.id, codigo: c.codigo, expira: c.expira, barberoId: c.barberoId, estado: c.estado }) }
+    try { await insertarCita(env, c, extra); await auditar(env, 'Cliente', 'Reservó', c.codigo, `${c.cliente?.nombre || ''} · ${c.fecha} ${c.hora}`); return json({ id: c.id, codigo: c.codigo, expira: c.expira, barberoId: c.barberoId, estado: c.estado, precio: c.precio, promo: c.promo?.titulo || '' }) }
     catch (e) { if (e.status !== 409) throw e }
   }
   fail(409, 'Ese horario se acaba de ocupar 😕');
@@ -84,7 +88,7 @@ export async function rutasPublicas(c) {
     await expirar(env);
     const d = await datos(env), hoy = ahoraLocal(env).fecha;
     const r = await env.DB.prepare(`SELECT barbero_id AS b, fecha AS f, hora AS h FROM citas WHERE fecha >= ? AND hora <> '' AND estado IN (${ACTIVOS.map(() => '?').join(',')})`).bind(addD(hoy, -1), ...ACTIVOS).all();
-    return json({ ...vistaPublica(d), ocupados: r.results, ts: env.TURNSTILE_SITEKEY || '' });
+    return json({ ...vistaPublica(d, hoy), ocupados: r.results, ts: env.TURNSTILE_SITEKEY || '' });
   }
   if ((x = path.match(/^\/publico\/dni\/(\d{8})$/)) && m === 'GET') {
     await frenar(env, 'RL_DNI', ipDe(req), [10, 60e3]);

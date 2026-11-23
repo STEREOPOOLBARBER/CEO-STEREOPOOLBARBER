@@ -86,6 +86,12 @@ El link que recibe el cliente ahora es **`tudominio/cita/CODIGO`** (WhatsApp, QR
 - El celular recuerda las citas que abrió («Mis citas» en `/cita`): solo código y fecha.
 - No hay que hacer nada en Cloudflare: se publica sola con el push.
 
+### Promociones
+En el panel: **☰ Menú → 🏷️ Promociones → Nueva promoción**. Eliges el servicio, el precio promo (menor al normal), desde/hasta y, si quieres, solo ciertos días (ej.: martes y miércoles). Puedes pausarla, ordenarla o borrarla.
+- El cliente la ve en su app «Mi cita» y en el formulario (servicio con precio tachado y días marcados «Promo»). Al reservar ese servicio un día válido, **el sistema pone el precio promo solo**; en la agenda la cita sale con la etiqueta 🏷️.
+- Cada promo muestra cuántas veces la vieron, cuántos tocaron «Reservar», cuántas citas salieron y cuánto dejaron.
+- No hay que configurar nada en Cloudflare.
+
 ### Rendimiento: el panel ya no descarga toda la historia (Fase 1)
 - `GET /api/panel` trae solo la **ventana** de citas: 35 días atrás → 120 días adelante (más los Yape pendientes) y un conteo de visitas por cliente para la fidelidad.
 - `GET /api/citas/buscar?desde&hasta&estado&barbero&q&limit&offset` filtra y pagina **en la base de datos** (máx. 500 por página; la búsqueda del panel pide de 30 en 30 con «Ver más»). Respeta permisos: el barbero solo ve lo suyo y sin teléfono si no tiene permiso.
