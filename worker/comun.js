@@ -60,5 +60,7 @@ export const bloquesDe = (d, servicioId) => { const s = d.servicios.find(x => x.
 export const horasOcupa = (hora, bloques) => (bloquesOk(bloques) ? bloques : [1]).map((x, k) => x ? fromMin(toMin(hora) + k * DUR) : null).filter(Boolean);
 // ¿Entra el servicio a esa hora? Cada hora ocupada debe ser un turno del día (no en el refrigerio, antes del cierre).
 export const entra = (cfg, hora, bloques) => { const sl = slotsDia(cfg); return horasOcupa(hora, bloques).every(h => sl.includes(h)) };
+// ¿Este barbero hace ese servicio? (sin lista = hace todos). Misma regla en js/reservar.js y js/panel/base.js.
+export const haceServicio = (b, servicioId) => !b?.servicios?.length || b.servicios.includes(servicioId);
 export const bloqueado = (cfg, f, bid) => (cfg.bloqueos || []).some(b => b.fecha === f && (!b.barberoId || b.barberoId === bid));
 export const trabaja = (cfg, b, f) => { const d = pYmd(f).getUTCDay(); return b && b.activo !== false && (cfg.dias || []).includes(d) && (b.dias || []).includes(d) && !bloqueado(cfg, f, b.id) };

@@ -131,6 +131,7 @@ function mapaHTML(c){const la=parseFloat(c.lat),lo=parseFloat(c.lng),dir=esc(c.d
  ${dir?`<p class="sub" style="margin-bottom:10px">${dir}</p>`:''}${ir?`<a class="btn" target="_blank" rel="noopener" href="${esc(ir)}">${ic('ruta')}Abrir en el mapa</a>`:''}</section>`}
 /* QR con el link de esta cita: la cámara del celular abre esta página; el 📷 del panel abre la cita. */
 function qrCita(i){const el=$('#qrCita');if(!el)return;try{if(!window.QRCode)throw 0;new QRCode(el,{text:urlCita(i.codigo),width:196,height:196,colorDark:'#15111d',colorLight:'#ffffff'})}catch(e){el.closest('.qr')?.remove()}}
+ACC.verPrivacidad=function(event){event?.preventDefault?.();Privacidad.abrir(P.cfg)};
 ACC.copiarCodigo=function(){navigator.clipboard?.writeText(E.codigo).then(()=>toast('Código copiado')).catch(()=>{})};
 ACC.actualizarCita=function(){cargar(E.codigo)};
 ACC.escribirBarberia=function(){const i=E.info;window.open(waUrl(waNum(P.cfg.whatsapp),`Hola, soy ${(i.cliente?.nombre||'').split(' ')[0]}. Mi código de cita es ${i.codigo}.`),'_blank')};

@@ -2,9 +2,11 @@
    ESCENA PÚBLICA · pantalla de carga + narrador + voz grabada.
    La comparten el formulario (reservar.html) y el estado de la cita (estado.html). Usa js/voz.js.
 
-   Flujo: la página carga con el logo → «Toca para entrar» → ese primer toque habilita el sonido
-   (los navegadores, sobre todo iPhone, solo dejan sonar tras un toque) → el logo se derrite →
-   el narrador saluda con la voz grabada. Nunca usa la voz del celular: sin grabación, solo el globo.
+   Flujo: la página carga con el logo → apenas está lista, el logo se derrite SOLO (sin «Toca para entrar») →
+   el narrador queda dormido (no se ve) → en el PRIMER toque de la persona aparece y habla con la voz grabada.
+   Ese toque es el que habilita el sonido (los navegadores, sobre todo iPhone, solo dejan sonar tras un toque).
+   Si ese primer toque ya fue una acción (p. ej. elegir un servicio), dice la frase de esa acción y no el saludo.
+   Nunca usa la voz del celular: sin grabación, solo el globo.
 
    Sonido en todos los celulares:
    · Web Audio (AudioContext) se desbloquea dentro del toque y las piezas (frase + fecha + hora) se
@@ -25,7 +27,9 @@ const Escena=(()=>{
  const escH=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
  const plantilla=(s,v)=>String(s||'').replace(/\{(\w+)\}/g,(m,k)=>k in v?v[k]:m).replace(/\s+([,.!?])/g,'$1').trim();
  const IMG={narr:'/img/narrador.webp',logo:'/img/logo-stereo.webp',drip:'/img/logo-derretido.webp'};
- const E={cfg:null,hoy:()=>'',audio:null,foto:async()=>'',entrado:false,quiereEntrar:false,pendiente:null};
+ const E={cfg:null,hoy:()=>'',audio:null,foto:async()=>'',entrado:false,despierto:false,habloDespierto:false,pendiente:null};
+ const T0=performance.now();
+ document.documentElement.classList.add('narr-dormido'); // el narrador aparece recién con el primer toque
 
  /* =================== VOZ GRABADA =================== */
  const R={ctx:null,el:null,listo:false,turno:0,fuentes:[],datos:new Map(),bufs:new Map(),mudo:guardado('narrMudo',false),porSonar:null};
@@ -37,7 +41,10 @@ const Escena=(()=>{
   if(AC){try{R.ctx=new AC();R.ctx.resume?.();const s=R.ctx.createBufferSource();s.buffer=R.ctx.createBuffer(1,1,22050);s.connect(R.ctx.destination);s.start(0)}catch(_){R.ctx=null}}
   if(!R.ctx){R.el=new Audio();R.el.src=SILENCIO;R.el.play()?.catch(()=>{})}
   R.listo=true;if(R.porSonar){const p=R.porSonar;R.porSonar=null;sonar(p.claves,p.fin)}}
- ['pointerup','touchend','click','keydown'].forEach(t=>addEventListener(t,desbloquear,{capture:true,passive:true}));
+ /* Primer toque real de la persona: habilita el sonido y despierta al narrador. (Un desplazamiento no cuenta si el
+    navegador dice que no hubo activación.) */
+ function primerToque(){if(navigator.userActivation&&!navigator.userActivation.isActive)return;desbloquear();despertar()}
+ ['pointerup','touchend','click','keydown'].forEach(t=>addEventListener(t,primerToque,{capture:true,passive:true}));
  const datos=k=>{if(!R.datos.has(k))R.datos.set(k,E.audio(k).catch(e=>{R.datos.delete(k);throw e}));return R.datos.get(k)};
  const decodificar=ab=>new Promise((ok,no)=>{const p=R.ctx.decodeAudioData(ab.slice(0),ok,no);p?.then?.(ok,no)});
  const buffer=k=>{if(!R.bufs.has(k))R.bufs.set(k,datos(k).then(decodificar).catch(e=>{R.bufs.delete(k);throw e}));return R.bufs.get(k)};
@@ -68,8 +75,7 @@ const Escena=(()=>{
   SPL.drawn=true}
  async function logo(src){const propio=src&&src!==IMG.logo;SPL.img=alfa(await cargarImg(src||IMG.logo));SPL.drip=propio?null:alfa(await cargarImg(IMG.drip));dibujar()}
  function splashInicio(){const sp=$('#splash');if(!sp)return;const c=$('#spc');c.width=innerWidth*SPL.dpr;c.height=innerHeight*SPL.dpr;logo(IMG.logo);
-  sp.addEventListener('click',()=>{if(E.cfg)entrar();else{E.quiereEntrar=true;sp.classList.add('espera')}});
-  sp.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();sp.click()}})}
+  sp.addEventListener('click',()=>{if(E.cfg)entrar()})} // tocarla solo la adelanta: entra sola apenas está lista
  /* El logo se transforma en su versión derretida y cae en gotas (o se desvanece si no hay efecto). */
  function derretir(){const sp=$('#splash');if(!sp)return;SPL.done=true;sp.classList.remove('glow','listo','espera');sp.style.pointerEvents='none';
   const c=$('#spc'),x=c.getContext('2d'),reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -84,8 +90,13 @@ const Escena=(()=>{
    (function fr(now){const t=now-s0;x.clearRect(0,0,W,H);x.globalAlpha=Math.max(0,1-Math.max(0,t-900)/800);
     for(let i=0;i<cols;i++){const tt=Math.max(0,t-del[i])/1000,dy=tt*tt*H*1.6;if(dy>=H)continue;x.drawImage(snap,i*sw,0,sw,H,i*sw,dy,sw,H*(1+dy/H*1.4))}
     if(t<END)requestAnimationFrame(fr);else sp.remove()})(s0)}}
- /* Entrar: el toque ya habilitó el sonido; se derrite el logo y el narrador dice lo que estaba esperando. */
- function entrar(){if(E.entrado)return;E.entrado=true;derretir();setTimeout(()=>{const p=E.pendiente;E.pendiente=null;if(p)decir(p.k,p.v,p.cuando)},E.cfg?.splashOn===false?0:700)}
+ /* Entrar: el logo se derrite y se ve la página. El narrador sigue dormido hasta el primer toque. */
+ function entrar(){if(E.entrado)return;E.entrado=true;derretir()}
+ /* Sale sola: espera a que el logo se vea (mín. 0,9 s para que se luzca) y como mucho 2,5 s aunque el internet sea lento. */
+ function salirSola(){const chk=()=>{if(E.entrado)return;const t=performance.now()-T0;if((SPL.drawn&&t>=900)||t>=2500)entrar();else setTimeout(chk,120)};chk()}
+ /* El primer toque despierta al narrador. Si ese toque hizo algo que el narrador comenta (decir), gana eso; si no, dice lo pendiente (el saludo). */
+ function despertar(){if(E.despierto)return;E.despierto=true;document.documentElement.classList.remove('narr-dormido');colocar();
+  setTimeout(()=>{const p=E.pendiente;E.pendiente=null;if(p&&!E.habloDespierto)decir(p.k,p.v,p.cuando)},350)}
 
  /* =================== NARRADOR =================== */
  const NR={last:null,pos:guardado('narrPos',null),off:guardado('narrOff',false),hide:null};
@@ -116,7 +127,7 @@ const Escena=(()=>{
   $('#nArm')?.addEventListener('click',()=>{NR.off=false;guardar('narrOff',false);pintarEstado();colocar();repetir()});
   addEventListener('resize',colocar);pintarEstado();colocar()}
  /* Muestra el globo y suena la voz grabada (frase + piezas de fecha y hora). Lo que no esté grabado se salta. */
- function decir(k,v={},cuando={}){if(!lleno())return;if(!E.entrado){E.pendiente={k,v,cuando};return}
+ function decir(k,v={},cuando={}){if(!lleno())return;if(!E.despierto){E.pendiente={k,v,cuando};return}E.habloDespierto=true;
   let t=plantilla(E.cfg.narr?.[k]??VOZ.FRASES[k],v);if(!t)return;t=t[0].toUpperCase()+t.slice(1);
   const au=E.cfg.narrAudio||{},claves=VOZ.claves(k,{...cuando,hoy:E.hoy()}).map(x=>au[x]).filter(x=>typeof x==='string');
   NR.last={t,claves};mostrar()}
@@ -135,13 +146,13 @@ const Escena=(()=>{
  function iniciar({cfg,hoy,audio,foto}){E.cfg=cfg;E.hoy=hoy;E.audio=audio;E.foto=foto||E.foto;narrador();
   ['hola','holaLink'].forEach(k=>VOZ.claves(k).forEach(x=>{const a=cfg.narrAudio?.[x];if(a)datos(a).catch(()=>{})})); // el saludo ya descargado al tocar
   const sp=$('#splash');
-  // App instalada: abre directo (sin la pantalla de «Toca para entrar»); la voz suena al primer toque.
+  // App instalada o pantalla de carga apagada: abre directo. El narrador igual aparece con el primer toque.
   const app=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
   if(!sp||cfg.splashOn===false||app){sp?.remove();SPL.done=true;entrar();return}
   if(cfg.splashImg)E.foto(cfg.splashImg).then(u=>u&&logo(u));
-  sp.classList.add('listo');if(E.quiereEntrar)entrar()}
+  sp.classList.add('listo');salirSola()}
  /* Si la página no pudo cargar, se quita la pantalla de carga para mostrar el error. */
  function error(){const sp=$('#splash');if(sp){SPL.done=true;sp.remove()}E.entrado=true}
  /* Para las pruebas y el diagnóstico: qué está pasando con la voz. */
- const estado=()=>({entrado:E.entrado,sonidoListo:R.listo,mudo:R.mudo,ultimo:NR.last,webAudio:!!R.ctx});
+ const estado=()=>({entrado:E.entrado,despierto:E.despierto,sonidoListo:R.listo,mudo:R.mudo,ultimo:NR.last,webAudio:!!R.ctx});
  return{iniciar,decir,pie,error,callar,estado}})();

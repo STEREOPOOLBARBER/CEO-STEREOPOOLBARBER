@@ -32,3 +32,18 @@
 #splash.listo .ld{display:none}
 #splash.listo .toca{opacity:1;animation:late 1.4s ease-in-out infinite}
 @keyframes late{50%{opacity:.35}}
+
+/* Aviso de privacidad como hoja encima (js/privacidad.js): se cierra y la persona sigue donde estaba. */
+.sin-scroll,.sin-scroll body{overflow:hidden}
+.privhoja{position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
+.privhoja .ph-caja{width:100%;max-width:480px;max-height:88dvh;display:flex;flex-direction:column;background:var(--card,#fff);color:var(--tx,#15111d);border-radius:20px 20px 0 0;border:1px solid var(--line,var(--bd,#e7e3ee));padding:14px 16px calc(14px + env(safe-area-inset-bottom));box-shadow:0 -10px 30px rgba(0,0,0,.35)}
+.privhoja .ph-cab{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:8px}
+.privhoja .ph-cab b{font:800 18px 'Syne',sans-serif}
+.privhoja .ph-x{width:44px;height:44px;border-radius:50%;border:1px solid var(--line,var(--bd,#e7e3ee));background:transparent;color:inherit;font-size:18px}
+.privhoja .ph-txt{overflow-y:auto;-webkit-overflow-scrolling:touch;font-size:14px;line-height:1.5;padding-right:4px}
+.privhoja .ph-txt h3{font:800 15px 'Syne',sans-serif;margin:14px 0 4px}
+.privhoja .ph-txt ul{padding-left:18px}.privhoja .ph-txt li{margin:3px 0}.privhoja .ph-txt p{margin:4px 0}
+.privhoja .ph-ok{margin-top:12px;min-height:48px;border-radius:14px;border:0;background:var(--blue,#8a3ffc);color:#fff;font-weight:800;font-size:15px}
+
+/* Narrador dormido hasta el primer toque (js/escena.js → despertar) */
+.narr-dormido #narr,.narr-dormido #nArm{display:none!important}

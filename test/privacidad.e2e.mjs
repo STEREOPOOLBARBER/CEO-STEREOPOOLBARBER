@@ -8,10 +8,10 @@ const adm = (await call('POST', '/auth/login', { pin: '5821' })).cookie, pn = (a
 const lima = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date()), f = d => { const x = new Date(lima + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + d); if (x.getUTCDay() === 0) x.setUTCDate(x.getUTCDate() + 1); return x.toISOString().slice(0, 10) };
 // consentimiento
 const res = { servicioId: pn.servicios[0].id, barberoId: 'b1', fecha: f(3), hora: '10:00', cliente: { nombre: 'Paula Privada', tel: '987600100', ciudad: 'Lima' } };
-let r = await call('POST', '/publico/reservas', res); check('sin aceptar el aviso de privacidad no se guarda la reserva', r.s === 400 && /aceptación/.test(r.j.error), JSON.stringify(r.j));
+let r = await call('POST', '/publico/reservas', res); check('sin aceptar el aviso de privacidad no se guarda la reserva', r.s === 400 && /aviso de privacidad/.test(r.j.error), JSON.stringify(r.j));
 r = await call('POST', '/publico/reservas', { ...res, consentimiento: true }); check('con aceptación sí', r.s === 200);
 let c = (await call('GET', '/panel', null, adm)).j.citas.find(x => x.codigo === r.j.codigo);
-check('queda constancia del consentimiento (fecha y versión del aviso)', c.consentimiento?.ts > 0 && c.consentimiento?.version === 1, JSON.stringify(c.consentimiento));
+check('queda constancia de la aceptación al tocar Reservar (fecha, versión 2 del aviso y cómo)', c.consentimiento?.ts > 0 && c.consentimiento?.version === 2 && /Reservar/.test(c.consentimiento?.como), JSON.stringify(c.consentimiento));
 // datos completos de un cliente: fotos, link personal, bitácora
 const foto = (await call('POST', '/fotos', { data: PNG }, adm)).j.key, cap = (await call('POST', '/fotos', { data: PNG }, adm)).j.key;
 const nc = (await call('POST', '/citas', { fecha: f(-10), hora: '11:00', barberoId: 'b2', servicioId: pn.servicios[0].id, precio: 35, cliente: { nombre: 'Rodrigo Borrame', tel: '987600200', dni: '40001111', ciudad: 'Comas' }, nota: 'alérgico al gel', estado: 'atendida', fotoAntes: foto, yapeCaptura: cap }, adm)).j;

@@ -97,13 +97,23 @@ function togNotif(e){e?.stopPropagation();let el=$('#notif');if(!el){el=document
  if(el.classList.contains('on'))return el.classList.remove('on');pintaNotif();el.classList.add('on')}
 function pintaNotif(){const el=$('#notif'),l=notifs(),vis=l.filter(x=>!S.leidas.has(x.k)||x.tipo==='yape'||x.tipo==='prox');
  const wa=(x,key,txt)=>x.c.cliente?.tel&&(can('verTel')||isAdmin())?`<button class="btn sm" style="border-color:#25d366;color:#25d366" data-on-click="a94557f45" data-p0="${x.c.id}" data-p1="${key}" data-p2="${x.k}">💬 ${txt}</button>`:'';
- const acc=x=>{if(x.tipo==='rec')return `<button class="btn sm p" data-on-click="abrirRecordatorios">⏰ Abrir recordatorios</button>`;if(x.tipo==='alerta'&&x.accion==='reporte')return `<button class="btn sm p" data-on-click="verReporteNotif" data-p0="${x.k}" data-p1="${x.semana}">📊 Ver reporte</button>`;if(x.tipo==='alerta')return `<button class="btn sm" data-on-click="a74da319d" data-p0="${x.k}">🛡️ Ver seguridad</button>`;const v=`<button class="btn sm" data-on-click="ac80577bd" data-p0="${x.c.id}" data-p1="${x.k}">👁️ Ver</button>`;
+ const cp=x=>x.c?`<button class="btn sm" data-on-click="copiarCita" data-p0="${x.c.id}">📋 Copiar</button>`:'';
+ const acc=x=>cp(x)+acc0(x),acc0=x=>{if(x.tipo==='rec')return `<button class="btn sm p" data-on-click="abrirRecordatorios">⏰ Abrir recordatorios</button>`;if(x.tipo==='alerta'&&x.accion==='reporte')return `<button class="btn sm p" data-on-click="verReporteNotif" data-p0="${x.k}" data-p1="${x.semana}">📊 Ver reporte</button>`;if(x.tipo==='alerta')return `<button class="btn sm" data-on-click="a74da319d" data-p0="${x.k}">🛡️ Ver seguridad</button>`;const v=`<button class="btn sm" data-on-click="ac80577bd" data-p0="${x.c.id}" data-p1="${x.k}">👁️ Ver</button>`;
   if(x.tipo==='yape')return v+(x.c.yapeCaptura&&can('yape')?`<button class="btn sm p" data-on-click="a545db87c" data-p0="${x.k}" data-p1="${x.c.id}">✅ Validar Yape</button>`:wa(x,'waYape','Pedir Yape'));
   if(x.tipo==='prox')return v+wa(x,'waRecuerda','Recordar');
   if(x.tipo==='baja')return v+wa(x,'waVuelve','Reagendar');
   return v+wa(x,'waConfirma','Confirmar')};
  el.innerHTML=`<div class="nh"><b>🔔 Notificaciones</b>${l.some(x=>!S.leidas.has(x.k))?`<button data-on-click="ac48ed6f5">Marcar todo leído</button>`:''}</div>
  <div class="nl">${vis.length?vis.map(x=>`<div class="ni ${S.leidas.has(x.k)?'':'nueva'}"><span class="e">${x.i}</span><div class="x"><b>${esc(x.t)}</b><small>${esc(x.s)}</small><div class="ac">${acc(x)}</div></div><span class="t">${x.tipo==='prox'||x.tipo==='alerta'||x.tipo==='rec'?'':hace(x.ts)}</span></div>`).join(''):'<div class="vac">✨ Todo al día. Aquí verás reservas nuevas, Yapes por validar, reprogramaciones y citas próximas.</div>'}</div>`}
+/* 📋 Copiar: todo lo de la cita en texto (para pegar en WhatsApp o notas). Respeta permisos: sin «ver celulares» el
+   celular ya viene oculto del servidor; sin «ver montos» no van precio ni adelanto. Se puede copiar las veces que quieras. */
+function textoCita(c){const b=barb(c.barberoId)?.nombre||'',cl=c.cliente||{},m=can('verMontos');
+ return [`👤 ${cl.nombre||'Cliente'}`,cl.tel?`📱 ${cl.tel}`:'',cl.dni?`🪪 DNI ${cl.dni}`:'',`📅 ${fLarga(c.fecha)} · ${h12(c.hora)}${rangoCita(c)}`,b?`💈 ${b}`:'',
+  `✂️ ${c.servicioNombre||''}${m?' · '+soles(c.precio):''}`,m&&+c.adelanto>0?`💸 Adelanto ${soles(c.adelanto)}${c.adelantoOk?' (validado)':' (por validar)'}`:'',
+  `🔖 #${c.codigo||''} · ${est(c.estado).t}`,c.nota?`📝 ${c.nota}`:'',c.codigo?`🔎 ${estadoUrl(c.codigo)}`:''].filter(Boolean).join('\n')}
+ACC.copiarCita=async function(event){event?.stopPropagation?.();const c=cita(this.dataset.p0),b=this;if(!c)return;const txt=textoCita(c);
+ try{await navigator.clipboard.writeText(txt)}catch(e){const t=document.createElement('textarea');t.value=txt;t.style.cssText='position:fixed;opacity:0';document.body.appendChild(t);t.select();try{document.execCommand('copy')}catch(_){prompt('Copia:',txt)}t.remove()}
+ clearTimeout(b._t);b.textContent='✅ Copiado';b.classList.add('ok');b._t=setTimeout(()=>{b.textContent='📋 Copiar';b.classList.remove('ok')},2000)};
 function notifLeer(k){S.leidas.add(k);lsSet('notifLeidas',[...S.leidas].slice(-300));renderHeader()}
 function notifTodas(){notifs().forEach(x=>S.leidas.add(x.k));lsSet('notifLeidas',[...S.leidas].slice(-300));renderHeader();pintaNotif()}
 function notifVer(id,k){notifLeer(k);$('#notif').classList.remove('on');irACita(id)}
@@ -140,13 +150,13 @@ function cardCita(c,vis){
    <span class="lk">📅 ${DIAS[pYmd(c.fecha).getDay()]} ${pYmd(c.fecha).getDate()} ${MESC[pYmd(c.fecha).getMonth()]} · ${h12(c.hora)}${rangoCita(c)}</span>
    <span class="lk">💰 ${c.gratis?'GRATIS':monV(c.precio)}</span>
   </div>
-  <div class="sub2">✂️ ${esc(c.servicioNombre||'')}${cl.ciudad?' · 📍 '+esc(cl.ciudad):''}</div>
+  <div class="sub2">✂️ ${esc(c.servicioNombre||'')}</div>
   ${c.nota?`<div class="nota">📝 ${esc(c.nota)}</div>`:''}
   <div class="tags"><span class="tag">#${esc(c.codigo||'')}</span>${c.promo?`<span class="tag" style="color:var(--pur);border-color:var(--pur)" title="Reservó con la promoción «${esc(c.promo.titulo||'')}»">🏷️ ${esc(c.promo.titulo||'Promo')}</span>`:''}${c.asistencia?`<span class="tag" style="color:#3fb950;border-color:#3fb950" title="Confirmó ${c.asistencia.via==='whatsapp'?'respondiendo por WhatsApp':'desde el link de su cita'}">👍 Confirmó que viene</span>`:''}${recInfo(c)}${c.reprog?`<span class="tag" style="color:var(--blue);border-color:var(--blue)" title="Antes: ${c.reprogDe?esc(fLarga(c.reprogDe.fecha)+' · '+h12(c.reprogDe.hora)):''}">🔁 Reprogramada${c.reprogDe?' (antes '+esc(fLarga(c.reprogDe.fecha).split(' ').slice(0,2).join(' ')+' '+h12(c.reprogDe.hora))+')':''}</span>`:''}${v?`<span class="tag">⭐ ${v} visita${v>1?'s':''}</span>`:''}${gratis?'<span class="tag" style="color:var(--pur);border-color:var(--pur)">🎁 Le toca gratis</span>':''}${(c.links||[]).slice(0,1).map(l=>`<span class="tag lk" style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-on-click="a7df36ca4" data-p0="${c.id}">🔗 ${esc(l.url.replace(/^https?:\/\//,'').slice(0,22))}…</span>`).join('')}${(c.links||[]).length>1?`<span class="tag">+${c.links.length-1}</span>`:''}${c.origen==='web'?'<span class="tag">🌐 Web</span>':c.origen==='walkin'?'<span class="tag">⚡ Sin cita</span>':''}</div>
-  ${pagoBox}${S.cfg.modFotos&&(['confirmada','en_silla','atendida'].includes(c.estado)||c.fotoAntes||c.fotoDespues||c.refFoto)?`<div class="box"><h5>📷 <span>Fotos del corte</span>${c.adelantoOk?`<span class="pill" style="color:var(--grn);border-color:var(--grn)">✔ Adelanto ${soles(c.adelanto)}</span>`:''}</h5><div class="phs3">${ph(c,'antes')}${ph(c,'despues')}${ph(c,'ref')}</div></div>`:''}
+  ${pagoBox}${S.cfg.modFotos&&(['confirmada','en_silla','atendida'].includes(c.estado)||c.fotoAntes||c.fotoDespues)?`<div class="box"><h5>📷 <span>Fotos del corte</span>${c.adelantoOk?`<span class="pill" style="color:var(--grn);border-color:var(--grn)">✔ Adelanto ${soles(c.adelanto)}</span>`:''}</h5><div class="phs3 dos">${ph(c,'antes')}${ph(c,'despues')}</div></div>`:''}
   <div class="acts"><button class="big" style="color:${ac?ac.c:e.c};border-color:${ac?ac.c:e.c};background:${ac?ac.c:e.c}1a" data-on-click="afa8ec677" data-p0="${c.id}">${ac?ac.t:`${e.i} ${esc(e.t)} 🔒`}</button>${can('crear')?`<button class="sq" data-on-click="a1b96555c" data-p0="${c.id}">✏️</button>`:''}${can('cancelar')?(['cancelada','expirada'].includes(c.estado)?`<button class="sq r" title="Mover a la papelera" data-on-click="a42b723aa" data-p0="${c.id}">🗑️</button>`:`<button class="etqcan" title="Cancelar la cita (el horario queda libre)" data-on-click="a42b723aa" data-p0="${c.id}">🚫 Cancelar</button>`):''}</div>
  </div>`}
-function ph(c,k){const key=k==='antes'?c.fotoAntes:k==='ref'?c.refFoto:c.fotoDespues,lbl=k==='antes'?'ANTES':k==='ref'?'REFERENCIA':'DESPUÉS',inp=`<input type="file" accept="image/*" ${k==='ref'?'':'capture="environment"'} data-on-change="a6646ca8f" data-p0="${c.id}" data-p1="${k}">`;
+function ph(c,k){const key=k==='antes'?c.fotoAntes:c.fotoDespues,lbl=k==='antes'?'ANTES':'DESPUÉS',inp=`<input type="file" accept="image/*" capture="environment" data-on-change="a6646ca8f" data-p0="${c.id}" data-p1="${k}">`;
  return key?`<div class="ph"><span class="tg">${lbl}</span><img data-foto="${key}" data-on-click="adb395fd1" data-p0="${key}"><label class="re">↻${inp}</label></div>`:`<label class="ph">📷<br>Foto ${lbl.toLowerCase()}${inp}</label>`}
 function accion(c){const id=c.id,E=k=>est(k);switch(c.estado){
  case 'por_validar':if(!can('yape'))return{t:'💸 Yape por validar 🔒',go:()=>toast('🔒 Solo quien valida pagos puede confirmarlo'),c:E('por_validar').c};return{t:c.yapeCaptura?`💸 Validar Yape`:`💸 Validar Yape · sin comprobante`,go:()=>verYape(id),c:E('por_validar').c};
@@ -159,7 +169,7 @@ function waPlantilla(id,k){if(k==='waRecuerda')return recordar(id);const c=cita(
 async function setEstado(id,k,extra={},msg){try{await API.updateCita(id,{estado:k,...extra});await reload();toast(msg||`${est(k).i} ${est(k).t}`)}catch(e){toast('❌ '+e.message)}}
 /* Foto ANTES: pasa a "En silla". Foto DESPUÉS: termina el corte (queda "Atendido"). */
 async function subirFoto(id,k,inp){const f=inp.files[0];if(!f)return;toast('⏳ Subiendo foto…');
- try{const key=await API.putFoto(await compressImg(f,1000,.72)),c=cita(id),p={[k==='antes'?'fotoAntes':k==='ref'?'refFoto':'fotoDespues']:key};let msg='📷 Foto guardada';
+ try{const key=await API.putFoto(await compressImg(f,1000,.72)),c=cita(id),p={[k==='antes'?'fotoAntes':'fotoDespues']:key};let msg='📷 Foto guardada';
   if(k==='antes'&&c?.estado==='confirmada'){p.estado='en_silla';p.enSillaTs=Date.now();msg='💺 Foto guardada · ahora está En silla'}
   await API.updateCita(id,p);await reload();toast(msg);
   if(k==='despues'&&['confirmada','en_silla'].includes(cita(id)?.estado))await terminar(id,true)}catch(e){toast('❌ '+e.message)}}
@@ -190,12 +200,12 @@ function menuWA(id){const c=cita(id);if(!c)return;
 function formCita(id){const c=id?cita(id):null,cl=c?.cliente||{};
  const bid=c?.barberoId||(isAdmin()?(S.vista.barb[0]||S.barberos.find(b=>b.activo!==false)?.id||''):S.ses.barberoId);
  const bOpts=(isAdmin()?S.barberos:S.barberos.filter(b=>b.id===S.ses.barberoId)).map(b=>`<option value="${b.id}" ${b.id===bid?'selected':''}>${esc(b.nombre)}</option>`).join('');
- S._ed={fotoAntes:c?.fotoAntes||'',fotoDespues:c?.fotoDespues||'',refFoto:c?.refFoto||'',links:[...(c?.links||[])],precio:c?.precio};
+ S._ed={fotoAntes:c?.fotoAntes||'',fotoDespues:c?.fotoDespues||'',links:[...(c?.links||[])],precio:c?.precio};
  const estSel=c?.estado||'confirmada';
  openModal(`<div class="grab"></div>`+mHead(c?'✏️ Editar cita':'➕ Nueva cita')+`
  ${c?'':pegarBox()}
  <div class="g2"><div><label class="lb">DNI (opcional)</label><input class="in" id="fDni" inputmode="numeric" maxlength="8" placeholder="8 dígitos" value="${esc(cl.dni||'')}" data-on-input="a2e87e5f0"><small id="fDniEst" style="color:var(--mu);display:block;min-height:16px;margin-top:4px"></small></div><div><label class="lb">Teléfono</label><input class="in" id="fTel" inputmode="tel" placeholder="9XXXXXXXX" value="${esc(cl.tel||'')}"></div></div>
- <div class="g2"><div><label class="lb">Nombre *</label><input class="in" id="fNom" placeholder="Nombre y apellido" value="${esc(cl.nombre||'')}"></div><div><label class="lb">Ciudad / distrito</label><input class="in" id="fCiu" placeholder="Ej: Puente Piedra" value="${esc(cl.ciudad||'')}"></div></div>
+ <label class="lb">Nombre *</label><input class="in" id="fNom" placeholder="Nombre y apellido" value="${esc(cl.nombre||'')}">
  <div class="g2"><div><label class="lb">Barbero</label><select class="in" id="fBarb" data-on-change="abcce00c9">${bOpts}</select></div><div><label class="lb">Servicio</label><select class="in" id="fServ" data-on-change="a52e1df12">${S.servicios.map(s=>`<option value="${s.id}" ${s.id===c?.servicioId?'selected':''}>${s.emoji} ${esc(s.nombre)}</option>`).join('')}</select></div></div>
  <div class="g2"><div><label class="lb">Fecha</label><input type="date" class="in" id="fFecha" value="${c?.fecha||(S.vista.per.t==='dia'?S.vista.per.f:hoy())}" data-on-change="abcce00c9"></div><div><label class="lb">Hora</label><select class="in" id="fHora"></select></div></div>
  <p class="hint" id="fWarn" style="color:var(--yel);margin-top:4px"></p>
@@ -213,7 +223,7 @@ function formCita(id){const c=id?cita(id):null,cl=c?.cliente||{};
 `);
  S._eh=c?.hora||'';S._eid=id||'';fillHoras()}
 function edTiles(){if(!S.cfg.modFotos)return'<p class="hint" style="grid-column:1/-1">Las fotos están apagadas en ⚙️ Config → Funciones.</p>';
- return [['fotoAntes','📷','Antes'],['fotoDespues','✨','Después'],['refFoto','🖼️','Referencia']].map(([k,i,t])=>{const v=S._ed[k],inp=`<input type="file" accept="image/*" ${k==='refFoto'?'':'capture="environment"'} data-on-change="a9ae09c29" data-p0="${k}">`;
+ return [['fotoAntes','📷','Antes'],['fotoDespues','✨','Después']].map(([k,i,t])=>{const v=S._ed[k],inp=`<input type="file" accept="image/*" capture="environment" data-on-change="a9ae09c29" data-p0="${k}">`;
   return `<div>${v?`<div class="dbox has" data-on-click="adb395fd1" data-p0="${v}"><img data-foto="${v}"><span class="dt">${t}</span></div><div class="row" style="gap:6px"><label class="dadd" style="flex:1">↻${inp}</label><button class="dadd" style="width:44px;flex:none;color:var(--red);border-color:#f8514966;background:rgba(248,81,73,.08)" data-on-click="ab4b08f58" data-p0="${k}">✕</button></div>`
   :`<label class="dbox"><span class="di">${i}</span><b>${t}</b>${inp}</label><label class="dadd">+ Agregar${inp}</label>`}</div>`}).join('')}
 function edLinks(){return S._ed.links.map((l,i)=>`<div class="lkrow"><span>🔗</span><a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.url.replace(/^https?:\/\//,''))}</a><button class="ibtn bare" style="color:var(--blue)" data-on-click="ad75c19e9" data-p0="${i}">↗</button><button class="ibtn bare" style="color:var(--red)" data-on-click="a788d2896" data-p0="${i}">✕</button></div>`).join('')}
@@ -228,7 +238,7 @@ function fillHoras(){const f=$('#fFecha').value,bid=$('#fBarb').value,b=barb(bid
  $('#fWarn').textContent=b&&!trabaja(S.cfg,b,f)?'⚠️ Ese barbero no atiende ese día (puedes guardarla igual).':''}
 async function guardarCita(id){const s=S.servicios.find(x=>x.id===$('#fServ').value),c=id?cita(id):null,estN=$('#fEst').value;
  const pre=$('#fPre')?Math.max(0,+$('#fPre').value||0):(c?.precio??+s?.precio??0);
- const d={fecha:$('#fFecha').value,hora:$('#fHora').value,barberoId:$('#fBarb').value,servicioId:s?.id,servicioNombre:s?.nombre||'',precio:pre,cliente:{nombre:$('#fNom').value.trim(),tel:$('#fTel').value.replace(/[^\d+ ]/g,'').trim(),ciudad:$('#fCiu').value.trim(),dni:$('#fDni').value.replace(/\D/g,'').slice(0,8)},nota:$('#fNota').value.trim(),fotoAntes:S._ed.fotoAntes,fotoDespues:S._ed.fotoDespues,refFoto:S._ed.refFoto,links:S._ed.links,estado:estN};
+ const d={fecha:$('#fFecha').value,hora:$('#fHora').value,barberoId:$('#fBarb').value,servicioId:s?.id,servicioNombre:s?.nombre||'',precio:pre,cliente:{nombre:$('#fNom').value.trim(),tel:$('#fTel').value.replace(/[^\d+ ]/g,'').trim(),dni:$('#fDni').value.replace(/\D/g,'').slice(0,8)},nota:$('#fNota').value.trim(),fotoAntes:S._ed.fotoAntes,fotoDespues:S._ed.fotoDespues,links:S._ed.links,estado:estN};
  if(!d.fecha||!d.hora)return toast('Elige fecha y una hora libre');if(!d.cliente.nombre)return toast('Falta el nombre del cliente');
  if(c&&estN!==c.estado){if(c.estado==='por_validar'&&['confirmada','en_silla','atendida'].includes(estN)&&!can('yape'))return toast('🔒 Solo quien valida pagos puede confirmar esta cita');if(['cancelada','no_vino'].includes(estN)&&!can('cancelar'))return toast('🔒 Sin permiso para cancelar');
   if(estN==='en_silla'&&!c.enSillaTs)d.enSillaTs=Date.now();if(estN==='atendida'&&!c.atendidaTs)d.atendidaTs=Date.now();if(estN==='confirmada'&&c.adelanto>0&&c.estado==='por_validar')d.adelantoOk=true}
@@ -245,11 +255,11 @@ function walkIn(){const bid=isAdmin()?(S.vista.barb[0]||S.barberos.find(b=>b.act
  <label class="lb">Barbero</label><select class="in" id="wBarb">${bOpts}</select>
  <label class="lb">Servicio</label><select class="in" id="wServ">${S.servicios.filter(s=>s.activo!==false).map(s=>`<option value="${s.id}">${s.emoji} ${esc(s.nombre)} — ${soles(s.precio)}</option>`).join('')}</select>
  <label class="lb">Cliente (opcional)</label><input class="in" id="wNom" placeholder="Nombre">
- <div class="g2" style="margin-top:8px"><input class="in" id="wTel" inputmode="tel" placeholder="Celular"><input class="in" id="wCiu" placeholder="Ciudad / distrito"></div>
+ <input class="in" id="wTel" inputmode="tel" placeholder="Celular" style="margin-top:8px">
  <button class="btn pu w" style="margin-top:14px;padding:14px" data-on-click="aeff5c34f">💺 Pasar a silla</button>`)}
 async function guardarWalk(){const s=S.servicios.find(x=>x.id===$('#wServ').value),bid=$('#wBarb').value,now=new Date(),m=now.getHours()*60+now.getMinutes();
  let hora=slotsDia(S.cfg).find(h=>toMin(h)<=m&&m<toMin(h)+CONFIG.DUR)||fromMin(m);if(ocupado(S.citas,bid,hoy(),hora))hora=fromMin(m);
- try{await API.crearCita({fecha:hoy(),hora,barberoId:bid,servicioId:s?.id,servicioNombre:s?.nombre||'',precio:+s?.precio||0,cliente:{nombre:$('#wNom').value.trim()||'Cliente sin cita',tel:$('#wTel').value.replace(/[^\d+ ]/g,'').trim(),ciudad:$('#wCiu').value.trim()},nota:'',estado:'en_silla',enSillaTs:Date.now(),adelanto:0,adelantoOk:false,origen:'walkin'});
+ try{await API.crearCita({fecha:hoy(),hora,barberoId:bid,servicioId:s?.id,servicioNombre:s?.nombre||'',precio:+s?.precio||0,cliente:{nombre:$('#wNom').value.trim()||'Cliente sin cita',tel:$('#wTel').value.replace(/[^\d+ ]/g,'').trim()},nota:'',estado:'en_silla',enSillaTs:Date.now(),adelanto:0,adelantoOk:false,origen:'walkin'});
   closeModal();fijarDia(hoy());await reload();toast('💺 En silla')}catch(e){toast('❌ '+e.message)}}
 async function quitarDemo(){if(!confirm('¿Borrar todas las citas de ejemplo?'))return;lsSet('citas',lsGet('citas',[]).filter(c=>!c.demo));await reload();toast('🧹 Ejemplos borrados')}
 function ayuda(){openModal(mHead('📖 Cómo funciona')+[

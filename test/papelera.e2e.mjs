@@ -10,7 +10,7 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
 const nueva = (hora, x = {}) => call('POST', '/citas', { fecha: f, hora, barberoId: 'b1', servicioId: 's1', servicioNombre: 'Corte', precio: 25, cliente: { nombre: 'Papa Lera', tel: '966111222' }, estado: 'confirmada', ...x }, adm).then(r => r.j);
 
 const foto = (await call('POST', '/fotos', { data: PNG }, adm)).j.key;
-const a = await nueva('10:00', { refFoto: foto });
+const a = await nueva('10:00', { fotoAntes: foto });
 let r = await call('DELETE', '/citas/' + a.id, null, adm);
 check('eliminar una cita la manda a la papelera', r.s === 200 && r.j.papelera === true, JSON.stringify(r.j));
 check('ya no está en la agenda', (await call('GET', '/citas/buscar?q=' + a.codigo, null, adm)).j.items.length === 0);
@@ -24,7 +24,7 @@ check('el panel trae cuántas hay en la papelera', (await call('GET', '/panel', 
 r = await call('POST', `/papelera/${a.id}/recuperar`, {}, adm);
 check('si su horario ya se ocupó, vuelve como CANCELADA', r.s === 200 && r.j.ocupado === true, JSON.stringify(r.j));
 let c = (await call('GET', '/citas/buscar?q=' + a.codigo, null, adm)).j.items[0];
-check('…con sus datos intactos', c?.estado === 'cancelada' && c.cliente?.nombre === 'Papa Lera' && c.refFoto === foto, JSON.stringify(c));
+check('…con sus datos intactos', c?.estado === 'cancelada' && c.cliente?.nombre === 'Papa Lera' && c.fotoAntes === foto, JSON.stringify(c));
 check('y salió de la papelera', !(await call('GET', '/papelera', null, adm)).j.items.length);
 
 // recuperar normal

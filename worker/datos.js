@@ -93,6 +93,9 @@ export const MIGRACIONES = [
     `CREATE TRIGGER IF NOT EXISTS tr_turnos_upd AFTER UPDATE OF fecha, hora, barbero_id, estado, data ON citas BEGIN DELETE FROM turnos WHERE cita_id = OLD.id; INSERT INTO turnos(barbero_id, fecha, hora, cita_id) SELECT NEW.barbero_id, NEW.fecha, printf('%02d:%02d', (CAST(substr(NEW.hora, 1, instr(NEW.hora, ':') - 1) AS INTEGER) * 60 + CAST(substr(NEW.hora, instr(NEW.hora, ':') + 1) AS INTEGER) + j.key * 60) / 60, (CAST(substr(NEW.hora, 1, instr(NEW.hora, ':') - 1) AS INTEGER) * 60 + CAST(substr(NEW.hora, instr(NEW.hora, ':') + 1) AS INTEGER) + j.key * 60) % 60), NEW.id FROM json_each(COALESCE(json_extract(NEW.data, '$.bloques'), '[1]')) j WHERE j.value = 1 AND NEW.hora <> '' AND instr(NEW.hora, ':') > 0 AND NEW.estado IN ('pendiente_pago','por_validar','confirmada','en_silla','atendida'); END`,
     `CREATE TRIGGER IF NOT EXISTS tr_turnos_del AFTER DELETE ON citas BEGIN DELETE FROM turnos WHERE cita_id = OLD.id; END`,
   ] },
+  // Decisión del dueño (Ley 29733, solo los datos necesarios): ya no se piden distrito ni foto de referencia.
+  // Esta limpieza borra los ya guardados (citas, papelera, links, ficha de clientes y las fotos en R2).
+  { v: 12, nombre: 'sin distrito ni foto de referencia', sql: [], despues: quitarDistritoYReferencia },
 ];
 export let schemaListo = null;
 export function asegurarSchema(env) { return schemaListo ||= aplicarMigraciones(env).catch(e => { schemaListo = null; throw e }) }
@@ -137,7 +140,7 @@ export async function quitarPines(env) {
    · rol 'dueno' tiene todos los permisos; los demás, los que el dueño marque.
    · «atiende» = sale en la agenda, el formulario y la caja (lo que antes era «barbero»). Su id es el barberoId de sus citas.
    · Sujeto de acceso (clave, huella, puerta) = 'p_' + id. */
-export const barberoDe = p => ({ id: p.id, nombre: p.nombre, esp: p.esp || '', foto: p.foto || '', color: p.color || '', comision: +p.comision || 0, dias: p.dias || [1, 2, 3, 4, 5, 6], activo: p.activo !== false, email: p.email || '', ...(p.pin ? { pin: p.pin } : {}) });
+export const barberoDe = p => ({ id: p.id, nombre: p.nombre, esp: p.esp || '', foto: p.foto || '', color: p.color || '', comision: +p.comision || 0, dias: p.dias || [1, 2, 3, 4, 5, 6], activo: p.activo !== false, email: p.email || '', ...(p.servicios?.length ? { servicios: p.servicios } : {}), ...(p.pin ? { pin: p.pin } : {}) });
 /* Une las listas antiguas (barberos + usuarios + dueño con PIN/clave aparte) en el equipo. mapa: sujeto viejo → nuevo. */
 export function equipoDesde(barberos = [], usuarios = [], cfg = {}) {
   const permB = { ...ROL_BARBERO, ...(cfg.permBarbero || {}) }, mapa = { admin: 'p_dueno' };
@@ -151,6 +154,22 @@ export function equipoDesde(barberos = [], usuarios = [], cfg = {}) {
   return { equipo, mapa };
 }
 /* Migración v7: pasa barberos y usuarios al equipo y mueve sus claves y huellas al nuevo sujeto. Las sesiones se cierran. */
+async function quitarDistritoYReferencia(env) {
+  const fotos = [];
+  for (const t of ['citas', 'papelera']) {
+    const r = await env.DB.prepare(`SELECT json_extract(data, '$.refFoto') AS f FROM ${t} WHERE json_extract(data, '$.refFoto') IS NOT NULL`).all();
+    for (const x of r.results) if (typeof x.f === 'string' && /^f_[\w-]+$/.test(x.f)) fotos.push(x.f);
+  }
+  await env.DB.batch([
+    env.DB.prepare("UPDATE citas SET data = json_remove(data, '$.refFoto', '$.cliente.ciudad') WHERE json_extract(data, '$.refFoto') IS NOT NULL OR json_extract(data, '$.cliente.ciudad') IS NOT NULL"),
+    env.DB.prepare("UPDATE papelera SET data = json_remove(data, '$.refFoto', '$.cliente.ciudad') WHERE json_extract(data, '$.refFoto') IS NOT NULL OR json_extract(data, '$.cliente.ciudad') IS NOT NULL"),
+    env.DB.prepare("UPDATE links SET data = json_remove(data, '$.cliente.ciudad') WHERE json_extract(data, '$.cliente.ciudad') IS NOT NULL"),
+    env.DB.prepare("UPDATE clientes SET ciudad = '' WHERE ciudad <> ''"),
+  ]);
+  if (env.FOTOS) for (let i = 0; i < fotos.length; i += 500) { try { await env.FOTOS.delete(fotos.slice(i, i + 500)) } catch (e) { console.error('fotos de referencia', e) } }
+}
+/* Los datos que ya no se piden no se guardan aunque lleguen (pantallas viejas, Excel, importaciones). */
+export const sinDatosDeMas = c => { if (!c || typeof c !== 'object') return c; delete c.refFoto; if (c.cliente && typeof c.cliente === 'object') delete c.cliente.ciudad; return c };
 async function unirEquipo(env) {
   const d = await leerKV(env, ['cfg', 'barberos', 'usuarios', 'equipo']);
   if (d.equipo || (!d.barberos && !d.usuarios)) return; // instalación nueva: el equipo lo crea sembrar()

@@ -14,7 +14,7 @@ function setLL(la,lo){D().cfg.lat=String(+(+la).toFixed(6));D().cfg.lng=String(+
 function ubicAqui(){if(!navigator.geolocation)return toast('Tu navegador no permite la ubicación');toast('📍 Buscando tu ubicación…');navigator.geolocation.getCurrentPosition(p=>{setLL(p.coords.latitude,p.coords.longitude);toast('✅ Ubicación lista · toca Guardar')},e=>toast(e.code===1?'❌ Permite la ubicación en tu navegador (candado junto a la dirección)':e.code===3?'❌ Tardó demasiado: prueba de nuevo o usa «Buscar mi dirección»':'❌ No se pudo obtener tu ubicación: usa «Buscar mi dirección»'),{enableHighAccuracy:true,timeout:15000})}
 async function ubicBuscar(){const c=D().cfg,q=[c.direccion,c.ciudad].filter(Boolean).join(', ');if(!q)return toast('Primero escribe la dirección');toast('🔎 Buscando…');try{const r=await(await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=pe&q='+encodeURIComponent(q))).json();if(!r[0])return toast('No la encontré: usa «Usar donde estoy»');setLL(r[0].lat,r[0].lon);toast('✅ Encontrada · revisa el mapa y toca Guardar')}catch(e){toast('❌ No se pudo buscar')}}
 function mapsCoords(u){const m=String(u).match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)||String(u).match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/)||String(u).match(/[?&](?:q|ll|query)=(-?\d+\.\d+),(-?\d+\.\d+)/);if(m&&!D().cfg.lat&&!D().cfg.lng)setLL(m[1],m[2])}
-const VARS=['cliente','fecha','hora','barbero','servicio','precio','codigo','negocio','direccion','maps','link','adelanto','yape','telefono','ciudad','nota','pago','seguimiento'];
+const VARS=['cliente','fecha','hora','barbero','servicio','precio','codigo','negocio','direccion','maps','link','adelanto','yape','telefono','nota','pago','seguimiento'];
 function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,equipo:S.equipo,servicios:S.servicios});S.dirty=false}
  const d=D(),c=d.cfg;applyTheme(c);
  $('#t-config').innerHTML=`
@@ -161,7 +161,7 @@ function agMarca(){const l=S._ag,vistos=new Set();let n=0;l.forEach((e,i)=>{cons
  const b=$('#agBtn');if(b){b.textContent=n?`✅ Crear ${n} cita${n>1?'s':''}`:'Nada para crear';b.disabled=!n}}
 async function agendaCrear(){const est=$('#agEst').value,l=S._ag.filter(e=>e.ok&&!e._bad&&e.nombre.trim());let n=0,err=[];$('#agBtn').disabled=true;
  for(const e of l){const s=S.servicios.find(x=>x.id===e.servicioId);
-  try{await API.crearCita({fecha:e.fecha,hora:e.hora,barberoId:e.barberoId,servicioId:s?.id,servicioNombre:s?.nombre||'',precio:+s?.precio||0,cliente:{nombre:e.nombre.trim(),tel:e.tel||'',ciudad:'',dni:e.dni||''},nota:'',estado:est,...(est==='atendida'?{atendidaTs:new Date(e.fecha+'T'+e.hora).getTime()}:{}),adelanto:0,adelantoOk:false,origen:'panel'});n++}catch(x){err.push(e.nombre)}}
+  try{await API.crearCita({fecha:e.fecha,hora:e.hora,barberoId:e.barberoId,servicioId:s?.id,servicioNombre:s?.nombre||'',precio:+s?.precio||0,cliente:{nombre:e.nombre.trim(),tel:e.tel||'',dni:e.dni||''},nota:'',estado:est,...(est==='atendida'?{atendidaTs:new Date(e.fecha+'T'+e.hora).getTime()}:{}),adelanto:0,adelantoOk:false,origen:'panel'});n++}catch(x){err.push(e.nombre)}}
  closeModal();if(l[0])fijarDia(l[0].fecha);await reload();toast(`✅ ${n} cita${n!==1?'s':''} creada${n!==1?'s':''}${err.length?` · ❌ fallaron: ${err.join(', ')}`:''}`)}
 
 /* Mover varias citas a otro día (p. ej. una carga masiva que quedó con la fecha equivocada) */
@@ -222,7 +222,7 @@ async function rehacerFichas(b){b.disabled=true;b.textContent='⏳ Reconstruyend
 async function respaldarAhora(b){b.disabled=true;b.textContent='⏳ Creando…';try{const r=await API.req('POST','/respaldos');toast(`✅ Respaldo creado: ${r.citas} citas`);S.alT=0;cargarAlertas();verSeguridad()}catch(e){toast('❌ '+e.message);b.disabled=false;b.textContent='💾 Crear respaldo ahora'}}
 async function probarDni(){const d=prompt('DNI de 8 dígitos para probar la conexión con RENIEC:');if(!d)return;
  try{const r=await API.req('GET','/dni/'+d.replace(/\D/g,'')+'?crudo=1');alert(`Consultas de DNI hoy: ${r.usoHoy}${r.tope?' de '+r.tope:''}\n\n`+'Nombre que usará el sistema: '+(r.nombre||'(no se pudo armar)')+'\n\nRespuesta del servicio:\n'+JSON.stringify(r.crudo,null,1).slice(0,1200))}catch(e){alert('❌ '+e.message)}}
-function tplPreview(s){return tpl(s,{fecha:hoy(),hora:'10:00',barberoId:atienden()[0]?.id,servicioNombre:'Fade / Degradado',precio:30,codigo:'AB12CD',adelanto:D().cfg.adelanto,cliente:{nombre:'Carlos',tel:'987654321',ciudad:'Puente Piedra'}},D().cfg)}
+function tplPreview(s){return tpl(s,{fecha:hoy(),hora:'10:00',barberoId:atienden()[0]?.id,servicioNombre:'Fade / Degradado',precio:30,codigo:'AB12CD',adelanto:D().cfg.adelanto,cliente:{nombre:'Carlos',tel:'987654321'}},D().cfg)}
 const NVARS=['narrador','cliente','servicio','precio','barbero','especialidad','fecha','hora','adelanto','yape','negocio'];
 function insVarN(k,v){const ta=$('#tn_'+k);const p=ta.selectionStart??ta.value.length;ta.value=ta.value.slice(0,p)+'{'+v+'}'+ta.value.slice(ta.selectionEnd??p);D().cfg.narr[k]=ta.value;dirty();ta.focus()}
 async function subirImg(inp,key,max,type){const f=inp.files[0];if(!f)return;try{D().cfg[key]=await API.putFoto(await compressImg(f,max,.85,type));dirty();renderConfig()}catch(e){toast('❌ '+e.message)}}

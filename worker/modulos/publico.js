@@ -1,4 +1,4 @@
-import { ACTIVOS, DEF, addD, bloquesDe, entra, horasOcupa, ahoraLocal, codigo, fail, json, minutosHasta, reglaReprog, slotsDia, str, toMin, trabaja, uid } from '../comun.js';
+import { ACTIVOS, DEF, addD, bloquesDe, entra, haceServicio, horasOcupa, ahoraLocal, codigo, fail, json, minutosHasta, reglaReprog, slotsDia, str, toMin, trabaja, uid } from '../comun.js';
 import { plazoCalificar, yaCalificada } from './calificaciones.js';
 import { promoPara, promosPublicas } from './promos.js';
 import { avisarEquipo, pushBaseCita } from './push.js';
@@ -21,13 +21,13 @@ export async function reservar(req, env, b, fondo = p => p) {
   await frenar(env, 'RL_RES', 'r:' + ipDe(req));
   await limitar(env, 'r:' + ipDe(req), 15, 60 * 60e3);
   if (!await turnstileOk(env, b.turnstile, ipDe(req))) { await anotarSeg(env, 'robot'); fail(400, 'No pudimos verificar que no eres un robot. Inténtalo de nuevo.') }
-  const cliente = { nombre: str(b.cliente?.nombre, 80), tel: String(b.cliente?.tel || '').replace(/\D/g, '').slice(-9), dni: String(b.cliente?.dni || '').replace(/\D/g, ''), ciudad: str(b.cliente?.ciudad, 60) };
+  const cliente = { nombre: str(b.cliente?.nombre, 80), tel: String(b.cliente?.tel || '').replace(/\D/g, '').slice(-9), dni: String(b.cliente?.dni || '').replace(/\D/g, '') };
   if (cliente.nombre.length < 3) fail(400, 'Escribe tu nombre completo');
   if (!/^9\d{8}$/.test(cliente.tel)) fail(400, 'Escribe un WhatsApp válido (9 dígitos, empieza con 9)');
   if (cliente.dni && cliente.dni.length !== 8) fail(400, 'El DNI debe tener 8 dígitos (o déjalo vacío)');
-  if (cliente.ciudad.length < 2) fail(400, 'Escribe tu ciudad o distrito');
-  // Ley 29733: sin consentimiento informado no se guardan los datos. Se deja constancia de cuándo y de qué versión del aviso.
-  if (b.consentimiento !== true) fail(400, 'Marca la casilla de aceptación para continuar');
+  // Ley 29733: sin aceptación informada no se guardan los datos. Desde la versión 2 del aviso, se acepta al tocar «Reservar»
+  // (el aviso está junto al botón); se deja constancia de cuándo, de qué versión y cómo.
+  if (b.consentimiento !== true) fail(400, 'Para reservar debes aceptar el aviso de privacidad');
 
   await expirar(env);
   const d = await datos(env), cfg = { ...DEF, ...d.cfg }, ahora = ahoraLocal(env);
@@ -54,27 +54,27 @@ export async function reservar(req, env, b, fondo = p => p) {
   if (b.barberoId === 'any') {
     const r = await env.DB.prepare('SELECT barbero_id AS b, hora AS h FROM turnos WHERE fecha = ?').bind(fecha).all(), mias = horasOcupa(hora, bloques);
     const carga = id => r.results.filter(x => x.b === id).length;
-    candidatos = d.barberos.filter(x => trabaja(cfg, x, fecha) && !r.results.some(y => y.b === x.id && mias.includes(y.h))).sort((a, z) => carga(a.id) - carga(z.id));
+    candidatos = d.barberos.filter(x => trabaja(cfg, x, fecha) && haceServicio(x, s.id) && !r.results.some(y => y.b === x.id && mias.includes(y.h))).sort((a, z) => carga(a.id) - carga(z.id));
     if (!candidatos.length) fail(409, 'Ese horario se acaba de ocupar 😕');
   } else {
     const x = d.barberos.find(y => y.id === b.barberoId);
     if (!trabaja(cfg, x, fecha)) fail(400, 'Ese barbero no atiende ese día');
+    if (!haceServicio(x, s.id)) fail(400, 'Ese barbero no hace ese servicio. Elige otro.');
     candidatos = [x];
   }
 
   const ad = link && link.adelanto != null && link.adelanto !== '' ? +link.adelanto : +cfg.adelanto;
   const sinPago = !(cfg.modAdelanto && cfg.yapeNum && ad > 0);
-  const refFoto = b.refFoto ? await guardarFoto(env, b.refFoto) : '';
   let nota = str(b.nota, 300); if (link?.nota) nota = '🎁 ' + link.nota + (nota ? ' · ' + nota : '');
   // Promoción: el Worker la aplica sola si vale para ese servicio ESE día (el navegador solo la muestra).
   const pr = link ? null : promoPara(d, s.id, fecha);
   const base = {
-    fecha, hora, servicioId: s.id, servicioNombre: s.nombre, precio: pr ? +pr.precio : +s.precio || 0, ...(bloques.length > 1 ? { bloques } : {}), ...(pr ? { promo: { id: pr.id, titulo: pr.titulo, precioNormal: +s.precio || 0 } } : {}), cliente, nota, refFoto,
+    fecha, hora, servicioId: s.id, servicioNombre: s.nombre, precio: pr ? +pr.precio : +s.precio || 0, ...(bloques.length > 1 ? { bloques } : {}), ...(pr ? { promo: { id: pr.id, titulo: pr.titulo, precioNormal: +s.precio || 0 } } : {}), cliente, nota,
     adelanto: sinPago ? 0 : ad, linkId: link?.id || '', adelantoOk: false,
     estado: 'por_validar', expira: sinPago ? null : Date.now() + (+cfg.holdMin || 20) * 60e3, origen: link ? 'link' : 'web',
   };
   for (const barb of candidatos) {
-    const c = { id: uid(), codigo: codigo(), creada: Date.now(), ...base, barberoId: barb.id, consentimiento: { ts: Date.now(), aviso: 'privacidad.html', version: 1 } };
+    const c = { id: uid(), codigo: codigo(), creada: Date.now(), ...base, barberoId: barb.id, consentimiento: { ts: Date.now(), aviso: '/privacidad', version: Number.isInteger(b.aviso) && b.aviso >= 1 && b.aviso <= 99 ? b.aviso : 2, como: 'botón Reservar' } };
     const extra = link ? [env.DB.prepare('UPDATE links SET data = ? WHERE id = ?').bind(JSON.stringify({ ...link, estado: 'usado', citaId: c.id, usado: Date.now() }), link.id)] : [];
     try { await insertarCita(env, c, extra); await auditar(env, 'Cliente', 'Reservó', c.codigo, `${c.cliente?.nombre || ''} · ${c.fecha} ${c.hora}`); fondo(avisarEquipo(env, c, 'reserva')); return json({ id: c.id, codigo: c.codigo, expira: c.expira, barberoId: c.barberoId, estado: c.estado, precio: c.precio, promo: c.promo?.titulo || '' }) }
     catch (e) { if (e.status !== 409) throw e }

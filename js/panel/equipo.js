@@ -39,7 +39,8 @@ function pintarAtiende(){const p=S._p,el=$('#pAtiBox');$('#pAti').classList.togg
  <label class="lb">Especialidad (se ve en el formulario)</label><input class="in" id="pEsp" value="${esc(p.esp||'')}" placeholder="Ej: Fades y diseños">
  <label class="lb">Color en la agenda</label><div class="sws">${COLORES.map(x=>`<button class="swc ${p.color===x?'on':''}" style="background:${x}" data-on-click="eqColor" data-p0="${x}"></button>`).join('')}</div>
  <label class="lb">Comisión %</label><input class="in" id="pCom" type="number" min="0" max="100" value="${+p.comision||0}">
- <label class="lb">Días que trabaja</label><div class="dchips">${ORDEN.map(x=>`<button class="dchip ${p.dias.includes(x)?'on':''}" data-on-click="eqDia" data-p0="${x}">${DIAS[x]}</button>`).join('')}</div>`;hydrate(el)}
+ <label class="lb">Días que trabaja</label><div class="dchips">${ORDEN.map(x=>`<button class="dchip ${p.dias.includes(x)?'on':''}" data-on-click="eqDia" data-p0="${x}">${DIAS[x]}</button>`).join('')}</div>
+ <label class="lb">Servicios que hace <span class="hint">(en el link solo aparece para lo que sabe hacer)</span></label><div class="dchips">${D().servicios.filter(s=>s.activo!==false).map(s=>`<button class="dchip ${!p.servicios?.length||p.servicios.includes(s.id)?'on':''}" style="width:auto;padding:11px 12px" data-on-click="eqServ" data-p0="${s.id}">${esc(s.nombre)}</button>`).join('')}</div>`;hydrate(el)}
 function pintarPermisos(){const p=S._p,el=$('#pPerms');
  el.innerHTML=p.rol==='dueno'?'<p class="hint" style="margin:0">👑 El dueño tiene todos los permisos.</p>':PERMS.map(([k,t])=>`<div class="perm"><span>${t}</span><button class="sw ${p.permisos[k]?'on':''}" data-on-click="eqPerm" data-p0="${k}"></button></div>`).join('')}
 /* Guarda lo escrito en los campos antes de volver a pintar una parte de la hoja. */
@@ -50,6 +51,9 @@ ACC.eqRol=function(){leerCampos();const p=S._p;p.rol=this.value;if(p.rol!=='pers
 ACC.eqAtiende=function(){leerCampos();S._p.atiende=!S._p.atiende;if(S._p.atiende&&!S._p.dias.length)S._p.dias=[...D().cfg.dias];pintarAtiende()};
 ACC.eqPerm=function(){const k=this.dataset.p0,p=S._p;p.permisos[k]=!p.permisos[k];p.rol=p.rol==='dueno'?p.rol:'personal';$('#pRol').value=p.rol;pintarPermisos()};
 ACC.eqDia=function(){leerCampos();const x=+this.dataset.p0,d=S._p.dias;S._p.dias=d.includes(x)?d.filter(y=>y!==x):[...d,x];pintarAtiende()};
+/* Servicios que hace: sin lista = todos. Tocar uno lo quita o lo pone; si vuelven a estar todos, se guarda «todos». */
+ACC.eqServ=function(){leerCampos();const ids=D().servicios.filter(s=>s.activo!==false).map(s=>s.id),p=S._p,l=p.servicios?.length?[...p.servicios]:[...ids],k=this.dataset.p0;
+ const n=l.includes(k)?l.filter(x=>x!==k):[...l,k];if(!n.length)return toast('Debe hacer al menos un servicio');p.servicios=ids.every(x=>n.includes(x))?undefined:n;pintarAtiende()};
 ACC.eqColor=function(){leerCampos();S._p.color=this.dataset.p0;pintarAtiende()};
 ACC.eqFoto=async function(){const f=this.files[0];if(!f)return;leerCampos();try{S._p.foto=await API.putFoto(await compressImg(f,320,.8));pintarAtiende()}catch(e){toast('❌ '+e.message)}};
 ACC.eqGuardar=function(){leerCampos();const p=S._p,eq=D().equipo,otros=eq.filter(x=>x.id!==p.id);

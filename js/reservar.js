@@ -6,7 +6,7 @@
    Endpoints públicos del Worker:
    GET  /publico                 -> {cfg,barberos,servicios,ocupados:[{b,f,h}],ts}
    GET  /publico/link/:token     -> link personal
-   POST /publico/reservas        {servicioId,barberoId|'any',fecha,hora,cliente,nota,refFoto,turnstile,linkToken}
+   POST /publico/reservas        {servicioId,barberoId|'any',fecha,hora,cliente,nota,turnstile,linkToken,consentimiento,aviso}
                                  -> {id,codigo,expira,barberoId,estado}
    POST /publico/reservas/:id/captura {codigo,data} -> {ok}
    El Worker vuelve a validar horario, precio y Turnstile: el navegador no decide nada.
@@ -57,7 +57,7 @@ const DEF_CFG={nombre:'Stereo Barber Pool',eslogan:'Barber · Pool · Lima',logo
  waYape:'Hola {cliente} 👋 Para confirmar tu cita del {fecha} a las {hora} falta el adelanto de *{adelanto}* por Yape al *{yape}*. Envíanos la captura por aquí 🙏',
  waVuelve:'Hola {cliente} 👋 ¡Te extrañamos en *{negocio}*, sobrino! Ya toca corte 💈\nReserva aquí: {link}',
  linkBase:'',
- waReserva:'💈 *NUEVA RESERVA* — #{codigo}\n\n👤 {cliente}\n📱 {telefono}\n📍 {ciudad}\n✂️ {servicio} — {precio}\n💈 {barbero}\n📅 {fecha} · {hora}\n💸 {pago}\n📝 {nota}\n\n🔎 Estado de la cita: {seguimiento}',
+ waReserva:'💈 *NUEVA RESERVA* — #{codigo}\n\n👤 {cliente}\n📱 {telefono}\n✂️ {servicio} — {precio}\n💈 {barbero}\n📅 {fecha} · {hora}\n💸 {pago}\n📝 {nota}\n\n🔎 Estado de la cita: {seguimiento}',
  narrOn:true,narrNombre:'Tío Stereo',narrImg:'',narrAudio:{},splashOn:true,splashImg:'',splashMelt:true,
  narr:{...VOZ.FRASES},
  est:{},bloqueos:[]};
@@ -119,9 +119,8 @@ const API={
   let bid=d.barberoId;
   if(bid==='any'){const lib=bs.filter(b=>trabaja(cfg,b,d.fecha)&&!ocupadoLocal(cs,b.id,d.fecha,d.hora));if(!lib.length)throw new Error('Ese horario se acaba de ocupar 😕');const carga=b=>cs.filter(c=>c.barberoId===b.id&&c.fecha===d.fecha&&activa(c)).length;lib.sort((a,b)=>carga(a)-carga(b));bid=lib[0].id}
   else{const b=bs.find(x=>x.id===bid);if(!trabaja(cfg,b,d.fecha))throw new Error('Ese barbero no atiende ese día');if(ocupadoLocal(cs,bid,d.fecha,d.hora))throw new Error('Ese horario se acaba de ocupar 😕')}
-  let ref='';if(d.refFoto){ref='f_'+uid();await IDB.put(ref,d.refFoto)}
   const lk=d.linkToken?lsGet('links',[]).find(x=>x.token===d.linkToken):null;if(d.linkToken){if(!lk)throw new Error('Este link ya no existe');if(lk.estado==='usado')throw new Error('Este link ya fue usado');if(lk.vence&&lk.vence<Date.now())throw new Error('Este link ya venció')}
-  const ad=lk&&lk.adelanto!=null&&lk.adelanto!==''?+lk.adelanto:+cfg.adelanto,np=!(cfg.modAdelanto&&cfg.yapeNum&&ad>0),c={id:uid(),codigo:codigo(),creada:Date.now(),fecha:d.fecha,hora:d.hora,barberoId:bid,servicioId:s.id,servicioNombre:s.nombre,...(bloquesOk(s.bloques)&&s.bloques.length>1?{bloques:s.bloques}:{}),precio:+s.precio||0,cliente:d.cliente,nota:d.nota,refFoto:ref,adelanto:np?0:ad,linkId:lk?.id||'',adelantoOk:false,estado:'por_validar',expira:np?null:Date.now()+(+cfg.holdMin||20)*60000,origen:lk?'link':'web'};if(lk?.nota)c.nota=('🎁 '+lk.nota+(c.nota?' · '+c.nota:''));
+  const ad=lk&&lk.adelanto!=null&&lk.adelanto!==''?+lk.adelanto:+cfg.adelanto,np=!(cfg.modAdelanto&&cfg.yapeNum&&ad>0),c={id:uid(),codigo:codigo(),creada:Date.now(),fecha:d.fecha,hora:d.hora,barberoId:bid,servicioId:s.id,servicioNombre:s.nombre,...(bloquesOk(s.bloques)&&s.bloques.length>1?{bloques:s.bloques}:{}),precio:+s.precio||0,cliente:d.cliente,nota:d.nota,adelanto:np?0:ad,linkId:lk?.id||'',adelantoOk:false,estado:'por_validar',expira:np?null:Date.now()+(+cfg.holdMin||20)*60000,origen:lk?'link':'web'};if(lk?.nota)c.nota=('🎁 '+lk.nota+(c.nota?' · '+c.nota:''));
   cs.push(c);lsSet('citas',cs);if(lk){const ls=lsGet('links',[]),x=ls.find(y=>y.id===lk.id);Object.assign(x,{estado:'usado',citaId:c.id,usado:Date.now()});lsSet('links',ls)}return{id:c.id,codigo:c.codigo,expira:c.expira,barberoId:bid,estado:c.estado}},
  async captura(id,cod,data){if(this.remote)return this.req('POST',`/publico/reservas/${id}/captura`,{codigo:cod,data});
   const cs=expirarLocal(),c=cs.find(x=>x.id===id&&x.codigo===cod);if(!c)throw new Error('Reserva no encontrada');if(c.estado==='expirada')throw new Error('Se venció el tiempo de pago');if(c.estado!=='por_validar'||!c.expira)throw new Error('Esta reserva ya fue procesada');
@@ -134,8 +133,9 @@ const API={
 
 /* ---------- estado del formulario ---------- */
 let P=null;
-const F={step:0,serv:null,barb:null,fecha:null,hora:null,cli:{nombre:'',tel:'',ciudad:'',...lsGet('yo',{})},nota:'',ref:'',cap:'',cita:null,ts:'',busy:false};
-const PASOS=['Servicio','Barbero','Día y hora','Tus datos','Adelanto','Listo'];
+const F={step:0,serv:null,barb:null,fecha:null,hora:null,cli:(({ciudad,...x})=>x)({nombre:'',tel:'',...lsGet('yo',{})}),nota:'',cap:'',cita:null,ts:'',busy:false};
+/* Orden: servicio → tus datos → día y hora → barbero (solo los libres a esa hora que hacen ese servicio) → adelanto → listo. */
+const PASOS=['Servicio','Tus datos','Día y hora','Barbero','Adelanto','Listo'];
 let timerInt=null;
 const serv=()=>P.servicios.find(s=>s.id===F.serv);
 const durTxt=bl=>{bl=bloquesOk(bl)?bl:[1];const e=bl.filter(x=>!x).length;return `${bl.length} h${e?` (${e} h de espera)`:''}`};
@@ -165,20 +165,39 @@ function render(){clearInterval(timerInt);[s0,s1,s2,s3,s4,s5][F.step]()}
 function s0(){if(!P.servicios.length)return shell('<div class="empty">✂️<br>La barbería aún no publicó sus servicios.</div>');
  const u=lsGet('ultima',null),prev=u&&u.codigo&&u.fecha>=hoy()?`<a class="warn" style="display:block;text-decoration:none;border-color:var(--pur);color:var(--tx);background:rgba(138,63,252,.12)" href="/cita/${encodeURIComponent(u.codigo)}">📋 Tienes una cita el <b>${fLarga(u.fecha)}</b> · ${h12(u.hora)}<br><small style="color:var(--mu)">Toca para ver su estado</small></a>`:'';
  shell(`${prev}<h2>${esc(P.cfg.txtBienvenida||'¿Qué te hacemos hoy?')}</h2>${P.servicios.map(s=>`<button class="opt ${F.serv===s.id?'on':''}" data-on-click="aab7eb6b8" data-p0="${s.id}"><span class="em">${s.foto?`<img data-foto="${s.foto}" alt="">`:s.emoji}</span><span class="t"><b>${esc(s.nombre)}</b><small>${esc(s.desc||'')} · ⏱️ ${durTxt(s.bloques)}</small></span><span class="pr">${(()=>{const p=promosDe(s.id).sort((a,b)=>a.precio-b.precio)[0];return p?`<s style="color:var(--mu);font-weight:400;font-size:12px">${soles(s.precio)}</s><br>${soles(p.precio)}<br><small style="font-size:10.5px;color:var(--pur)">🏷️ Promo</small>`:soles(s.precio)})()}</span></button>`).join('')}`)}
-/* paso 1: barbero */
-function s1(){shell(`<h2>Elige tu barbero</h2>
- <button class="opt ${F.barb==='any'?'on':''}" data-on-click="aae95d490"><span class="em round">🎲</span><span class="t"><b>El primero disponible</b><small>Más horarios para elegir</small></span></button>
- ${P.barberos.map(b=>`<button class="opt ${F.barb===b.id?'on':''}" data-on-click="a9b2b8043" data-p0="${b.id}"><span class="em round">${b.foto?`<img data-foto="${b.foto}" alt="">`:'💈'}</span><span class="t"><b>${esc(b.nombre)}</b><small>${b.esp?esc(b.esp)+' · ':''}${[1,2,3,4,5,6,0].filter(d=>(b.dias||[]).includes(d)&&P.cfg.dias.includes(d)).map(d=>DIAS[d]).join(' ')}</small></span></button>`).join('')}`,
- `<button class="btn" data-on-click="af5d7adc5">←</button>`)}
-function pickServ(id){F.serv=id;go(1);say('servicio')}
-function pickBarb(id){if(F.barb!==id){F.fecha=null;F.hora=null}F.barb=id;go(2);say(id==='any'?'cualquiera':'barbero')}
-async function pickDia(f){F.fecha=f;F.hora=null;await s2();say('dia')}
-async function pickHora(h){F.hora=h;await s2();say('hora')}
-/* paso 2: día y hora */
-function libres(fecha){const cfg=P.cfg,bs=P.barberos.filter(b=>(F.barb==='any'||b.id===F.barb)&&trabaja(cfg,b,fecha));if(!bs.length)return[];
- const esHoy=fecha===hoy(),n=new Date(),nm=n.getHours()*60+n.getMinutes();
- const bl=serv()?.bloques;
- return slotsDia(cfg).filter(h=>(!esHoy||toMin(h)>nm+10)&&entra(cfg,h,bl)).map(h=>{const mias=horasOcupa(h,bl);return{h,ok:bs.some(b=>!P.ocupados.some(o=>o.b===b.id&&o.f===fecha&&mias.includes(o.h)))}})}
+/* ¿Este barbero hace ese servicio? (sin lista = todos). Misma regla que worker/comun.js → haceServicio. */
+const hace=(b,sid)=>!b?.servicios?.length||b.servicios.includes(sid);
+// Link personal con barbero: solo ese barbero.
+const fijo=()=>F.link?.barberoId&&P.barberos.some(b=>b.id===F.link.barberoId)?F.link.barberoId:null;
+const candidatos=fecha=>P.barberos.filter(b=>(!fijo()||b.id===fijo())&&hace(b,F.serv)&&trabaja(P.cfg,b,fecha));
+const libreEn=(b,fecha,h)=>{const mias=horasOcupa(h,serv()?.bloques);return !P.ocupados.some(o=>o.b===b.id&&o.f===fecha&&mias.includes(o.h))};
+const libresAHora=()=>F.fecha&&F.hora?candidatos(F.fecha).filter(b=>libreEn(b,F.fecha,F.hora)):[];
+function pickServ(id){if(F.serv!==id){F.fecha=F.hora=null;F.barb=null}F.serv=id;go(1);say('servicioDatos')}
+async function pickDia(f){F.fecha=f;F.hora=null;F.barb=null;await s2();say('dia')}
+async function pickHora(h){F.hora=h;F.barb=null;await s2();say('hora')}
+const avisoPriv=()=>`<p class="legal">Al tocar <b>Reservar</b> aceptas el <a href="/privacidad" data-on-click="verPrivacidad">aviso de privacidad</a> y que te escribamos por WhatsApp sobre tu cita.</p>`;
+ACC.verPrivacidad=function(event){event?.preventDefault?.();Privacidad.abrir(P?.cfg||{})};
+/* paso 1: tus datos */
+function s1(){
+ shell(`<h2>Tus datos</h2>
+ <label class="lb">DNI <small style="color:var(--mu)">(opcional · llena tus datos solo)</small></label><input class="in" id="cDni" inputmode="numeric" maxlength="8" placeholder="8 dígitos" autocomplete="off" value="${esc(F.cli.dni||'')}" data-on-input="a5d5818b0"><small id="dniEst" style="color:var(--mu);display:block;min-height:16px;margin-top:4px"></small><small style="color:var(--mu);display:block;font-size:11px">Si lo escribes, consultamos tu nombre en RENIEC para llenarlo por ti.</small>
+ <label class="lb">Nombre y apellido *</label><input class="in" id="cNom" autocomplete="name" value="${esc(F.cli.nombre)}">
+ <label class="lb">WhatsApp *</label><div class="pre"><span>+51</span><input class="in" id="cTel" inputmode="tel" autocomplete="tel" placeholder="9XXXXXXXX" maxlength="11" value="${esc(F.cli.tel)}"></div>
+ <label class="lb">¿Algo que deba saber tu barbero?</label><textarea class="in" id="cNota" rows="2" placeholder="Ej: mid fade, dejar largo arriba">${esc(F.nota)}</textarea>
+ <div id="ts" style="margin-top:12px"></div><p class="err" id="err"></p>`,
+ `<button class="btn" data-on-click="resAtras">←</button><button class="btn p" data-on-click="resDatosOk">Continuar →</button>`);
+ if(CONFIG.TURNSTILE_SITEKEY)loadTS()}
+function datosValidos(){guardaCli();const c=F.cli,e=$('#err');
+ if(c.nombre.length<3){if(e)e.textContent='Escribe tu nombre completo';return false}
+ if(!/^9\d{8}$/.test(c.tel.slice(-9))||c.tel.length<9){if(e)e.textContent='Escribe un WhatsApp válido (9 dígitos, empieza con 9)';return false}
+ if(c.dni&&c.dni.length!==8){if(e)e.textContent='El DNI debe tener 8 dígitos (o déjalo vacío)';return false}
+ return true}
+ACC.resAtras=function(){if(F.step===1)guardaCli();back()};
+ACC.resDatosOk=function(){if(!datosValidos())return;F.cli.tel=F.cli.tel.slice(-9);lsSet('yo',F.cli);go(2);say('tusDatos')};
+/* paso 2: día y hora (horas donde al menos un barbero que hace ese servicio está libre todo el servicio) */
+function libres(fecha){const cfg=P.cfg,bs=candidatos(fecha);if(!bs.length)return[];
+ const esHoy=fecha===hoy(),n=new Date(),nm=n.getHours()*60+n.getMinutes(),bl=serv()?.bloques;
+ return slotsDia(cfg).filter(h=>(!esHoy||toMin(h)>nm+10)&&entra(cfg,h,bl)).map(h=>({h,ok:bs.some(b=>libreEn(b,fecha,h))}))}
 async function s2(){
  try{const d=await API.publico();P.ocupados=d.ocupados}catch(e){}
  const ini=addD(hoy(),+P.cfg.anticipacion||0),dias=[];for(let i=0;i<Math.max(1,+P.cfg.ventana||14);i++){const f=addD(ini,i),l=libres(f);dias.push({f,ok:l.some(x=>x.ok)})}
@@ -186,28 +205,29 @@ async function s2(){
  const sl=F.fecha?libres(F.fecha):[];if(F.hora&&!sl.find(x=>x.h===F.hora&&x.ok))F.hora=null;
  shell(`<h2>¿Qué día y a qué hora?</h2>
  ${dias.some(d=>d.ok)?`<div class="days">${dias.map(d=>{const x=pYmd(d.f);return `<button class="day ${F.fecha===d.f?'on':''}" ${d.ok?'':'disabled'} data-on-click="aca2472e3" data-p0="${d.f}"><small>${d.f===hoy()?'Hoy':DIAS[x.getDay()]}</small><b>${x.getDate()}</b><small>${MESC[x.getMonth()]}</small>${promoEl(F.serv,d.f)?'<small class="dpromo">Promo</small>':''}</button>`}).join('')}</div>
- <p class="pt" style="margin-bottom:8px">${fLarga(F.fecha)} · ${esc(barbNom(F.barb))}</p>${promoAviso()}
+ <p class="pt" style="margin-bottom:8px">${fLarga(F.fecha)} · ${esc(serv()?.nombre||'')} · ⏱️ ${durTxt(serv()?.bloques)}</p>${promoAviso()}
  <div class="slots">${sl.map(x=>`<button class="slot ${F.hora===x.h?'on':''}" ${x.ok?'':'disabled'} data-on-click="aa1001b6c" data-p0="${x.h}">${h12(x.h)}</button>`).join('')}</div>`
- :`<div class="empty">😕 No hay horarios libres en los próximos días${F.barb!=='any'?' con este barbero.<br><br><button class="btn" style="margin:auto" data-on-click="aae95d490">Ver con cualquier barbero</button>':'.'}</div>`}`,
- `<button class="btn" data-on-click="af5d7adc5">←</button><button class="btn p" ${F.hora?'':'disabled'} data-on-click="a093b2e36">Continuar →</button>`)}
+ :`<div class="empty">😕 No hay horarios libres en los próximos días para este servicio.${P.cfg.whatsapp?`<br><br><button class="btn" style="margin:auto" data-on-click="ae74f37bc" data-p0="${waNum(P.cfg.whatsapp)}">💬 Escribir a la barbería</button>`:''}</div>`}`,
+ `<button class="btn" data-on-click="resAtras">←</button><button class="btn p" ${F.hora?'':'disabled'} data-on-click="resHoraOk">Continuar →</button>`)}
+ACC.resHoraOk=function(){if(F.hora)go(3)};
 function promoAviso(){const L=promosDe(F.serv);if(!L.length||!F.fecha)return'';const p=promoEl(F.serv,F.fecha),s=serv();
  return p?`<div class="warn" style="border-color:var(--pur);background:rgba(255,63,210,.1);color:var(--tx)">🏷️ <b>${esc(p.titulo)}</b>: este día pagas <b>${soles(p.precio)}</b> <s style="color:var(--mu)">${soles(s.precio)}</s></div>`
   :`<div class="warn" style="color:var(--tx)">🏷️ La promo vale ${diasTxt(L[0])}, del ${fLarga(L[0].desde).toLowerCase()} al ${fLarga(L[0].hasta).toLowerCase()}. Elige un día marcado con «Promo» para pagar menos.</div>`}
-/* paso 3: datos */
-function s3(){const s=serv(),np=sinPagoF();
- shell(`<h2>Tus datos</h2>
- <div class="card"><div class="res"><span>✂️</span><span><b>${esc(s.nombre)}</b> · ${soles(precioF())}${promoEl(F.serv,F.fecha)?' 🏷️':''}</span><span>💈</span><span>${esc(barbNom(F.barb))}</span><span>📅</span><span>${fLarga(F.fecha)} · ${h12(F.hora)}</span></div></div>
- <label class="lb">DNI <small style="color:var(--mu)">(opcional · llena tus datos solo)</small></label><input class="in" id="cDni" inputmode="numeric" maxlength="8" placeholder="8 dígitos" autocomplete="off" value="${esc(F.cli.dni||'')}" data-on-input="a5d5818b0"><small id="dniEst" style="color:var(--mu);display:block;min-height:16px;margin-top:4px"></small><small style="color:var(--mu);display:block;font-size:11px">Si lo escribes, consultamos tu nombre en RENIEC para llenarlo por ti. <a href="privacidad.html" target="_blank" rel="noopener" style="color:var(--blue)">Privacidad</a></small>
- <label class="lb">Nombre y apellido *</label><input class="in" id="cNom" autocomplete="name" value="${esc(F.cli.nombre)}">
- <label class="lb">WhatsApp *</label><div class="pre"><span>+51</span><input class="in" id="cTel" inputmode="tel" autocomplete="tel" placeholder="9XXXXXXXX" maxlength="11" value="${esc(F.cli.tel)}"></div>
- <label class="lb">Ciudad / distrito *</label><input class="in" id="cCiu" placeholder="Ej: Puente Piedra, Lima" value="${esc(F.cli.ciudad)}">
- <label class="lb">¿Algo que deba saber tu barbero?</label><textarea class="in" id="cNota" rows="2" placeholder="Ej: mid fade, dejar largo arriba">${esc(F.nota)}</textarea>
- <label class="lb">Foto de referencia (opcional)</label>
- <label class="upl"><span class="prev" id="refPrev">${F.ref?`<img src="${F.ref}">`:'🖼️'}</span><span><b>Sube el corte que quieres</b><br><small style="color:var(--mu)">Una captura de Instagram o TikTok sirve</small></span><input type="file" accept="image/*" data-on-change="a488e7220"></label>
- <label class="chk"><input type="checkbox" id="cOk" ${F.cli.nombre?'checked':''}><span>Acepto que usen mis datos para gestionar mi cita, validar mi DNI y escribirme por WhatsApp, según el <a href="privacidad.html" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline">aviso de privacidad</a>.</span></label>
- <div id="ts" style="margin-top:12px"></div><p class="err" id="err"></p>`,
- `<button class="btn" data-on-click="a50bede1b">←</button><button class="btn p" id="bRes" data-on-click="aba4fdcb4">${np?'✅ Reservar':`Reservar y pagar ${soles(adel())} →`}</button>`);
+/* paso 3: barbero (solo los libres a esa hora que hacen ese servicio) y reservar */
+function s3(){const s=serv(),np=sinPagoF(),bs=libresAHora();
+ if(!bs.length){F.barb=null;return shell(`<h2>Elige tu barbero</h2><div class="empty">😕 Ese horario se acaba de ocupar. Elige otra hora.</div>`,`<button class="btn p" data-on-click="resAtras">← Elegir otra hora</button>`)}
+ if(F.barb&&F.barb!=='any'&&!bs.some(b=>b.id===F.barb))F.barb=null;
+ if(!F.barb&&bs.length===1)F.barb=bs[0].id;
+ shell(`<h2>Elige tu barbero</h2>
+ <p class="pt" style="margin:-4px 0 10px">${fLarga(F.fecha)} · ${h12(F.hora)} · libres para ${esc(s.nombre)}</p>
+ ${bs.length>1?`<button class="opt ${F.barb==='any'?'on':''}" data-on-click="resBarb" data-p0="any"><span class="em round">🎲</span><span class="t"><b>El primero disponible</b><small>Te asignamos uno de los ${bs.length} libres</small></span></button>`:''}
+ ${bs.map(b=>`<button class="opt ${F.barb===b.id?'on':''}" data-on-click="resBarb" data-p0="${b.id}"><span class="em round">${b.foto?`<img data-foto="${b.foto}" alt="">`:'💈'}</span><span class="t"><b>${esc(b.nombre)}</b><small>${b.esp?esc(b.esp):'Libre a esa hora'}</small></span></button>`).join('')}
+ <div class="card"><div class="res"><span>✂️</span><span><b>${esc(s.nombre)}</b> · ${soles(precioF())}${promoEl(F.serv,F.fecha)?' 🏷️':''}</span><span>📅</span><span>${fLarga(F.fecha)} · ${h12(F.hora)}</span><span>👤</span><span>${esc(F.cli.nombre)} · ${esc(F.cli.tel)}</span></div></div>
+ ${avisoPriv()}<div id="ts" style="margin-top:10px"></div><p class="err" id="err"></p>`,
+ `<button class="btn" data-on-click="resAtras">←</button><button class="btn p" id="bRes" ${F.barb?'':'disabled'} data-on-click="aba4fdcb4">${np?'✅ Reservar':`Reservar y pagar ${soles(adel())} →`}</button>`);
  if(CONFIG.TURNSTILE_SITEKEY)loadTS()}
+/* Elegir barbero sin volver a pintar todo (la verificación de Cloudflare se queda donde está). */
+ACC.resBarb=function(){F.barb=this.dataset.p0;document.querySelectorAll('#app .opt').forEach(o=>o.classList.toggle('on',o===this));const b=$('#bRes');if(b)b.disabled=false;say(F.barb==='any'?'cualquieraHora':'barbero')};
 let dniAuto='';
 async function buscarDni(inp){const v=inp.value.replace(/\D/g,'');inp.value=v;const est=$('#dniEst');if(!est)return;
  if(v.length!==8||!API.remote){est.textContent='';return}
@@ -216,25 +236,20 @@ async function buscarDni(inp){const v=inp.value.replace(/\D/g,'');inp.value=v;co
   if(n&&(!n.value.trim()||n.value===dniAuto)){n.value=r.nombre;dniAuto=r.nombre;n.dispatchEvent(new Event('input'))}
   est.textContent='✅ Datos encontrados. Revísalos antes de continuar.'}
  catch(e){est.textContent=/No encontramos/.test(e.message)?'No encontramos ese DNI. Escribe tu nombre a mano.':/consultas de DNI|Demasiadas/.test(e.message)?'Escribe tu nombre a mano 🙂':''}}
-function guardaCli(){const g=id=>$(id)?.value.trim()||'';F.cli={nombre:g('#cNom'),tel:g('#cTel').replace(/\D/g,''),dni:g('#cDni').replace(/\D/g,''),ciudad:g('#cCiu')};F.nota=g('#cNota')}
-async function refFoto(inp){const f=inp.files[0];if(!f)return;try{F.ref=await compressImg(f,900,.72);$('#refPrev').innerHTML=`<img src="${F.ref}">`}catch(e){toast('❌ '+e.message)}}
+function guardaCli(){if(!$('#cNom'))return;const g=id=>$(id)?.value.trim()||'';F.cli={nombre:g('#cNom'),tel:g('#cTel').replace(/\D/g,''),dni:g('#cDni').replace(/\D/g,'')};F.nota=g('#cNota')}
 /* Turnstile: cada pase sirve una sola vez. Al usarlo (consulta DNI o reserva) se pide otro con tsNuevo(). */
 let TSW=null;
 function tsNuevo(){F.ts='';try{if(TSW!=null&&$('#ts')?.childElementCount)window.turnstile?.reset(TSW)}catch(_){}}
 async function tsEsperar(seg=10){for(let i=0;i<seg*4&&!F.ts;i++)await new Promise(r=>setTimeout(r,250));return F.ts}
 function loadTS(){const r=()=>{F.ts='';TSW=window.turnstile.render('#ts',{sitekey:CONFIG.TURNSTILE_SITEKEY,theme:'dark',callback:t=>F.ts=t,'expired-callback':tsNuevo,'error-callback':()=>{F.ts=''}})};if(window.turnstile)return r();const s=document.createElement('script');s.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';s.onload=r;document.head.appendChild(s)}
-async function reservar(){if(F.busy)return;guardaCli();const e=$('#err'),c=F.cli;
- if(c.nombre.length<3)return e.textContent='Escribe tu nombre completo';
- if(!/^9\d{8}$/.test(c.tel.slice(-9))||c.tel.length<9)return e.textContent='Escribe un WhatsApp válido (9 dígitos, empieza con 9)';
- if(c.dni&&c.dni.length!==8)return e.textContent='El DNI debe tener 8 dígitos (o déjalo vacío)';
- if(c.ciudad.length<2)return e.textContent='Escribe tu ciudad o distrito';
- if(!$('#cOk').checked)return e.textContent='Marca la casilla para continuar';
+async function reservar(){if(F.busy||!F.barb)return;const e=$('#err'),c=F.cli;
+ if(c.nombre.length<3||!/^9\d{8}$/.test(c.tel.slice(-9)))return go(1); // por si volvió atrás y borró algo
  F.busy=true;const b=$('#bRes');b.disabled=true;b.textContent='Reservando…';
  if(CONFIG.TURNSTILE_SITEKEY&&!F.ts){b.textContent='Verificando…';if(!await tsEsperar(12)){F.busy=false;b.disabled=false;b.textContent='Reintentar';return e.textContent='Completa la verificación de Cloudflare'}b.textContent='Reservando…'}
  try{c.tel=c.tel.slice(-9);lsSet('yo',c);
-  F.cita=await API.crear({servicioId:F.serv,barberoId:F.barb,fecha:F.fecha,hora:F.hora,cliente:c,nota:F.nota,refFoto:F.ref,turnstile:F.ts,linkToken:F.link?.token||'',consentimiento:true});
+  F.cita=await API.crear({servicioId:F.serv,barberoId:F.barb,fecha:F.fecha,hora:F.hora,cliente:c,nota:F.nota,turnstile:F.ts,linkToken:F.link?.token||'',consentimiento:true,aviso:Privacidad.VERSION});
   go(F.cita.expira?4:5);say(F.cita.expira?'datos':'listo')}
- catch(err){e.textContent='❌ '+err.message;b.disabled=false;b.textContent='Reintentar';if(/link/i.test(err.message)){F.link=null}if(/ocupa/i.test(err.message)){say('ocupado');F.hora=null;setTimeout(()=>go(2),1400)}}
+ catch(err){e.textContent='❌ '+err.message;b.disabled=false;b.textContent='Reintentar';if(/link/i.test(err.message)){F.link=null}if(/ocupa/i.test(err.message)){say('ocupado');F.hora=null;F.barb=null;setTimeout(()=>go(2),1400)}}
  finally{F.busy=false;if(CONFIG.TURNSTILE_SITEKEY)tsNuevo()}}
 /* paso 4: adelanto Yape */
 function s4(){const cfg=P.cfg,s=serv(),resto=Math.max(0,precioF()-adel());
@@ -257,13 +272,13 @@ function vencido(){clearInterval(timerInt);say('vencido');$('#app').innerHTML=`<
 /* paso 5: listo */
 function s5(){const cfg=P.cfg,s=serv(),c=F.cita,np=!c.expira&&sinPagoF();lsSet('ultima',{codigo:c.codigo,fecha:F.fecha,hora:F.hora});
  const base=(cfg.linkBase||'').trim()||location.origin+location.pathname,seg=(()=>{try{return new URL(base,location.href).origin+'/cita/'+c.codigo}catch(e){return location.origin+'/cita/'+c.codigo}})(),plant=(cfg.waReserva||'')+((cfg.waReserva||'').includes('{seguimiento}')?'':'\n\n🔎 Estado de la cita: {seguimiento}');
- const msg=tpl(plant,{seguimiento:seg,cliente:F.cli.nombre,telefono:F.cli.tel,ciudad:F.cli.ciudad,servicio:s.nombre,precio:soles(F.cita?.precio??precioF()),barbero:barbNom(c.barberoId),fecha:fLarga(F.fecha),hora:h12(F.hora),codigo:c.codigo,negocio:cfg.nombre,direccion:cfg.direccion||cfg.ciudad,nota:F.nota,adelanto:soles(adel()),pago:np?'':`Adelanto ${soles(adel())} enviado por Yape (adjunto captura)`});
+ const msg=tpl(plant,{seguimiento:seg,cliente:F.cli.nombre,telefono:F.cli.tel,servicio:s.nombre,precio:soles(F.cita?.precio??precioF()),barbero:barbNom(c.barberoId),fecha:fLarga(F.fecha),hora:h12(F.hora),codigo:c.codigo,negocio:cfg.nombre,direccion:cfg.direccion||cfg.ciudad,nota:F.nota,adelanto:soles(adel()),pago:np?'':`Adelanto ${soles(adel())} enviado por Yape (adjunto captura)`});
  shell(`<div class="ok"><b>✅</b><h2>${esc(cfg.txtFinal||'¡Reserva recibida!')}</h2><p style="color:var(--mu)">Tu código</p><div class="code">${esc(c.codigo)}</div></div>
  <div class="card"><div class="res"><span>✂️</span><span><b>${esc(s.nombre)}</b> · ${soles(precioF())}${promoEl(F.serv,F.fecha)?' 🏷️':''}</span><span>💈</span><span>${esc(barbNom(c.barberoId))}</span><span>📅</span><span>${fLarga(F.fecha)} · ${h12(F.hora)}</span><span>📍</span><span>${esc(cfg.direccion||cfg.ciudad)}</span></div></div>
  <div class="warn">⏳ ${np?'La barbería confirmará tu cita por WhatsApp.':'Validaremos tu Yape y te confirmamos por WhatsApp.'} Toca el botón verde para avisarnos ahora.</div>`,
  `${cfg.whatsapp?`<button class="btn g" data-on-click="ac8f245b7" data-p0="${waNum(cfg.whatsapp)}">💬 Avisar por WhatsApp</button>`:''}<button class="btn" data-on-click="a79618d45">＋ Otra</button>`);
  window.MSG=msg}
-function reiniciar(){Object.assign(F,{link:null,step:0,serv:null,barb:null,fecha:null,hora:null,nota:'',ref:'',cap:'',cita:null});render();scrollTo(0,0)}
+function reiniciar(){Object.assign(F,{link:null,step:0,serv:null,barb:null,fecha:null,hora:null,nota:'',cap:'',cita:null});render();scrollTo(0,0)}
 
 /* =================== NARRADOR (js/escena.js) =================== */
 function nv(){const s=serv(),b=P.barberos.find(x=>x.id===(F.cita?.barberoId||F.barb));return{narrador:P.cfg.narrNombre,servicio:s?.nombre||'',precio:s?soles(s.precio):'',barbero:b?.nombre||'',especialidad:b?.esp||'',fecha:F.fecha?fLarga(F.fecha).toLowerCase():'',hora:F.hora?h12(F.hora):'',cliente:(F.cli.nombre||'').split(' ')[0],adelanto:soles(adel()),yape:(P.cfg.yapeNum||'').replace(/(\d{3})(\d{3})(\d{3})/,'$1 $2 $3'),negocio:P.cfg.nombre}}
@@ -280,7 +295,7 @@ async function cargarLink(){const t=new URLSearchParams(location.search).get('l'
  if(l.vence&&l.vence<Date.now()){linkBloqueado('Este link ya venció ⌛','Pide uno nuevo a la barbería, sobrino.');return false}
  F.link=l;if(l.cliente?.nombre)F.cli={...F.cli,nombre:l.cliente.nombre,...(l.cliente.tel?{tel:l.cliente.tel}:{})};
  if(l.servicioId&&P.servicios.find(x=>x.id===l.servicioId))F.serv=l.servicioId;if(l.barberoId&&P.barberos.find(x=>x.id===l.barberoId))F.barb=l.barberoId;
- F.step=F.serv&&F.barb?2:F.serv?1:0;return true}
+ F.step=F.serv?1:0;return true} // con servicio ya elegido, sigue en «Tus datos»
 /* «Reservar con esta promo» (desde la app «Mi cita»): llega con ?promo=ID y el servicio ya elegido. */
 function cargarPromo(){const id=new URLSearchParams(location.search).get('promo'),p=id&&!F.link&&(P.promos||[]).find(x=>x.id===id);if(p&&P.servicios.find(x=>x.id===p.servicioId)){F.serv=p.servicioId;F.step=1}}
 (async function(){if(new URLSearchParams(location.search).get('c'))return;

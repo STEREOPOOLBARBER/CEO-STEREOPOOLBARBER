@@ -11,7 +11,8 @@ const adm = await api('POST', '/auth/login', { pin: '5821' });
 const lima = d => new Date(Date.now() - 5 * 3600e3 + d * 864e5).toISOString().slice(0, 10), dow = f => new Date(f + 'T12:00:00Z').getUTCDay();
 const f = [2, 3, 4, 5, 6, 7].map(lima).find(x => dow(x) !== 0);
 const pn = await api('GET', '/panel');
-await api('PUT', '/config', { cfg: { ...pn.cfg, dias: [1, 2, 3, 4, 5, 6], apertura: '09:00', cierre: '20:00', refIni: '13:00', refFin: '14:00' }, equipo: pn.equipo, servicios: pn.servicios });
+// Solo Jhon (b1) hace cortes y taper: así las horas libres son las de él (los demás solo hacen fade, s2)
+await api('PUT', '/config', { cfg: { ...pn.cfg, dias: [1, 2, 3, 4, 5, 6], apertura: '09:00', cierre: '20:00', refIni: '13:00', refFin: '14:00' }, equipo: pn.equipo.map(p => p.atiende && p.id !== 'b1' ? { ...p, servicios: ['s2'] } : p), servicios: pn.servicios });
 
 // ---- panel: duración del servicio
 const P = await nueva(); await P.goto(B + '/index.html'); await P.evaluate(s => localStorage.setItem('brb_ses', JSON.stringify(s)), adm); await P.reload(); await P.waitForSelector('#agChips .chip');
@@ -31,7 +32,7 @@ check('se guarda: ocupado · espera · ocupado', JSON.stringify(sv.bloques) === 
 check('la lista de servicios dice «3 h (1 h de espera)»', (await P.locator('#t-config').innerText()).includes('3 h (1 h de espera)'));
 
 // ---- formulario: solo horas donde entra
-const R = await nueva(); await R.goto(B + '/reservar.html'); await R.waitForSelector('#splash.listo'); await R.click('#splash'); await R.waitForSelector('.opt');
+const R = await nueva(); await R.goto(B + '/reservar.html'); await R.waitForSelector('#splash', { state: 'detached', timeout: 9000 }); await R.waitForSelector('.opt');
 check('el formulario muestra la duración', /3 h \(1 h de espera\)/.test(await R.locator('.opt[data-p0="s3"]').innerText()));
 const horas = async (sid) => R.evaluate(async ([sid, f]) => { F.serv = sid; F.barb = 'b1'; F.fecha = f; await s2(); return [...document.querySelectorAll('.slot:not([disabled])')].map(b => b.dataset.p0) }, [sid, f]);
 let h = await horas('s3');
@@ -44,7 +45,7 @@ check('con la de 3 h a las 9: el corte de 1 h puede a las 10 (espera), no a las 
 await P.evaluate(f => { S.vista.per = { t: 'dia', f }; renderAgenda() }, f); await P.click('text=📅 Agenda').catch(() => { });
 await P.evaluate(f => { goTab('agenda'); S.vista.per = { t: 'dia', f }; renderAgenda() }, f); await P.waitForSelector('#lista .cita');
 check('la tarjeta muestra «9:00 – 12:00 · espera 10:00»', /9:00 a\.\s?m\. – 12:00 p\.\s?m\..*espera 10:00/i.test(await P.locator('#lista').innerText()), (await P.locator('#lista .cita').first().innerText()).slice(0, 200));
-const E = await nueva(); await E.goto(B + '/cita/' + larga.codigo); await E.waitForSelector('#splash.listo'); await E.click('#splash'); await E.waitForSelector('.card.estado');
+const E = await nueva(); await E.goto(B + '/cita/' + larga.codigo); await E.waitForSelector('#splash', { state: 'detached', timeout: 9000 }); await E.waitForSelector('.card.estado');
 check('«Mi cita» muestra hasta qué hora y la hora de espera', /9:00 a\.\s?m\. – 12:00 p\.\s?m\./.test(await E.locator('.card.estado .sub').innerText()) && /espera desde 10:00/.test(await E.locator('#app').innerText()), await E.locator('.card.estado .sub').innerText());
 check('sin errores ni violaciones de CSP', !errores.length, errores.join(' | '));
 console.log(`\n${ok} OK · ${bad} fallos`); await br.close(); process.exit(bad ? 1 : 0);

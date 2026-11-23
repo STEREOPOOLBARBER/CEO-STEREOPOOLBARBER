@@ -78,6 +78,7 @@ h2{font:800 24px 'Syne';margin-bottom:12px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,140px);background:var(--card2);border:1px solid var(--line);padding:11px 18px;border-radius:99px;font-weight:700;z-index:80;transition:.3s;max-width:92%;text-align:center}
 .toast.on{transform:translate(-50%,0)}
 .chk{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--mu);margin-top:14px}
+.legal{font-size:12.5px;color:var(--mu);margin-top:12px;line-height:1.45}.legal a{color:var(--blue);text-decoration:underline}
 .chk input{width:20px;height:20px;accent-color:var(--blue);flex:none;margin-top:1px}
 .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:sp 1s linear infinite;margin:60px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -93,14 +94,15 @@ h2{font:800 24px 'Syne';margin-bottom:12px}
   <header class="hero" id="hero"><div class="logo">💈</div><div><h1>Cargando…</h1></div></header>
   <div id="app"><div class="spin"></div></div>
 </div>
-<p style="text-align:center;font-size:12px;margin:8px 0 90px"><a href="privacidad.html" style="color:var(--mu)">🔏 Aviso de privacidad</a></p>
+<p style="text-align:center;font-size:12px;margin:8px 0 90px"><a href="/privacidad" data-on-click="verPrivacidad" style="color:var(--mu)">🔏 Aviso de privacidad</a></p>
 <div class="toast" id="toast"></div>
 <div id="narr"></div><button id="nArm" title="Traer al personaje" aria-label="Traer al personaje">💪</button>
-<div id="splash" class="glow" role="button" tabindex="0" aria-label="Toca para entrar"><canvas id="spc"></canvas><div class="ld"></div><p class="toca">👆 Toca para entrar</p></div>
+<div id="splash" class="glow" aria-label="Cargando"><canvas id="spc"></canvas><div class="ld"></div></div>
 
 <script src="js/eventos.js"></script>
 <script src="js/voz.js"></script>
 <script src="js/escena.js"></script>
+<script src="js/privacidad.js"></script>
 <script src="js/reservar.js"></script>
 </body>
 </html>

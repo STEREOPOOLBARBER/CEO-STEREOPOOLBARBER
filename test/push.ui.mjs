@@ -29,7 +29,7 @@ const lima = d => new Date(Date.now() - 5 * 3600e3 + d * 864e5).toISOString().sl
 
 // ---- cliente
 const cf = await api('POST', '/citas', { fecha: lima(3), hora: '10:00', barberoId: 'b2', servicioId: 's1', servicioNombre: 'Corte', precio: 25, cliente: { nombre: 'Rosa Avisos', tel: '966000777' }, estado: 'confirmada' });
-const E = await nueva(); await E.goto(B + '/cita/' + cf.codigo); await E.waitForSelector('#splash.listo'); await E.click('#splash');
+const E = await nueva(); await E.goto(B + '/cita/' + cf.codigo); await E.waitForSelector('#splash', { state: 'detached', timeout: 9000 });
 await E.waitForSelector('#avisosCard:not([hidden])');
 check('la app de la cita ofrece «Recibe avisos de tu cita»', /recibe avisos de tu cita/i.test(await E.locator('#avisosCard').innerText()));
 await E.click('[data-on-click="avisosActivar"]'); await E.waitForSelector('text=Avisos activados', { timeout: 8000 });

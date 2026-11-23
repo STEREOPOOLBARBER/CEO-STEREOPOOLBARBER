@@ -43,9 +43,6 @@ async function abrirDash(keep){const p=S.dp||(S.dp='30'),[d1,d2]=rango(p);let RE
  const ult={};if(!LAP)todas().forEach(c=>{if(c.estado!=='atendida')return;const k=telKey(c.cliente?.tel);if(!k)return;if(!ult[k]||c.fecha>ult[k].fecha)ult[k]=c});
  const futuro=new Set((S.hist||S.citas).filter(c=>c.fecha>=hoy()&&activa(c)).map(c=>telKey(c.cliente?.tel)));
  const lapsed=LAP?LAP.items.map(x=>({k:x.k,c:{id:'',cliente:{nombre:x.nombre,tel:x.tel},servicioNombre:`${x.visitas} visita(s) · ${soles(x.gasto)}`,fecha:x.ultima},dias:Math.round((pYmd(hoy())-pYmd(x.ultima))/864e5)})):Object.entries(ult).filter(([k,c])=>c.fecha<addD(hoy(),-35)&&!futuro.has(k)).map(([k,c])=>({k,c,dias:Math.round((pYmd(hoy())-pYmd(c.fecha))/864e5)})).sort((a,b)=>b.dias-a.dias).slice(0,15);
- // distritos
- const zm={};cs.forEach(c=>{const z=(c.cliente?.ciudad||'').trim();if(z)zm[z]=(zm[z]||0)+1});
- const porZ=Object.entries(zm).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([z,v])=>({k:z.replace(/\W/g,''),l:z,v}));
  S.dx=S.dx||new Set();
  const html=mHead('📈 Dashboard')+`
  <div class="chips" style="padding-top:0">${PER.map(([k,t])=>`<button class="chip ${p===k?'on':''}" data-on-click="a6721479a" data-p0="${k}">${t}</button>`).join('')}</div>
@@ -58,6 +55,6 @@ async function abrirDash(keep){const p=S.dp||(S.dp='30'),[d1,d2]=rango(p);let RE
  <div class="dsec"><h6>Días de la semana</h6>${bars('dia',porD,'var(--grn)')}</div>
  <div class="dsec"><h6>Top 10 clientes</h6><div class="top10">${top.map((o,i)=>{const k='top:'+o.k,open=S.dx.has(k);return `<div class="tr" data-on-click="a12c081a6" data-p0="${k}"><b>${i+1}</b><div class="t"><div>${esc(o.n)}</div><small>${esc(o.tel)}</small></div><em>${o.a.length} <small>visitas</small></em></div>${open?`<div class="bars"><div class="dt">${dl('💰 Gastó',soles(o.g))+o.a.slice(-5).reverse().map(c=>dl(`${c.fecha.slice(5)} · ${esc(c.servicioNombre)}`,esc(barb(c.barberoId)?.nombre||''))).join('')}<button class="btn sm g" style="margin-top:8px" data-on-click="a47748a5f" data-p0="${o.k}">💬 WhatsApp</button></div></div>`:''}`}).join('')||'<p class="hint">Aún no hay clientes atendidos en este periodo</p>'}</div></div>
  <div class="dsec"><h6>💈 Clientes por recuperar <span style="text-transform:none;letter-spacing:0">(más de 5 semanas sin venir)</span></h6>${lapsed.map(o=>`<div class="li"><div class="t"><b>${esc(o.c.cliente.nombre)}</b><small>Último corte hace ${o.dias} días · ${esc(o.c.servicioNombre)}</small></div><button class="btn sm g" data-on-click="a97c37bc5" data-p0="${esc(o.c.cliente.tel)}" data-p1="${o.c.id}" data-p2="${esc(o.c.cliente.nombre).replace(/'/g,'')}">💬</button></div>`).join('')||'<p class="hint">¡Nadie por recuperar! 🔥</p>'}</div>
- ${porZ.length?`<div class="dsec"><h6>Distritos de tus clientes</h6>${bars('zona',porZ,'var(--pur)')}</div>`:''}`;
+`;
  if(keep&&$('#modal').classList.contains('on')){$('#mbody').innerHTML=html;hydrate($('#mbody'))}else openModal(html)}
 

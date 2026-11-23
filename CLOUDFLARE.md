@@ -95,6 +95,13 @@ El link que recibe el cliente ahora es **`tudominio/cita/CODIGO`** (WhatsApp, QR
 - **iPhone:** solo funcionan con la app instalada en la pantalla de inicio (regla de Apple). Android y PC: siempre.
 - **No hay que configurar nada en Cloudflare:** la clave de firma se crea sola. (Opcional: secreto `VAPID_PRIVADA` si algún día quieres fijarla tú.) Los recordatorios de WhatsApp siguen igual, como respaldo.
 
+### Formulario de reservas (nuevo orden) y datos
+- Pasos: **Servicio → Tus datos → Día y hora → Barbero → Adelanto**. En «Día y hora» solo salen horas con algún barbero libre que haga ese servicio; en «Barbero», solo los libres a esa hora (y «El primero disponible» si hay varios).
+- En ⚙️ Config → Equipo → cada barbero: **«Servicios que hace»** (todos marcados por defecto).
+- Ya no se piden **distrito** ni **foto de referencia** (lo que había guardado se borró). No hay casilla: junto al botón dice «Al tocar Reservar aceptas el aviso de privacidad». El aviso se abre encima y al cerrarlo sigues donde estabas.
+- La pantalla de carga entra sola; el Tío Stereo aparece y habla con el primer toque. Para el nuevo orden hay 3 frases nuevas por grabar (⚙️ Config → Voz): «Al elegir servicio (pide sus datos)», «Al poner sus datos» y «Si elige el primero disponible».
+- 🔔 Notificaciones: **📋 Copiar** copia todo lo del cliente.
+
 ### Duración de cada servicio (y horas de espera)
 - ⚙️ Config → **Servicios** → ✏️ → **Duración**: 1 a 6 horas. Con 2 o más, cada hora intermedia se toca para marcarla **«⏳ Espera (libre)»** (por ejemplo, mientras el producto hace efecto). La primera y la última siempre son de trabajo.
 - El link de reservas solo ofrece horas donde entra todo el servicio (sin pisar el refrigerio ni pasar del cierre). Las horas de espera quedan **libres para otro cliente**.

@@ -1,6 +1,6 @@
 import { actualizarCliente, cursorDe, leerCursor, rehacerClientes, telDe } from './clientes.js';
 import { PERMS, ROLES, addD, bloquesDe, bloquesOk, ahoraLocal, codigo, fail, json, norm, str, uid } from '../comun.js';
-import { bumpStmt, citaPorId, datos, expirar, filaCita, guardarCita, insertarCita, kvStmt, leerKV } from '../datos.js';
+import { bumpStmt, citaPorId, sinDatosDeMas, datos, expirar, filaCita, guardarCita, insertarCita, kvStmt, leerKV } from '../datos.js';
 import { auditar, identDe, personaDe, pinPermitido, quienEs } from './auth.js';
 import { filtrosCitas, MONTO, ordenCitas } from './filtros.js';
 import { contarPapelera, moverAPapelera } from './papelera.js';
@@ -102,7 +102,7 @@ export async function rutasCitas(c) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(b.fecha || '')) fail(400, 'Fecha no válida');
     const { id, codigo: _c, creada, ...resto } = b;
     const c = { ...resto, id: uid(), codigo: codigo(), creada: Date.now(), estado: b.estado || 'confirmada', creadoPor: s.pid };
-    conBloques(c, d);
+    sinDatosDeMas(c); conBloques(c, d);
     if (!s.perm.verTodas) c.barberoId = s.barberoId;
     const nueva = await insertarCita(env, c);
     await auditar(env, quienEs(s), 'Creó cita', c.codigo, `${c.cliente?.nombre || ''} · ${c.fecha} ${c.hora} · ${c.estado}`);
@@ -117,7 +117,7 @@ export async function rutasCitas(c) {
     else exigir('crear');
     if (!s.perm.verTodas && patch.barberoId && patch.barberoId !== s.barberoId) fail(403, 'No puedes pasar la cita a otro barbero');
     const antes = { ...c };
-    Object.assign(c, patch, { upd: Date.now() });
+    Object.assign(c, sinDatosDeMas(patch), { upd: Date.now() });
     if ('servicioId' in patch && patch.servicioId !== antes.servicioId) conBloques(c, d); // cambió el servicio: cambia la duración
     if (patch.estado && patch.estado !== 'por_validar') c.expira = null;
     await guardarCita(env, c);
@@ -133,6 +133,7 @@ export async function rutasCitas(c) {
     let n = 0, u = 0, err = 0;
     for (const raw of arr.slice(0, 5000)) {
       try {
+        sinDatosDeMas(raw);
         const ex = raw.codigo && await env.DB.prepare('SELECT * FROM citas WHERE codigo = ?').bind(raw.codigo).first();
         if (ex) { const c = { ...filaCita(ex), ...raw, id: ex.id, upd: Date.now() }; await guardarCita(env, c); u++ }
         else { await insertarCita(env, { estado: 'confirmada', ...raw, id: uid(), creada: raw.creada || Date.now(), codigo: raw.codigo || codigo() }); n++ }
@@ -154,6 +155,8 @@ export function validarEquipo(lista, anterior, s, env) {
     ids.add(id); if (email) correos.add(email);
     const x = { id, nombre: str(p.nombre, 60), rol, permisos: Object.fromEntries(PERMS.map(k => [k, rol !== 'dueno' && !!p.permisos?.[k]])), atiende: !!p.atiende, activo: p.activo !== false, email,
       foto: /^f_[\w-]+$/.test(p.foto || '') ? p.foto : '', color: /^#[0-9a-f]{6}$/i.test(p.color || '') ? p.color : '', esp: str(p.esp, 80), dias: Array.isArray(p.dias) ? p.dias.filter(dia) : [], comision: Math.min(100, Math.max(0, +p.comision || 0)) };
+    // Servicios que hace (vacío = todos). Se usa para mostrar solo a los barberos que pueden atender lo que pidió el cliente.
+    if (Array.isArray(p.servicios) && p.servicios.length) x.servicios = [...new Set(p.servicios.map(v => str(v, 40)).filter(Boolean))].slice(0, 60);
     if (pinPermitido(env) && /^\d{4,6}$/.test(p.pin || '')) x.pin = p.pin;
     return x;
   });

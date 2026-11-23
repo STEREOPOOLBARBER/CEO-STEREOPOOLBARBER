@@ -110,15 +110,16 @@ body #nArm{background:#fff;border-color:var(--bd);bottom:calc(84px + env(safe-ar
 <body>
 <header class="cab" id="cab"><div class="logo">S</div><div><h1>Tu cita</h1><p>Cargando…</p></div></header>
 <main id="app"><div class="spin"></div></main>
-<p class="pie"><a href="/privacidad.html">Aviso de privacidad</a></p>
+<p class="pie"><a href="/privacidad" data-on-click="verPrivacidad">Aviso de privacidad</a></p>
 <div class="toast" id="toast"></div>
 <div class="modal" id="modal" data-on-click="cerrarHoja"><div class="hoja" id="hoja"></div></div>
 <div id="narr"></div><button id="nArm" title="Traer al personaje" aria-label="Traer al personaje"><svg class="ic"><use href="/img/iconos.svg#persona"/></svg></button>
-<div id="splash" class="glow" role="button" tabindex="0" aria-label="Toca para entrar"><canvas id="spc"></canvas><div class="ld"></div><p class="toca">Toca para entrar</p></div>
+<div id="splash" class="glow" aria-label="Cargando"><canvas id="spc"></canvas><div class="ld"></div></div>
 <script src="/js/eventos.js"></script>
 <script src="/js/voz.js"></script>
 <script src="/js/escena.js"></script>
 <script src="/vendor/qrcode.min.js" integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU"></script>
+<script src="/js/privacidad.js"></script>
 <script src="/js/estado.js"></script>
 </body>
 </html>

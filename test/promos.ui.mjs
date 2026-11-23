@@ -30,24 +30,23 @@ check('el servidor la guardó', pub.promos?.length === 1 && pub.promos[0].precio
 
 // ---- el cliente la ve en su app «Mi cita»
 const cf = await api('POST', '/citas', { fecha: lima(3), hora: '10:00', barberoId: 'b2', servicioId: 's2', servicioNombre: 'Fade', precio: 30, cliente: { nombre: 'Rosa Promo', tel: '966000555' }, estado: 'confirmada' });
-const E = await nueva(); await E.goto(B + '/cita/' + cf.codigo); await E.waitForSelector('#splash.listo'); await E.click('#splash'); await E.waitForSelector('.promo');
+const E = await nueva(); await E.goto(B + '/cita/' + cf.codigo); await E.waitForSelector('#splash', { state: 'detached', timeout: 9000 }); await E.waitForSelector('.promo');
 const txt = await E.locator('.promos').innerText();
 check('«Mi cita» muestra la promo con precio tachado y vigencia', /Corte de la semana/.test(txt) && /S\/ ?25/.test(await E.locator('.promo s').innerText()) && /20/.test(txt) && /solo/i.test(txt), txt);
 check('la promo no tiene emojis', !/\p{Extended_Pictographic}/u.test(txt));
 await E.waitForTimeout(500);
-await E.click('.promo button'); await E.waitForURL(/reservar(\.html)?\?promo=/); await E.waitForSelector('#splash.listo').catch(() => { });
-if (await E.locator('#splash').count()) await E.click('#splash');
-await E.waitForSelector('text=Elige tu barbero');
+await E.click('.promo button'); await E.waitForURL(/reservar(\.html)?\?promo=/); await E.waitForSelector('#splash', { state: 'detached', timeout: 9000 });
+await E.waitForSelector('#cNom');
 check('«Reservar» abre el formulario con el servicio ya elegido', await E.evaluate(() => F.serv) === 's1');
 const st = (await api('GET', '/promos')).stats[pub.promos[0].id] || {};
 check('se contó la vista y el toque', st.vistas >= 1 && st.clics === 1, JSON.stringify(st));
 
-// ---- formulario: días marcados y precio rebajado
-await E.click('[data-on-click="a9b2b8043"][data-p0="b1"]'); await E.waitForSelector('.day');
+// ---- formulario (servicio → tus datos → día y hora → barbero): días marcados y precio rebajado
+await E.fill('#cNom', 'Rosa Promo'); await E.fill('#cTel', '966000555'); await E.click('[data-on-click="resDatosOk"]'); await E.waitForSelector('.day');
 check('los días de promo salen marcados', await E.locator(`.day[data-p0="${dia}"] .dpromo`).count() === 1 && await E.locator('.dpromo').count() >= 1);
 await E.click(`.day[data-p0="${dia}"]`); await E.waitForSelector('text=este día pagas');
-await E.locator('.slot:not([disabled])').first().click(); await E.click('text=Continuar');
-await E.waitForSelector('text=Tus datos');
+await E.locator('.slot:not([disabled])').first().click(); await E.click('[data-on-click="resHoraOk"]');
+await E.waitForSelector('text=Elige tu barbero');
 check('el resumen muestra el precio promo', /S\/ ?20/.test(await E.locator('.res').innerText()), await E.locator('.res').innerText());
 check('sin errores ni violaciones de CSP', !errores.length, errores.join(' | '));
 console.log(`\n${ok} OK · ${bad} fallos`); await br.close(); process.exit(bad ? 1 : 0);

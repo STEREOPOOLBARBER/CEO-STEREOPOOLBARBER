@@ -24,10 +24,16 @@ const t = await P.locator('#notif').innerText(); console.log(t.replace(/\n+/g, '
 check('muestra Yape por validar / esperando comprobante', /Esperando comprobante — Ana Yape|Yape por validar — Ana Yape/.test(t));
 check('muestra la reprogramación con la fecha anterior', /Reprogramó — Beto Reprog/.test(t) && /antes/.test(t));
 check('muestra la cita próxima', /Cita en \d+ min — Carla Pronto/.test(t));
+check('cada aviso de cliente tiene «📋 Copiar»', (await P.locator('#notif .ni [data-on-click="copiarCita"]').count()) >= 3);
+await P.context().grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => { });
+const bCp = P.locator('#notif .ni:has-text("Carla Pronto") [data-on-click="copiarCita"]'); await bCp.click(); await P.waitForTimeout(300);
+check('al copiar dice «Copiado» y se puede volver a copiar', /Copiado/.test(await bCp.innerText()) && await bCp.isEnabled());
+const copiado = await P.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+check('copia todo lo del cliente (nombre, fecha, barbero, servicio, código y link)', /Carla Pronto/.test(copiado) && /📅/.test(copiado) && /🔖 #/.test(copiado) && /\/cita\//.test(copiado), copiado);
 check('cada aviso tiene Ver y WhatsApp', (await P.locator('#notif .ni >> text=👁️ Ver').count()) >= 3 && (await P.locator('#notif .ni >> text=💬').count()) >= 2);
 await P.click('text=Marcar todo leído'); await P.waitForTimeout(200);
 check('marcar todo leído apaga el contador', !(await P.locator('#hDot').isVisible()));
-await P.mouse.click(30, 500); check('se cierra al tocar fuera', !(await P.locator('#notif').isVisible()));
+await P.evaluate(() => document.querySelector('#t-agenda').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))); check('se cierra al tocar fuera', !(await P.locator('#notif').isVisible()));
 await P.click('#hBell'); await P.locator('#notif .ni:has-text("Carla Pronto") >> text=👁️ Ver').click(); await P.waitForTimeout(300);
 check('Ver abre la agenda en esa cita', !(await P.locator('#notif').isVisible()) && /Carla Pronto/.test(await P.locator('#t-agenda').innerText().catch(() => '')));
 await P.screenshot({ path: '/tmp/claude-0/notif.png' });

@@ -40,7 +40,7 @@ await P.evaluate(() => editServicio(D().servicios[0].id)); await P.waitForTimeou
 await P.click('[data-on-click="eqEditar"][data-p0=""]'); await P.waitForTimeout(300); await revisar(P, 'Nueva persona');
 await P.selectOption('#pRol', 'recepcion'); await P.locator('#pPerms .sw').nth(7).click(); await P.waitForTimeout(150);
 check('cambiar un permiso deja el rol en «Personalizado»', await P.evaluate(() => S._p.rol) === 'personal' && await P.inputValue('#pRol') === 'personal');
-await P.click('#pAti'); await P.waitForTimeout(150); check('«Atiende clientes» muestra sus datos de agenda', await P.locator('#pAtiBox .dchip').count() === 7);
+await P.click('#pAti'); await P.waitForTimeout(150); check('«Atiende clientes» muestra sus datos de agenda (días y servicios que hace)', await P.locator('#pAtiBox [data-on-click="eqDia"]').count() === 7 && await P.locator('#pAtiBox [data-on-click="eqServ"]').count() >= 1);
 await P.fill('#pNom', 'Kiara'); await P.click('text=💾 Listo'); await P.waitForTimeout(200);
 check('la persona nueva queda en el equipo', await P.evaluate(() => D().equipo.some(p => p.nombre === 'Kiara' && p.atiende)));
 await P.evaluate(() => closeModal());
@@ -66,13 +66,18 @@ await P.evaluate(() => moverCitas()); await P.waitForTimeout(300); await revisar
 const PV = await nueva(); await PV.goto(B + '/privacidad.html'); await PV.waitForSelector('text=Tus derechos', { timeout: 8000 });
 check('el aviso de privacidad carga (Ley 29733, derechos ARCO)', /29733/.test(await PV.locator('body').innerText()));
 // ---- formulario de reservas: recorrer los pasos con clics reales
-const entrar = async p => { await p.waitForSelector('#splash.listo', { timeout: 8000 }); await p.click('#splash'); await p.waitForSelector('#splash', { state: 'detached', timeout: 8000 }) }; // «Toca para entrar»
+const entrar = async p => { await p.waitForSelector('#splash', { state: 'detached', timeout: 9000 }) }; // la pantalla de carga entra sola
 const R = await nueva();
 await R.goto(B + '/reservar.html'); await entrar(R); await R.waitForSelector('[data-on-click^="a"]', { timeout: 8000 }); await revisar(R, 'Reservar: servicios');
-await R.locator('[data-on-click][data-p0]').first().click(); await R.waitForTimeout(500); await revisar(R, 'Reservar: barbero');
-check('reservar avanza al paso 2 con clic', await R.evaluate(() => F.step) === 1);
-await R.locator('[data-on-click][data-p0]').first().click(); await R.waitForTimeout(800); await revisar(R, 'Reservar: día y hora');
-check('reservar avanza al paso 3 con clic', await R.evaluate(() => F.step) === 2);
+await R.locator('[data-on-click][data-p0]').first().click(); await R.waitForTimeout(500); await revisar(R, 'Reservar: tus datos');
+check('reservar avanza al paso 2 (tus datos) con clic', await R.evaluate(() => F.step) === 1);
+await R.click('[data-on-click="verPrivacidad"]'); await R.waitForSelector('#privHoja'); await revisar(R, 'Aviso de privacidad en hoja');
+await R.click('#privHoja .ph-ok'); await R.waitForSelector('#privHoja', { state: 'detached' });
+check('el aviso de privacidad se abre encima y al cerrarlo sigue en el mismo paso', await R.evaluate(() => F.step) === 1);
+await R.fill('#cNom', 'Cliente Csp'); await R.fill('#cTel', '987000111'); await R.click('[data-on-click="resDatosOk"]'); await R.waitForTimeout(800); await revisar(R, 'Reservar: día y hora');
+check('reservar avanza al paso 3 (día y hora) con clic', await R.evaluate(() => F.step) === 2);
+await R.locator('.slot:not([disabled])').first().click(); await R.waitForTimeout(400); await R.click('[data-on-click="resHoraOk"]'); await R.waitForTimeout(500); await revisar(R, 'Reservar: barbero');
+check('reservar avanza al paso 4 (barbero libre a esa hora) con clic', await R.evaluate(() => F.step) === 3 && await R.locator('[data-on-click="resBarb"]').count() >= 1);
 // ---- confirmar asistencia desde el link
 const cod = await P.evaluate(async () => (await API.req('POST', '/citas', { fecha: addD(hoy(), 2), hora: '12:00', barberoId: S.barberos[1].id, servicioId: S.servicios[0].id, cliente: { nombre: 'Link Confirma', tel: '987000777' }, estado: 'confirmada' })).codigo);
 const EC = await nueva(); await EC.goto(B + '/estado.html?c=' + cod); await entrar(EC); await EC.waitForSelector('text=Confirmo que voy', { timeout: 8000 }); await revisar(EC, 'Estado con botón de confirmar');

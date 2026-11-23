@@ -68,7 +68,7 @@ function filtroLocal(v,alc){
   &&(!v.pago||!can('verMontos')||pagoDe(c)===v.pago)&&(!v.origen||origenDe(c)===v.origen)&&(!v.wa||waDe(c)===v.wa)
   &&(!v.cli||!can('dash')||pasaCliente(c,v.cli,h))
   &&(!etq('captura')||!!c.yapeCaptura===(v.captura==='con'))&&(!etq('foto')||!c.fotoDespues)
-  &&(!txt||[c.cliente?.nombre,c.cliente?.tel,c.cliente?.dni,c.cliente?.ciudad,c.codigo,c.servicioNombre].join(' ').toLowerCase().includes(txt)||(dig.length>=3&&[c.cliente?.tel,c.cliente?.dni].some(x=>String(x||'').replace(/\D/g,'').includes(dig))))}
+  &&(!txt||[c.cliente?.nombre,c.cliente?.tel,c.cliente?.dni,c.codigo,c.servicioNombre].join(' ').toLowerCase().includes(txt)||(dig.length>=3&&[c.cliente?.tel,c.cliente?.dni].some(x=>String(x||'').replace(/\D/g,'').includes(dig))))}
 function ordenar(cs,v){const o=ORDENES[v.orden]&&ordenVisible(v.orden)?v.orden:'hora';
  if(o==='hora'&&conTexto(v)){const h0=hoy();return cs.sort((a,b)=>{const pa=a.fecha>=h0,pb=b.fecha>=h0;if(pa!==pb)return pa?-1:1;const k=(a.fecha+a.hora).localeCompare(b.fecha+b.hora);return pa?k:-k})}
  const{k,desc}=ORDENES[o];return cs.sort((a,b)=>{const x=k(a),y=k(b);for(let i=0;i<x.length;i++){if(x[i]<y[i])return desc?1:-1;if(x[i]>y[i])return desc?-1:1}return 0})}

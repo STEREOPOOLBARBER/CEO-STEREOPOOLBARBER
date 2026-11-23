@@ -11,13 +11,18 @@ let ok = 0, bad = 0; const check = (n, c, x = '') => { c ? ok++ : bad++; console
 const br = await chromium.launch(), p = await br.newPage({ viewport: { width: 400, height: 900 } });
 p.on('pageerror', e => console.log('PAGEERR', e.message));
 await p.route('https://challenges.cloudflare.com/**', r => r.fulfill({ contentType: 'text/javascript', body: `(()=>{let n=0;const w={};window.turnstile={render(el,o){const id='w'+(++n);w[id]=o;const e=typeof el==='string'?document.querySelector(el):el;e.innerHTML='<div>✅ Simulado</div>';setTimeout(()=>o.callback('bueno'+Date.now()+Math.random()),300);return id},reset(id){const o=w[id];if(!o)throw new Error('sin widget');setTimeout(()=>o.callback('bueno'+Date.now()+Math.random()),300)}}})()` }));
-await p.goto(B + '/reservar.html'); await p.waitForSelector('#splash.listo', { timeout: 8000 }); await p.click('#splash'); await p.waitForSelector('#splash', { state: 'detached', timeout: 8000 });
+await p.goto(B + '/reservar.html'); await p.waitForSelector('#splash', { state: 'detached', timeout: 9000 });
 const lima = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date()); const d = new Date(lima + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 4); if (d.getUTCDay() === 0) d.setUTCDate(d.getUTCDate() + 1);
-await p.evaluate(f => { F.serv = P.servicios[0].id; F.barb = P.barberos[0].id; F.fecha = f; F.hora = '10:00'; go(3) }, d.toISOString().slice(0, 10));
+// Paso «Tus datos»: el DNI gasta un pase de Turnstile; al final, en «Barbero», la reserva pide otro.
+await p.evaluate(() => { F.serv = P.servicios[0].id; go(1) });
 await p.waitForSelector('#ts >> text=Simulado');
 await p.fill('#cDni', '44273815'); await p.waitForSelector('#dniEst:has-text("Datos encontrados")', { timeout: 10000 });
 check('el DNI se consulta (gasta el primer pase)', (await p.inputValue('#cNom')) === 'Ana Luz Mar');
-await p.fill('#cTel', '987123456'); await p.fill('#cCiu', 'Lima'); await p.check('#cOk');
+check('ya no se piden distrito ni foto ni casilla', !(await p.locator('#cCiu, #cOk, #refPrev').count()));
+await p.fill('#cTel', '987123456'); await p.click('[data-on-click="resDatosOk"]'); await p.waitForSelector('.day');
+await p.evaluate(async f => { F.fecha = f; F.hora = '10:00'; go(3) }, d.toISOString().slice(0, 10));
+await p.waitForSelector('#ts >> text=Simulado'); await p.locator('[data-on-click="resBarb"]').first().click();
+check('al lado del botón dice que reservar acepta el aviso de privacidad', /Al tocar Reservar aceptas el aviso de privacidad/.test(await p.locator('.legal').innerText()));
 await p.click('#bRes'); await p.waitForTimeout(3000);
 const err = await p.locator('#err').innerText().catch(() => '');
 check('después de consultar el DNI se puede reservar (pide un pase nuevo solo)', !/verificaci/i.test(err) && (await p.evaluate(() => !!F.cita)), err);
