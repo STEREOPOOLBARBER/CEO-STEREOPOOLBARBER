@@ -25,6 +25,10 @@ const waNum=t=>{let d=String(t||'').replace(/\D/g,'');if(d.length===9)d='51'+d;r
 const waUrl=(n,t)=>(!n||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent))?`https://wa.me/${n||''}?text=${encodeURIComponent(t)}`:`https://web.whatsapp.com/send?phone=${n}&text=${encodeURIComponent(t)}`;
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),2800)}
 function slotsDia(cfg){const out=[],dur=CONFIG.DUR,fin=toMin(cfg.cierre),ri=toMin(cfg.refIni),rf=toMin(cfg.refFin);let t=toMin(cfg.apertura),g=0;if(t==null||fin==null)return out;while(t+dur<=fin&&g++<60){if(ri!=null&&rf!=null&&rf>ri&&t<rf&&t+dur>ri){t=rf;continue}out.push(fromMin(t));t+=dur}return out}
+/* Duración en turnos: bloques [1,0,1] = ocupado · espera (barbero libre) · ocupado. Misma regla que worker/comun.js. */
+const bloquesOk=b=>Array.isArray(b)&&b.length>=1&&b.length<=6&&b.every(x=>x===0||x===1)&&b[0]===1&&b[b.length-1]===1;
+const horasOcupa=(h,bl)=>(bloquesOk(bl)?bl:[1]).map((x,k)=>x?fromMin(toMin(h)+k*CONFIG.DUR):null).filter(Boolean);
+const entra=(cfg,h,bl)=>{const sl=slotsDia(cfg);return horasOcupa(h,bl).every(x=>sl.includes(x))};
 const bloqueado=(cfg,f,bid)=>(cfg.bloqueos||[]).some(b=>b.fecha===f&&(!b.barberoId||b.barberoId===bid));
 const trabaja=(cfg,b,f)=>{const d=pYmd(f).getDay();return b&&b.activo!==false&&(cfg.dias||[]).includes(d)&&(b.dias||[]).includes(d)&&!bloqueado(cfg,f,b.id)};
 function applyTheme(c){const s=document.documentElement.style;const a1=!c.acento||c.acento==='#388bfd'?'#8a3ffc':c.acento,a2=!c.acento2||c.acento2==='#a371f7'?'#ff3fd2':c.acento2;s.setProperty('--blue',a1);s.setProperty('--pur',a2)}
@@ -86,6 +90,9 @@ async function cargar(cod){E.codigo=cod;$('#app').innerHTML='<div class="spin"><
  try{E.info=await API.estado(cod);history.replaceState(null,'','/cita/'+cod);recordar(E.info);E.cal=null;pintar();hablar(E.info)}catch(e){pedirCodigo(e.message)}}
 
 /* ---------- la cita ---------- */
+/* Servicio de varias horas: «– 1:00 p. m.» y, si tiene horas de espera, se dice (puede salir o esperar). */
+const finTxt=i=>bloquesOk(i.bloques)&&i.bloques.length>1?' – '+h12(fromMin(toMin(i.hora)+i.bloques.length*CONFIG.DUR)):'';
+const esperaTxt=i=>{const bl=i.bloques;if(!bloquesOk(bl))return'';const e=bl.map((x,k)=>x?null:h12(fromMin(toMin(i.hora)+k*CONFIG.DUR))).filter(Boolean);return e.length?` · espera desde ${e.join(', ')} (1 h)`:''};
 const puedeRep=i=>!!(i&&i.puedeReprog&&startOf(i.fecha,i.hora)-Date.now()>=(+i.horasReprog||24)*3600e3);
 const confirmable=i=>startOf(i.fecha,i.hora)-Date.now()>-30*60e3;
 function pintar(){const c=P.cfg,i=E.info;clearInterval(E.timer);
@@ -95,7 +102,7 @@ function pintar(){const c=P.cfg,i=E.info;clearInterval(E.timer);
  shell(`<div class="hola"><h2>Hola${nombre?', '+esc(nombre):''}</h2><p>Aquí ves tu cita al momento.</p></div>
  <section class="card estado">
   <div class="fila"><button class="codigo" data-on-click="copiarCodigo" aria-label="Copiar código">${esc(i.codigo)}${ic('copiar')}</button>${et?`<span class="pill ${cls}">${et}</span>`:''}</div>
-  <h3 class="titulo">${titulo(i)}</h3><p class="sub">${fLarga(i.fecha)} · ${h12(i.hora)}${i.barbero?' · con '+esc(i.barbero):''}</p>
+  <h3 class="titulo">${titulo(i)}</h3><p class="sub">${fLarga(i.fecha)} · ${h12(i.hora)}${finTxt(i)}${i.barbero?' · con '+esc(i.barbero):''}</p>
   ${viva?`<p class="cuenta">${ic('reloj')}<span id="fl">${fl()}</span></p>`:''}
   ${pasosHTML(i)}
   ${viva&&confirmable(i)?(i.asistencia?`<div class="aviso ok">${ic('check-circulo')}<span><b>Confirmaste que vienes.</b> ¡Te esperamos!</span></div>`:`<button class="btn p mt" data-on-click="confirmarAsistencia">${ic('check')}Confirmo que voy</button>`):''}
@@ -109,7 +116,7 @@ function pintar(){const c=P.cfg,i=E.info;clearInterval(E.timer);
  <section class="card"><p class="h3">${ic('info')}Detalles</p><div class="datos">
   <div class="dato">${ic('tijera')}<div><b>${esc(i.servicio||'')}</b><small>${soles(i.precio)}</small></div></div>
   ${i.barbero?`<div class="dato">${ic('persona')}<div><b>${esc(i.barbero)}</b><small>Tu barbero</small></div></div>`:''}
-  <div class="dato">${ic('calendario')}<div><b>${fLarga(i.fecha)}</b><small>${h12(i.hora)}</small></div></div>
+  <div class="dato">${ic('calendario')}<div><b>${fLarga(i.fecha)}</b><small>${h12(i.hora)}${finTxt(i)}${esperaTxt(i)}</small></div></div>
   <div class="dato">${ic('billetera')}<div><b>Pago</b><small>${pago}</small></div></div>
  </div></section>
  ${mapaHTML(c)}
@@ -200,7 +207,8 @@ ACC.calEnviar=async function(){this.disabled=true;const k=E.cal;try{await API.ca
 /* ---------- reprogramar: mismo barbero, solo días y horas libres ---------- */
 function libres(fecha,bid){const cfg=P.cfg,b=P.barberos.find(x=>x.id===bid);if(!trabaja(cfg,b,fecha))return[];
  const esHoy=fecha===hoy(),n=new Date(),nm=n.getHours()*60+n.getMinutes();
- return slotsDia(cfg).filter(h=>!esHoy||toMin(h)>nm+10).map(h=>({h,ok:!P.ocupados.some(o=>o.b===bid&&o.f===fecha&&o.h===h)}))}
+ const bl=E.info?.bloques,yo=E.info?horasOcupa(E.info.hora,bl):[],mia=o=>E.info&&o.f===E.info.fecha&&yo.includes(o.h); // sus propias horas no le estorban
+ return slotsDia(cfg).filter(h=>(!esHoy||toMin(h)>nm+10)&&entra(cfg,h,bl)).map(h=>{const mias=horasOcupa(h,bl);return{h,ok:!P.ocupados.some(o=>o.b===bid&&o.f===fecha&&mias.includes(o.h)&&!mia(o))}})}
 async function reprogUI(){const i=E.info;if(!puedeRep(i))return pintar();clearInterval(E.timer);
  try{const d=await API.publico();P.ocupados=d.ocupados||[]}catch(e){}
  const ini=addD(hoy(),+P.cfg.anticipacion||0),dias=[];for(let k=0;k<Math.max(1,+P.cfg.ventana||14);k++){const f=addD(ini,k);dias.push({f,ok:libres(f,i.barberoId).some(x=>x.ok)})}

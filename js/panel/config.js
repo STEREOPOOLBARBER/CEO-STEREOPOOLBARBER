@@ -51,7 +51,7 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,equipo:S.equipo,se
   ${(c.bloqueos||[]).filter(b=>b.fecha>=hoy()).sort((a,b)=>a.fecha.localeCompare(b.fecha)).map(b=>`<div class="li"><span class="av">🚫</span><div class="t"><b>${fLarga(b.fecha)}</b><small>${b.barberoId?esc(d.equipo.find(x=>x.id===b.barberoId)?.nombre||''):'Toda la barbería'}${b.motivo?' · '+esc(b.motivo):''}</small></div><button class="ibtn" data-on-click="ac7a4a56e" data-p0="${b.id}">🗑️</button></div>`).join('')}`})}
  ${acc('equipo',`👥 Equipo (${d.equipo.length})`,'Quién entra, qué puede hacer y quién atiende',()=>equipoHTML(d))}
  ${acc('servicios',`✂️ Servicios y precios (${d.servicios.length})`,'Cortes con foto de referencia',()=>`
-  ${d.servicios.map(s=>`<div class="li"><span class="av lg" style="border-radius:12px;overflow:hidden">${s.foto?`<img data-foto="${s.foto}" style="width:100%;height:100%;object-fit:cover">`:s.emoji}</span><div class="t"><b>${esc(s.nombre)}</b><small>${soles(s.precio)} · ${esc(s.desc||'')}</small></div>${sw(s.activo!==false,'togServ',s.id)}<button class="ibtn" data-on-click="a38880731" data-p0="${s.id}">✏️</button></div>`).join('')}
+  ${d.servicios.map(s=>`<div class="li"><span class="av lg" style="border-radius:12px;overflow:hidden">${s.foto?`<img data-foto="${s.foto}" style="width:100%;height:100%;object-fit:cover">`:s.emoji}</span><div class="t"><b>${esc(s.nombre)}</b><small>${soles(s.precio)} · ⏱️ ${durTxt(s.bloques)}${s.desc?' · '+esc(s.desc):''}</small></div>${sw(s.activo!==false,'togServ',s.id)}<button class="ibtn" data-on-click="a38880731" data-p0="${s.id}">✏️</button></div>`).join('')}
   <button class="btn p w" style="margin-top:12px" data-on-click="a7600a346">➕ Agregar servicio</button>`)}
  ${acc('yape','💸 Adelanto por Yape',pagoOn()?`Activo · ${soles(c.adelanto)}`:'Desactivado',()=>`
   <div class="li"><div class="t"><b>Cobrar adelanto para confirmar</b><small>Si lo apagas, las reservas llegan sin pago</small></div>${sw(c.modAdelanto,'setB','modAdelanto')}</div>
@@ -240,11 +240,21 @@ function editServicio(id){const s=id?D().servicios.find(x=>x.id===id):{id:'',emo
  <div class="g2"><div><label class="lb">Emoji</label><input class="in" id="sEmo" value="${esc(s.emoji)}" maxlength="4"></div><div><label class="lb">Precio S/</label><input class="in" id="sPre" type="number" min="0" step="0.5" value="${s.precio}"></div></div>
  <label class="lb">Nombre</label><input class="in" id="sNom" value="${esc(s.nombre)}" placeholder="Ej: Mid Fade">
  <label class="lb">Descripción corta</label><input class="in" id="sDes" value="${esc(s.desc||'')}">
+ <label class="lb">Duración (turnos de 1 hora)</label><div class="dchips" id="sDur"></div>
+ <div id="sBloq" style="margin-top:8px"></div><p class="hint" id="sDurTxt" style="margin:6px 0 0"></p>
  <button class="btn p w" style="margin-top:16px;padding:14px" data-on-click="ad71daada">💾 Listo</button>
  ${s.foto?`<button class="btn w" style="margin-top:8px" data-on-click="a5cf464b9">Quitar foto</button>`:''}
- ${id?`<button class="btn r w" style="margin-top:8px" data-on-click="ae4d87b13" data-p0="${id}">🗑️ Eliminar servicio</button>`:''}`)}
+ ${id?`<button class="btn r w" style="margin-top:8px" data-on-click="ae4d87b13" data-p0="${id}">🗑️ Eliminar servicio</button>`:''}`);pintarDur()}
+/* Duración del servicio: cuántas horas y cuáles son de espera (el barbero queda libre para otro cliente).
+   La primera y la última siempre son de trabajo. Ej.: semiondulación 3 h = ocupado · espera · ocupado. */
+function pintarDur(){const bl=S._s.bloques=bloquesOk(S._s.bloques)?S._s.bloques:[1],n=bl.length;
+ $('#sDur').innerHTML=[1,2,3,4,5,6].map(k=>`<button class="dchip ${k===n?'on':''}" data-on-click="svDur" data-p0="${k}">${k} h</button>`).join('');
+ $('#sBloq').innerHTML=n<2?'':bl.map((x,k)=>{const fija=k===0||k===n-1;return `<div class="li" style="padding:8px 0"><div class="t"><b>${k+1}.ª hora</b><small>${fija?(k?'Termina trabajando':'Empieza trabajando'):'Toca para cambiar'}</small></div><button class="btn sm ${x?'':'p'}" ${fija?'disabled':''} data-on-click="svBloq" data-p0="${k}">${x?'✂️ Ocupado':'⏳ Espera (libre)'}</button></div>`}).join('');
+ const e=bl.filter(x=>!x).length;$('#sDurTxt').innerHTML=n<2?'1 hora. Cambia si el servicio toma más.':`Dura <b>${n} h</b>${e?`; en ${e===1?'la hora':'las horas'} de espera el barbero puede atender a otro cliente`:''}.`}
+ACC.svDur=function(){const n=+this.dataset.p0,v=S._s.bloques||[1];S._s.bloques=Array.from({length:n},(_,k)=>k===0||k===n-1?1:(v[k]??1));pintarDur()};
+ACC.svBloq=function(){const k=+this.dataset.p0,bl=S._s.bloques;if(k>0&&k<bl.length-1){bl[k]=bl[k]?0:1;pintarDur()}};
 async function fotoServ(inp){const f=inp.files[0];if(!f)return;try{S._s.foto=await API.putFoto(await compressImg(f,600,.78));$('#sPrev').innerHTML=`<img src="${await API.foto(S._s.foto)}">`}catch(e){toast('❌ '+e.message)}}
-function saveServicio(){const s=S._s;s.emoji=$('#sEmo').value.trim()||'✂️';s.nombre=$('#sNom').value.trim();s.precio=Math.max(0,+$('#sPre').value||0);s.desc=$('#sDes').value.trim();if(!s.nombre)return toast('Falta el nombre');
+function saveServicio(){const s=S._s;s.emoji=$('#sEmo').value.trim()||'✂️';s.nombre=$('#sNom').value.trim();s.precio=Math.max(0,+$('#sPre').value||0);s.desc=$('#sDes').value.trim();if(!s.nombre)return toast('Falta el nombre');if(!bloquesOk(s.bloques)||s.bloques.length<2)delete s.bloques;
  if(s.id){const i=D().servicios.findIndex(x=>x.id===s.id);D().servicios[i]=s}else{s.id='s'+uid();D().servicios.push(s)}closeModal();dirty();renderConfig()}
 function delServicio(id){if(!confirm('¿Eliminar este servicio?'))return;D().servicios=D().servicios.filter(s=>s.id!==id);closeModal();dirty();renderConfig()}
 async function guardarConfig(){const d=D();if(!d)return;if(!d.cfg.nombre)return toast('Falta el nombre de la barbería');

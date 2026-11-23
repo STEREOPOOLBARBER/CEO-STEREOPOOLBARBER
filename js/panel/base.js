@@ -107,7 +107,17 @@ const activa=(c,now=Date.now())=>ACTIVOS.includes(c.estado)&&!(c.estado==='por_v
 function slotsDia(cfg){const out=[],dur=CONFIG.DUR,fin=toMin(cfg.cierre),ri=toMin(cfg.refIni),rf=toMin(cfg.refFin);let t=toMin(cfg.apertura),g=0;if(t==null||fin==null)return out;while(t+dur<=fin&&g++<60){if(ri!=null&&rf!=null&&rf>ri&&t<rf&&t+dur>ri){t=rf;continue}out.push(fromMin(t));t+=dur}return out}
 const bloqueado=(cfg,f,bid)=>(cfg.bloqueos||[]).some(b=>b.fecha===f&&(!b.barberoId||b.barberoId===bid));
 const trabaja=(cfg,b,f)=>{const d=pYmd(f).getDay();return b&&b.activo!==false&&(cfg.dias||[]).includes(d)&&(b.dias||[]).includes(d)&&!bloqueado(cfg,f,b.id)};
-const ocupado=(cs,bid,f,h,ign)=>cs.some(c=>c.id!==ign&&c.barberoId===bid&&c.fecha===f&&c.hora===h&&activa(c));
+/* Duración en turnos: bloques [1,0,1] = ocupado · espera (barbero libre) · ocupado. Misma regla que worker/comun.js. */
+const bloquesOk=b=>Array.isArray(b)&&b.length>=1&&b.length<=6&&b.every(x=>x===0||x===1)&&b[0]===1&&b[b.length-1]===1;
+const horasOcupa=(h,bl)=>(bloquesOk(bl)?bl:[1]).map((x,k)=>x?fromMin(toMin(h)+k*CONFIG.DUR):null).filter(Boolean);
+const entra=(cfg,h,bl)=>{const sl=slotsDia(cfg);return horasOcupa(h,bl).every(x=>sl.includes(x))};
+const blServ=id=>{const s=S.servicios.find(x=>x.id===id);return bloquesOk(s?.bloques)?s.bloques:[1]};
+// «3 h (1 h de espera)» · «1 h»
+const durTxt=bl=>{bl=bloquesOk(bl)?bl:[1];const e=bl.filter(x=>!x).length;return `${bl.length} h${e?` (${e} h de espera)`:''}`};
+// Rango de la cita: «10:00 a. m. – 1:00 p. m. · espera 11:00 a. m.»
+const rangoCita=c=>{const bl=c.bloques;if(!bloquesOk(bl)||bl.length<2)return '';const fin=fromMin(toMin(c.hora)+bl.length*CONFIG.DUR),es=bl.map((x,k)=>x?null:fromMin(toMin(c.hora)+k*CONFIG.DUR)).filter(Boolean);return ` – ${h12(fin)}${es.length?' · ⏳ espera '+es.map(h12).join(', '):''}`};
+// ¿Choca con otra cita activa del mismo barbero? (cada hora ocupada de las dos; las esperas no cuentan)
+const ocupado=(cs,bid,f,h,ign,bl)=>{const mias=horasOcupa(h,bl);return cs.some(c=>c.id!==ign&&c.barberoId===bid&&c.fecha===f&&activa(c)&&horasOcupa(c.hora,c.bloques).some(x=>mias.includes(x)))};
 function expirarLocal(){const cs=lsGet('citas',[]),now=Date.now();let ch=false;cs.forEach(c=>{if(c.estado==='pendiente_pago'){c.estado='por_validar';ch=true}if(c.estado==='por_validar'&&c.expira&&c.expira<now&&!c.yapeCaptura){c.estado='expirada';ch=true}});if(ch)lsSet('citas',cs);return cs}
 
 /* ---------- API (local ahora, Cloudflare después) ---------- */

@@ -1,5 +1,5 @@
 import { actualizarCliente, cursorDe, leerCursor, rehacerClientes, telDe } from './clientes.js';
-import { PERMS, ROLES, addD, ahoraLocal, codigo, fail, json, norm, str, uid } from '../comun.js';
+import { PERMS, ROLES, addD, bloquesDe, bloquesOk, ahoraLocal, codigo, fail, json, norm, str, uid } from '../comun.js';
 import { bumpStmt, citaPorId, datos, expirar, filaCita, guardarCita, insertarCita, kvStmt, leerKV } from '../datos.js';
 import { auditar, identDe, personaDe, pinPermitido, quienEs } from './auth.js';
 import { filtrosCitas, MONTO, ordenCitas } from './filtros.js';
@@ -61,6 +61,8 @@ export async function conteoCitas(env, s, q) {
   return { estados: Object.fromEntries(r.results.map(x => [x.estado, { n: x.n, m: m(x.m) }])), porValidar: { n: pv.n, m: m(pv.m) } };
 }
 
+/* La cita lleva la duración de su servicio (bloques); la de 1 hora no guarda nada. */
+const conBloques = (c, d) => { const bl = bloquesDe(d, c.servicioId); if (bl.length > 1) c.bloques = bl; else delete c.bloques };
 /* Agenda: panel, búsqueda paginada, configuración del negocio, crear/editar/eliminar e importar citas. */
 export async function rutasCitas(c) {
   const { req, env, path, m, body, d, s, exigir, propia } = c;
@@ -91,7 +93,8 @@ export async function rutasCitas(c) {
       const lista = (a, z, t) => { const ids = new Set(a.map(x => x.id)), nz = new Set(z.map(x => x.id)); return [...z.filter(x => !ids.has(x.id)).map(x => '+' + t + ' ' + x.nombre), ...a.filter(x => !nz.has(x.id)).map(x => '−' + t + ' ' + x.nombre), ...z.filter(x => ids.has(x.id) && JSON.stringify(x) !== JSON.stringify(a.find(y => y.id === x.id))).map(x => '✎' + t + ' ' + x.nombre)] };
       const det = [cambios.length ? 'config: ' + cambios.join(', ') : '', ...lista(d.equipo, equipo, 'persona'), ...lista(d.servicios, b.servicios, 'servicio')].filter(Boolean).join(' · ');
       if (det) await auditar(env, quienEs(s), 'Configuración', '', det) }
-    await env.DB.batch([kvStmt(env, 'cfg', cfg), kvStmt(env, 'equipo', equipo), kvStmt(env, 'servicios', b.servicios), bumpStmt(env)]);
+    const servicios = b.servicios.map(x => { const { bloques, ...y } = x || {}; return bloquesOk(bloques) && bloques.length > 1 ? { ...y, bloques } : y }); // duración: solo si es válida
+    await env.DB.batch([kvStmt(env, 'cfg', cfg), kvStmt(env, 'equipo', equipo), kvStmt(env, 'servicios', servicios), bumpStmt(env)]);
     return json({ ok: true });
   }
   if (path === '/citas' && m === 'POST') {
@@ -99,6 +102,7 @@ export async function rutasCitas(c) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(b.fecha || '')) fail(400, 'Fecha no válida');
     const { id, codigo: _c, creada, ...resto } = b;
     const c = { ...resto, id: uid(), codigo: codigo(), creada: Date.now(), estado: b.estado || 'confirmada', creadoPor: s.pid };
+    conBloques(c, d);
     if (!s.perm.verTodas) c.barberoId = s.barberoId;
     const nueva = await insertarCita(env, c);
     await auditar(env, quienEs(s), 'Creó cita', c.codigo, `${c.cliente?.nombre || ''} · ${c.fecha} ${c.hora} · ${c.estado}`);
@@ -114,6 +118,7 @@ export async function rutasCitas(c) {
     if (!s.perm.verTodas && patch.barberoId && patch.barberoId !== s.barberoId) fail(403, 'No puedes pasar la cita a otro barbero');
     const antes = { ...c };
     Object.assign(c, patch, { upd: Date.now() });
+    if ('servicioId' in patch && patch.servicioId !== antes.servicioId) conBloques(c, d); // cambió el servicio: cambia la duración
     if (patch.estado && patch.estado !== 'por_validar') c.expira = null;
     await guardarCita(env, c);
     { const camp = { estado: 'estado', fecha: 'fecha', hora: 'hora', barberoId: 'barbero', servicioNombre: 'servicio', precio: 'precio', adelantoOk: 'Yape validado' };

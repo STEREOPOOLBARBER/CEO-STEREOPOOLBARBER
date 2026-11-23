@@ -72,7 +72,7 @@ ACC.a4c08466b = function (event) { S._ag[(+this.dataset.p0)].nombre=this.value }
 ACC.a4f72d1b1 = function (event) { setC('cierre',this.value);renderConfig() };
 ACC.a50bede1b = function (event) { guardaCli();back() };
 ACC.a516c13ff = function (event) { if(event.key==='Enter')doLogin() };
-ACC.a52e1df12 = function (event) { const s=S.servicios.find(x=>x.id===this.value);if(s&&$('#fPre'))$('#fPre').value=s.precio };
+ACC.a52e1df12 = function (event) { const s=S.servicios.find(x=>x.id===this.value);if(s&&$('#fPre'))$('#fPre').value=s.precio;fillHoras() };
 ACC.a545db87c = function (event) { notifLeer((this.dataset.p0));$('#notif').classList.remove('on');verYape((this.dataset.p1)) };
 ACC.a5528013a = function (event) { S._ag[(+this.dataset.p0)].ok=this.checked;agMarca() };
 ACC.a5661e5d9 = function (event) { S.cliQ=this.value;clearTimeout(S._ct);S._ct=setTimeout(()=>clientesNube(),300) };

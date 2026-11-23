@@ -52,5 +52,13 @@ export function slotsDia(cfg) {
   while (t + DUR <= fin && g++ < 60) { if (ri != null && rf != null && rf > ri && t < rf && t + DUR > ri) { t = rf; continue } out.push(fromMin(t)); t += DUR }
   return out;
 }
+/* Duración de un servicio en turnos de DUR minutos: bloques [1,0,1] = ocupado · espera (barbero libre) · ocupado.
+   Empieza y termina ocupado; máximo 6 turnos. Lo mismo en js/reservar.js, js/estado.js y js/panel/base.js. */
+export const bloquesOk = b => Array.isArray(b) && b.length >= 1 && b.length <= 6 && b.every(x => x === 0 || x === 1) && b[0] === 1 && b[b.length - 1] === 1;
+export const bloquesDe = (d, servicioId) => { const s = d.servicios.find(x => x.id === servicioId); return bloquesOk(s?.bloques) ? s.bloques : [1] };
+// Horas (turnos) que el barbero queda ocupado con una cita que empieza a «hora».
+export const horasOcupa = (hora, bloques) => (bloquesOk(bloques) ? bloques : [1]).map((x, k) => x ? fromMin(toMin(hora) + k * DUR) : null).filter(Boolean);
+// ¿Entra el servicio a esa hora? Cada hora ocupada debe ser un turno del día (no en el refrigerio, antes del cierre).
+export const entra = (cfg, hora, bloques) => { const sl = slotsDia(cfg); return horasOcupa(hora, bloques).every(h => sl.includes(h)) };
 export const bloqueado = (cfg, f, bid) => (cfg.bloqueos || []).some(b => b.fecha === f && (!b.barberoId || b.barberoId === bid));
 export const trabaja = (cfg, b, f) => { const d = pYmd(f).getUTCDay(); return b && b.activo !== false && (cfg.dias || []).includes(d) && (b.dias || []).includes(d) && !bloqueado(cfg, f, b.id) };

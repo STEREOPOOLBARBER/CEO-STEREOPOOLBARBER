@@ -81,6 +81,18 @@ export const MIGRACIONES = [
     `CREATE TABLE IF NOT EXISTS papelera(id TEXT PRIMARY KEY, tel TEXT NOT NULL DEFAULT '', barbero_id TEXT NOT NULL DEFAULT '', borrada INTEGER NOT NULL, quien TEXT NOT NULL DEFAULT '', data TEXT NOT NULL)`,
     `CREATE INDEX IF NOT EXISTS ix_papelera_borrada ON papelera(borrada)`,
   ] },
+  // Duración de servicios: cada hora que ocupa una cita activa es una fila de «turnos». La clave (barbero, fecha, hora)
+  // impide que dos citas se pisen, aunque una dure 3 h con una hora de espera libre en medio (data.bloques = [1,0,1]).
+  // Los triggers la mantienen sola en cualquier INSERT/UPDATE/DELETE de citas (turnos de 60 min = DUR).
+  { v: 11, nombre: 'duración de servicios', sql: [
+    `CREATE TABLE IF NOT EXISTS turnos(barbero_id TEXT NOT NULL, fecha TEXT NOT NULL, hora TEXT NOT NULL, cita_id TEXT NOT NULL, PRIMARY KEY(barbero_id, fecha, hora))`,
+    `CREATE INDEX IF NOT EXISTS ix_turnos_cita ON turnos(cita_id)`,
+    `CREATE INDEX IF NOT EXISTS ix_turnos_fecha ON turnos(fecha)`,
+    `INSERT OR IGNORE INTO turnos(barbero_id, fecha, hora, cita_id) SELECT c.barbero_id, c.fecha, printf('%02d:%02d', (CAST(substr(c.hora, 1, instr(c.hora, ':') - 1) AS INTEGER) * 60 + CAST(substr(c.hora, instr(c.hora, ':') + 1) AS INTEGER) + j.key * 60) / 60, (CAST(substr(c.hora, 1, instr(c.hora, ':') - 1) AS INTEGER) * 60 + CAST(substr(c.hora, instr(c.hora, ':') + 1) AS INTEGER) + j.key * 60) % 60), c.id FROM citas c, json_each(COALESCE(json_extract(c.data, '$.bloques'), '[1]')) j WHERE j.value = 1 AND c.hora <> '' AND instr(c.hora, ':') > 0 AND c.estado IN ('pendiente_pago','por_validar','confirmada','en_silla','atendida')`,
+    `CREATE TRIGGER IF NOT EXISTS tr_turnos_ins AFTER INSERT ON citas BEGIN INSERT INTO turnos(barbero_id, fecha, hora, cita_id) SELECT NEW.barbero_id, NEW.fecha, printf('%02d:%02d', (CAST(substr(NEW.hora, 1, instr(NEW.hora, ':') - 1) AS INTEGER) * 60 + CAST(substr(NEW.hora, instr(NEW.hora, ':') + 1) AS INTEGER) + j.key * 60) / 60, (CAST(substr(NEW.hora, 1, instr(NEW.hora, ':') - 1) AS INTEGER) * 60 + CAST(substr(NEW.hora, instr(NEW.hora, ':') + 1) AS INTEGER) + j.key * 60) % 60), NEW.id FROM json_each(COALESCE(json_extract(NEW.data, '$.bloques'), '[1]')) j WHERE j.value = 1 AND NEW.hora <> '' AND instr(NEW.hora, ':') > 0 AND NEW.estado IN ('pendiente_pago','por_validar','confirmada','en_silla','atendida'); END`,
+    `CREATE TRIGGER IF NOT EXISTS tr_turnos_upd AFTER UPDATE OF fecha, hora, barbero_id, estado, data ON citas BEGIN DELETE FROM turnos WHERE cita_id = OLD.id; INSERT INTO turnos(barbero_id, fecha, hora, cita_id) SELECT NEW.barbero_id, NEW.fecha, printf('%02d:%02d', (CAST(substr(NEW.hora, 1, instr(NEW.hora, ':') - 1) AS INTEGER) * 60 + CAST(substr(NEW.hora, instr(NEW.hora, ':') + 1) AS INTEGER) + j.key * 60) / 60, (CAST(substr(NEW.hora, 1, instr(NEW.hora, ':') - 1) AS INTEGER) * 60 + CAST(substr(NEW.hora, instr(NEW.hora, ':') + 1) AS INTEGER) + j.key * 60) % 60), NEW.id FROM json_each(COALESCE(json_extract(NEW.data, '$.bloques'), '[1]')) j WHERE j.value = 1 AND NEW.hora <> '' AND instr(NEW.hora, ':') > 0 AND NEW.estado IN ('pendiente_pago','por_validar','confirmada','en_silla','atendida'); END`,
+    `CREATE TRIGGER IF NOT EXISTS tr_turnos_del AFTER DELETE ON citas BEGIN DELETE FROM turnos WHERE cita_id = OLD.id; END`,
+  ] },
 ];
 export let schemaListo = null;
 export function asegurarSchema(env) { return schemaListo ||= aplicarMigraciones(env).catch(e => { schemaListo = null; throw e }) }
@@ -171,7 +183,7 @@ export function paramsCita(c) {
 }
 export const INSERT_CITA = 'INSERT INTO citas(id, codigo, fecha, hora, barbero_id, estado, expira, creada, upd, data) VALUES(?,?,?,?,?,?,?,?,?,?)';
 export const UPDATE_CITA = 'UPDATE citas SET codigo=?2, fecha=?3, hora=?4, barbero_id=?5, estado=?6, expira=?7, creada=?8, upd=?9, data=?10 WHERE id=?1';
-export const esTurnoOcupado = e => /UNIQUE/i.test(e.message) && /barbero_id|ux_citas_turno|fecha|hora/i.test(e.message);
+export const esTurnoOcupado = e => /UNIQUE/i.test(e.message) && /barbero_id|ux_citas_turno|turnos|fecha|hora/i.test(e.message);
 export const esCodigoRepetido = e => /UNIQUE/i.test(e.message) && /codigo/i.test(e.message);
 
 export async function insertarCita(env, c, extra = []) {

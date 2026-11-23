@@ -137,7 +137,7 @@ function cardCita(c,vis){
   <div class="row"><div class="cn">${esc(cl.nombre||'Cliente')}${chrono(c)?`<div style="margin-top:6px">${chrono(c)}</div>`:''}</div>${cl.tel?`<button class="rb" data-on-click="a75bbbc50" data-p0="${telKey(cl.tel)}">📋</button><button class="rb" data-on-click="a77e36977" data-p0="${c.id}">💬</button>`:''}</div>
   <div class="meta">
    ${cl.tel?can('verTel')?`<span class="lk" data-on-click="a2dade712" data-p0="${c.id}">📞 ${esc(cl.tel)} ⧉</span>`:`<span>📞 ${esc(telV(cl.tel))}</span>`:''}${cl.dni?`<span>🪪 ${esc(cl.dni)}</span>`:''}
-   <span class="lk">📅 ${DIAS[pYmd(c.fecha).getDay()]} ${pYmd(c.fecha).getDate()} ${MESC[pYmd(c.fecha).getMonth()]} · ${h12(c.hora)}</span>
+   <span class="lk">📅 ${DIAS[pYmd(c.fecha).getDay()]} ${pYmd(c.fecha).getDate()} ${MESC[pYmd(c.fecha).getMonth()]} · ${h12(c.hora)}${rangoCita(c)}</span>
    <span class="lk">💰 ${c.gratis?'GRATIS':monV(c.precio)}</span>
   </div>
   <div class="sub2">✂️ ${esc(c.servicioNombre||'')}${cl.ciudad?' · 📍 '+esc(cl.ciudad):''}</div>
@@ -224,7 +224,7 @@ async function edFoto(k,inp){const f=inp.files[0];if(!f)return;toast('⏳ Subien
   toast(m)}catch(e){toast('❌ '+e.message)}}
 function edAddLink(){let u=$('#edLink').value.trim();if(!u)return;if(!/^https?:\/\//i.test(u))u='https://'+u;S._ed.links.push({url:u,t:Date.now()});$('#edLink').value='';$('#edLinks').innerHTML=edLinks()}
 function fillHoras(){const f=$('#fFecha').value,bid=$('#fBarb').value,b=barb(bid);if(f&&!cubre(f,f))traerRango(f,f).then(ok=>{if(ok&&$('#fHora'))fillHoras()});const sl=slotsDia(S.cfg);if(S._eh&&!sl.includes(S._eh))sl.push(S._eh);sl.sort();
- let first=true;$('#fHora').innerHTML=sl.map(h=>{const oc=ocupado(S.citas,bid,f,h,S._eid);const sel=h===S._eh||(!S._eh&&!oc&&first);if(sel&&!oc)first=false;return `<option value="${h}" ${sel?'selected':''} ${oc?'disabled':''}>${h12(h)}${oc?' · ocupado':''}</option>`}).join('')||'<option value="">Sin horarios</option>';
+ const bl=blServ($('#fServ')?.value);let first=true;$('#fHora').innerHTML=sl.map(h=>{const oc=ocupado(S.citas,bid,f,h,S._eid,bl)||(h!==S._eh&&!entra(S.cfg,h,bl));const sel=h===S._eh||(!S._eh&&!oc&&first);if(sel&&!oc)first=false;return `<option value="${h}" ${sel?'selected':''} ${oc?'disabled':''}>${h12(h)}${oc?' · ocupado':''}</option>`}).join('')||'<option value="">Sin horarios</option>';
  $('#fWarn').textContent=b&&!trabaja(S.cfg,b,f)?'⚠️ Ese barbero no atiende ese día (puedes guardarla igual).':''}
 async function guardarCita(id){const s=S.servicios.find(x=>x.id===$('#fServ').value),c=id?cita(id):null,estN=$('#fEst').value;
  const pre=$('#fPre')?Math.max(0,+$('#fPre').value||0):(c?.precio??+s?.precio??0);

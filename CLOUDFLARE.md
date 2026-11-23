@@ -95,6 +95,13 @@ El link que recibe el cliente ahora es **`tudominio/cita/CODIGO`** (WhatsApp, QR
 - **iPhone:** solo funcionan con la app instalada en la pantalla de inicio (regla de Apple). Android y PC: siempre.
 - **No hay que configurar nada en Cloudflare:** la clave de firma se crea sola. (Opcional: secreto `VAPID_PRIVADA` si algún día quieres fijarla tú.) Los recordatorios de WhatsApp siguen igual, como respaldo.
 
+### Duración de cada servicio (y horas de espera)
+- ⚙️ Config → **Servicios** → ✏️ → **Duración**: 1 a 6 horas. Con 2 o más, cada hora intermedia se toca para marcarla **«⏳ Espera (libre)»** (por ejemplo, mientras el producto hace efecto). La primera y la última siempre son de trabajo.
+- El link de reservas solo ofrece horas donde entra todo el servicio (sin pisar el refrigerio ni pasar del cierre). Las horas de espera quedan **libres para otro cliente**.
+- En la agenda la cita dice «9:00 a. m. – 12:00 p. m. · ⏳ espera 10:00 a. m.»; el cliente lo ve en «Mi cita».
+- Nada se pisa: ni el formulario, ni el panel, ni dos clientes reservando a la vez. Los servicios que no toques siguen de 1 hora.
+- **Refrigerio vacío = se atiende todo el día.**
+
 ### Agenda: cancelar, papelera y flechas
 - En cada cita activa, **«🚫 Cancelar»** (etiqueta): la cita pasa a CANCELADA y su horario queda libre.
 - **🗑️ Papelera:** en una cita cancelada, el 🗑️ la mueve a la papelera. El botón 🗑️ de herramientas (con el número) la abre: **Recuperar** (vuelve a la agenda; si su horario ya lo tomó otra, vuelve como cancelada) o **Eliminar ya**. A los **7 días** se borra sola, con sus fotos.

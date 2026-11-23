@@ -86,6 +86,10 @@ const mergeCfg=c=>({...DEF_CFG,...c,est:{...(c?.est||{})},narr:{...DEF_CFG.narr,
 const ACTIVOS=['por_validar','confirmada','en_silla','atendida'];
 const activa=(c,now=Date.now())=>ACTIVOS.includes(c.estado)&&!(c.estado==='por_validar'&&c.expira&&c.expira<now);
 function slotsDia(cfg){const out=[],dur=CONFIG.DUR,fin=toMin(cfg.cierre),ri=toMin(cfg.refIni),rf=toMin(cfg.refFin);let t=toMin(cfg.apertura),g=0;if(t==null||fin==null)return out;while(t+dur<=fin&&g++<60){if(ri!=null&&rf!=null&&rf>ri&&t<rf&&t+dur>ri){t=rf;continue}out.push(fromMin(t));t+=dur}return out}
+/* Duración en turnos: bloques [1,0,1] = ocupado · espera (barbero libre) · ocupado. Misma regla que worker/comun.js. */
+const bloquesOk=b=>Array.isArray(b)&&b.length>=1&&b.length<=6&&b.every(x=>x===0||x===1)&&b[0]===1&&b[b.length-1]===1;
+const horasOcupa=(h,bl)=>(bloquesOk(bl)?bl:[1]).map((x,k)=>x?fromMin(toMin(h)+k*CONFIG.DUR):null).filter(Boolean);
+const entra=(cfg,h,bl)=>{const sl=slotsDia(cfg);return horasOcupa(h,bl).every(x=>sl.includes(x))};
 const bloqueado=(cfg,f,bid)=>(cfg.bloqueos||[]).some(b=>b.fecha===f&&(!b.barberoId||b.barberoId===bid));
 const trabaja=(cfg,b,f)=>{const d=pYmd(f).getDay();return b&&b.activo!==false&&(cfg.dias||[]).includes(d)&&(b.dias||[]).includes(d)&&!bloqueado(cfg,f,b.id)};
 const ocupadoLocal=(cs,bid,f,h)=>cs.some(c=>c.barberoId===bid&&c.fecha===f&&c.hora===h&&activa(c));
@@ -107,7 +111,7 @@ const API={
  async dni(d,otra){const f=await this.ficha(),r=await fetch(CONFIG.API_URL+'/publico/dni/'+d,{headers:{'X-Ficha':f}}),j=await r.json().catch(()=>({}));
   if(r.status===403&&!otra){F.ficha=null;return this.dni(d,true)}if(!r.ok)throw new Error(j.error||('Error '+r.status));return j},
  async publico(){if(this.remote){const d=await this.req('GET','/publico');d.cfg=mergeCfg(d.cfg);return d}seed();const cs=expirarLocal();const cfg=mergeCfg(lsGet('cfg',{}));
-  return{cfg,barberos:lsGet('barberos',[]).filter(b=>b.activo!==false).map(({pin,comision,...b})=>b),servicios:lsGet('servicios',[]).filter(s=>s.activo!==false),ocupados:cs.filter(c=>activa(c)).map(c=>({b:c.barberoId,f:c.fecha,h:c.hora}))}},
+  return{cfg,barberos:lsGet('barberos',[]).filter(b=>b.activo!==false).map(({pin,comision,...b})=>b),servicios:lsGet('servicios',[]).filter(s=>s.activo!==false),ocupados:cs.filter(c=>activa(c)).flatMap(c=>horasOcupa(c.hora,c.bloques).map(h=>({b:c.barberoId,f:c.fecha,h})))}},
  async crear(d){if(this.remote)return this.req('POST','/publico/reservas',d);
   const cs=expirarLocal(),cfg=mergeCfg(lsGet('cfg',{})),bs=lsGet('barberos',[]),s=lsGet('servicios',[]).find(x=>x.id===d.servicioId&&x.activo!==false);
   if(!s)throw new Error('El servicio ya no está disponible');
@@ -117,7 +121,7 @@ const API={
   else{const b=bs.find(x=>x.id===bid);if(!trabaja(cfg,b,d.fecha))throw new Error('Ese barbero no atiende ese día');if(ocupadoLocal(cs,bid,d.fecha,d.hora))throw new Error('Ese horario se acaba de ocupar 😕')}
   let ref='';if(d.refFoto){ref='f_'+uid();await IDB.put(ref,d.refFoto)}
   const lk=d.linkToken?lsGet('links',[]).find(x=>x.token===d.linkToken):null;if(d.linkToken){if(!lk)throw new Error('Este link ya no existe');if(lk.estado==='usado')throw new Error('Este link ya fue usado');if(lk.vence&&lk.vence<Date.now())throw new Error('Este link ya venció')}
-  const ad=lk&&lk.adelanto!=null&&lk.adelanto!==''?+lk.adelanto:+cfg.adelanto,np=!(cfg.modAdelanto&&cfg.yapeNum&&ad>0),c={id:uid(),codigo:codigo(),creada:Date.now(),fecha:d.fecha,hora:d.hora,barberoId:bid,servicioId:s.id,servicioNombre:s.nombre,precio:+s.precio||0,cliente:d.cliente,nota:d.nota,refFoto:ref,adelanto:np?0:ad,linkId:lk?.id||'',adelantoOk:false,estado:'por_validar',expira:np?null:Date.now()+(+cfg.holdMin||20)*60000,origen:lk?'link':'web'};if(lk?.nota)c.nota=('🎁 '+lk.nota+(c.nota?' · '+c.nota:''));
+  const ad=lk&&lk.adelanto!=null&&lk.adelanto!==''?+lk.adelanto:+cfg.adelanto,np=!(cfg.modAdelanto&&cfg.yapeNum&&ad>0),c={id:uid(),codigo:codigo(),creada:Date.now(),fecha:d.fecha,hora:d.hora,barberoId:bid,servicioId:s.id,servicioNombre:s.nombre,...(bloquesOk(s.bloques)&&s.bloques.length>1?{bloques:s.bloques}:{}),precio:+s.precio||0,cliente:d.cliente,nota:d.nota,refFoto:ref,adelanto:np?0:ad,linkId:lk?.id||'',adelantoOk:false,estado:'por_validar',expira:np?null:Date.now()+(+cfg.holdMin||20)*60000,origen:lk?'link':'web'};if(lk?.nota)c.nota=('🎁 '+lk.nota+(c.nota?' · '+c.nota:''));
   cs.push(c);lsSet('citas',cs);if(lk){const ls=lsGet('links',[]),x=ls.find(y=>y.id===lk.id);Object.assign(x,{estado:'usado',citaId:c.id,usado:Date.now()});lsSet('links',ls)}return{id:c.id,codigo:c.codigo,expira:c.expira,barberoId:bid,estado:c.estado}},
  async captura(id,cod,data){if(this.remote)return this.req('POST',`/publico/reservas/${id}/captura`,{codigo:cod,data});
   const cs=expirarLocal(),c=cs.find(x=>x.id===id&&x.codigo===cod);if(!c)throw new Error('Reserva no encontrada');if(c.estado==='expirada')throw new Error('Se venció el tiempo de pago');if(c.estado!=='por_validar'||!c.expira)throw new Error('Esta reserva ya fue procesada');
@@ -134,6 +138,7 @@ const F={step:0,serv:null,barb:null,fecha:null,hora:null,cli:{nombre:'',tel:'',c
 const PASOS=['Servicio','Barbero','Día y hora','Tus datos','Adelanto','Listo'];
 let timerInt=null;
 const serv=()=>P.servicios.find(s=>s.id===F.serv);
+const durTxt=bl=>{bl=bloquesOk(bl)?bl:[1];const e=bl.filter(x=>!x).length;return `${bl.length} h${e?` (${e} h de espera)`:''}`};
 /* Promociones: misma regla que el Worker (worker/modulos/promos.js → promoPara). Aquí solo se MUESTRA; el precio lo pone el servidor. */
 const dowDe=f=>pYmd(f).getDay();
 const promoVale=(p,f)=>p.desde<=f&&f<=p.hasta&&(!p.dias?.length||p.dias.includes(dowDe(f)));
@@ -159,7 +164,7 @@ function render(){clearInterval(timerInt);[s0,s1,s2,s3,s4,s5][F.step]()}
 /* paso 0: servicio */
 function s0(){if(!P.servicios.length)return shell('<div class="empty">✂️<br>La barbería aún no publicó sus servicios.</div>');
  const u=lsGet('ultima',null),prev=u&&u.codigo&&u.fecha>=hoy()?`<a class="warn" style="display:block;text-decoration:none;border-color:var(--pur);color:var(--tx);background:rgba(138,63,252,.12)" href="/cita/${encodeURIComponent(u.codigo)}">📋 Tienes una cita el <b>${fLarga(u.fecha)}</b> · ${h12(u.hora)}<br><small style="color:var(--mu)">Toca para ver su estado</small></a>`:'';
- shell(`${prev}<h2>${esc(P.cfg.txtBienvenida||'¿Qué te hacemos hoy?')}</h2>${P.servicios.map(s=>`<button class="opt ${F.serv===s.id?'on':''}" data-on-click="aab7eb6b8" data-p0="${s.id}"><span class="em">${s.foto?`<img data-foto="${s.foto}" alt="">`:s.emoji}</span><span class="t"><b>${esc(s.nombre)}</b><small>${esc(s.desc||'')} · ⏱️ 1 h</small></span><span class="pr">${(()=>{const p=promosDe(s.id).sort((a,b)=>a.precio-b.precio)[0];return p?`<s style="color:var(--mu);font-weight:400;font-size:12px">${soles(s.precio)}</s><br>${soles(p.precio)}<br><small style="font-size:10.5px;color:var(--pur)">🏷️ Promo</small>`:soles(s.precio)})()}</span></button>`).join('')}`)}
+ shell(`${prev}<h2>${esc(P.cfg.txtBienvenida||'¿Qué te hacemos hoy?')}</h2>${P.servicios.map(s=>`<button class="opt ${F.serv===s.id?'on':''}" data-on-click="aab7eb6b8" data-p0="${s.id}"><span class="em">${s.foto?`<img data-foto="${s.foto}" alt="">`:s.emoji}</span><span class="t"><b>${esc(s.nombre)}</b><small>${esc(s.desc||'')} · ⏱️ ${durTxt(s.bloques)}</small></span><span class="pr">${(()=>{const p=promosDe(s.id).sort((a,b)=>a.precio-b.precio)[0];return p?`<s style="color:var(--mu);font-weight:400;font-size:12px">${soles(s.precio)}</s><br>${soles(p.precio)}<br><small style="font-size:10.5px;color:var(--pur)">🏷️ Promo</small>`:soles(s.precio)})()}</span></button>`).join('')}`)}
 /* paso 1: barbero */
 function s1(){shell(`<h2>Elige tu barbero</h2>
  <button class="opt ${F.barb==='any'?'on':''}" data-on-click="aae95d490"><span class="em round">🎲</span><span class="t"><b>El primero disponible</b><small>Más horarios para elegir</small></span></button>
@@ -172,7 +177,8 @@ async function pickHora(h){F.hora=h;await s2();say('hora')}
 /* paso 2: día y hora */
 function libres(fecha){const cfg=P.cfg,bs=P.barberos.filter(b=>(F.barb==='any'||b.id===F.barb)&&trabaja(cfg,b,fecha));if(!bs.length)return[];
  const esHoy=fecha===hoy(),n=new Date(),nm=n.getHours()*60+n.getMinutes();
- return slotsDia(cfg).filter(h=>!esHoy||toMin(h)>nm+10).map(h=>({h,ok:bs.some(b=>!P.ocupados.some(o=>o.b===b.id&&o.f===fecha&&o.h===h))}))}
+ const bl=serv()?.bloques;
+ return slotsDia(cfg).filter(h=>(!esHoy||toMin(h)>nm+10)&&entra(cfg,h,bl)).map(h=>{const mias=horasOcupa(h,bl);return{h,ok:bs.some(b=>!P.ocupados.some(o=>o.b===b.id&&o.f===fecha&&mias.includes(o.h)))}})}
 async function s2(){
  try{const d=await API.publico();P.ocupados=d.ocupados}catch(e){}
  const ini=addD(hoy(),+P.cfg.anticipacion||0),dias=[];for(let i=0;i<Math.max(1,+P.cfg.ventana||14);i++){const f=addD(ini,i),l=libres(f);dias.push({f,ok:l.some(x=>x.ok)})}

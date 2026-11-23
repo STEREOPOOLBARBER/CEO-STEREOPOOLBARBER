@@ -1,4 +1,4 @@
-import { ACTIVOS, DEF, addD, ahoraLocal, codigo, fail, json, minutosHasta, reglaReprog, slotsDia, str, toMin, trabaja, uid } from '../comun.js';
+import { ACTIVOS, DEF, addD, bloquesDe, entra, horasOcupa, ahoraLocal, codigo, fail, json, minutosHasta, reglaReprog, slotsDia, str, toMin, trabaja, uid } from '../comun.js';
 import { plazoCalificar, yaCalificada } from './calificaciones.js';
 import { promoPara, promosPublicas } from './promos.js';
 import { avisarEquipo, pushBaseCita } from './push.js';
@@ -37,6 +37,8 @@ export async function reservar(req, env, b, fondo = p => p) {
   const ini = addD(ahora.fecha, +cfg.anticipacion || 0), fin = addD(ini, Math.max(1, +cfg.ventana || 14) - 1);
   if (fecha < ini || fecha > fin) fail(400, 'Esa fecha no está disponible');
   if (!slotsDia(cfg).includes(hora)) fail(400, 'Horario no válido');
+  const bloques = bloquesDe(d, s.id);
+  if (!entra(cfg, hora, bloques)) fail(400, 'Ese servicio no entra a esa hora (choca con el refrigerio o el cierre). Elige otra.');
   if (fecha === ahora.fecha && toMin(hora) <= ahora.min + 10) fail(400, 'Esa hora ya pasó, elige otra');
 
   let link = null;
@@ -50,9 +52,9 @@ export async function reservar(req, env, b, fondo = p => p) {
 
   let candidatos;
   if (b.barberoId === 'any') {
-    const r = await env.DB.prepare(`SELECT barbero_id AS b, hora AS h FROM citas WHERE fecha = ? AND estado IN (${ACTIVOS.map(() => '?').join(',')})`).bind(fecha, ...ACTIVOS).all();
+    const r = await env.DB.prepare('SELECT barbero_id AS b, hora AS h FROM turnos WHERE fecha = ?').bind(fecha).all(), mias = horasOcupa(hora, bloques);
     const carga = id => r.results.filter(x => x.b === id).length;
-    candidatos = d.barberos.filter(x => trabaja(cfg, x, fecha) && !r.results.some(y => y.b === x.id && y.h === hora)).sort((a, z) => carga(a.id) - carga(z.id));
+    candidatos = d.barberos.filter(x => trabaja(cfg, x, fecha) && !r.results.some(y => y.b === x.id && mias.includes(y.h))).sort((a, z) => carga(a.id) - carga(z.id));
     if (!candidatos.length) fail(409, 'Ese horario se acaba de ocupar 😕');
   } else {
     const x = d.barberos.find(y => y.id === b.barberoId);
@@ -67,7 +69,7 @@ export async function reservar(req, env, b, fondo = p => p) {
   // Promoción: el Worker la aplica sola si vale para ese servicio ESE día (el navegador solo la muestra).
   const pr = link ? null : promoPara(d, s.id, fecha);
   const base = {
-    fecha, hora, servicioId: s.id, servicioNombre: s.nombre, precio: pr ? +pr.precio : +s.precio || 0, ...(pr ? { promo: { id: pr.id, titulo: pr.titulo, precioNormal: +s.precio || 0 } } : {}), cliente, nota, refFoto,
+    fecha, hora, servicioId: s.id, servicioNombre: s.nombre, precio: pr ? +pr.precio : +s.precio || 0, ...(bloques.length > 1 ? { bloques } : {}), ...(pr ? { promo: { id: pr.id, titulo: pr.titulo, precioNormal: +s.precio || 0 } } : {}), cliente, nota, refFoto,
     adelanto: sinPago ? 0 : ad, linkId: link?.id || '', adelantoOk: false,
     estado: 'por_validar', expira: sinPago ? null : Date.now() + (+cfg.holdMin || 20) * 60e3, origen: link ? 'link' : 'web',
   };
@@ -89,7 +91,8 @@ export async function rutasPublicas(c) {
   if (path === '/publico' && m === 'GET') {
     await expirar(env);
     const d = await datos(env), hoy = ahoraLocal(env).fecha;
-    const r = await env.DB.prepare(`SELECT barbero_id AS b, fecha AS f, hora AS h FROM citas WHERE fecha >= ? AND hora <> '' AND estado IN (${ACTIVOS.map(() => '?').join(',')})`).bind(addD(hoy, -1), ...ACTIVOS).all();
+    // Cada hora ocupada (también las de servicios largos; las horas de espera quedan libres).
+    const r = await env.DB.prepare('SELECT barbero_id AS b, fecha AS f, hora AS h FROM turnos WHERE fecha >= ?').bind(addD(hoy, -1)).all();
     return json({ ...vistaPublica(d, hoy), ocupados: r.results, ts: env.TURNSTILE_SITEKEY || '' });
   }
   if ((x = path.match(/^\/publico\/dni\/(\d{8})$/)) && m === 'GET') {
@@ -117,7 +120,7 @@ export async function rutasPublicas(c) {
     const c = filaCita(r), d = await datos(env), b = d.barberos.find(y => y.id === c.barberoId);
     const cfg = { ...DEF, ...d.cfg }, rg = reglaReprog(env, cfg, c);
     const atendida = c.estado === 'atendida', hecha = atendida && await yaCalificada(env, c);
-    return json({ fotos: atendida ? { antes: !!c.fotoAntes, despues: !!c.fotoDespues } : null, calificacion: atendida ? { hecha, puede: !hecha && plazoCalificar(env, c) } : null, asistencia: !!c.asistencia, barberoId: c.barberoId, reprog: c.reprog || 0, puedeReprog: rg.ok, tolerancia: +cfg.tolerancia || 0, horasReprog: +cfg.horasReprog || 24, codigo: c.codigo, estado: c.estado, fecha: c.fecha, hora: c.hora, servicio: c.servicioNombre || '', precio: +c.precio || 0, adelanto: +c.adelanto || 0, adelantoOk: !!c.adelantoOk, barbero: b?.nombre || '', cliente: { nombre: c.cliente?.nombre || '', tel: '••• ••• ' + String(c.cliente?.tel || '').slice(-3) }, sinComprobante: c.estado === 'por_validar' && !c.yapeCaptura && !!c.expira, expira: c.expira ?? null });
+    return json({ fotos: atendida ? { antes: !!c.fotoAntes, despues: !!c.fotoDespues } : null, calificacion: atendida ? { hecha, puede: !hecha && plazoCalificar(env, c) } : null, asistencia: !!c.asistencia, barberoId: c.barberoId, reprog: c.reprog || 0, puedeReprog: rg.ok, tolerancia: +cfg.tolerancia || 0, horasReprog: +cfg.horasReprog || 24, bloques: c.bloques || [1], codigo: c.codigo, estado: c.estado, fecha: c.fecha, hora: c.hora, servicio: c.servicioNombre || '', precio: +c.precio || 0, adelanto: +c.adelanto || 0, adelantoOk: !!c.adelantoOk, barbero: b?.nombre || '', cliente: { nombre: c.cliente?.nombre || '', tel: '••• ••• ' + String(c.cliente?.tel || '').slice(-3) }, sinComprobante: c.estado === 'por_validar' && !c.yapeCaptura && !!c.expira, expira: c.expira ?? null });
   }
   // Fotos de antes y después: el cliente las ve con el código de su cita, solo cuando ya fue atendido.
   if ((x = path.match(/^\/publico\/cita\/([A-Za-z0-9]{6})\/foto\/(antes|despues)$/)) && m === 'GET') {
@@ -143,6 +146,7 @@ export async function rutasPublicas(c) {
     const ini = addD(ahora.fecha, +cfg.anticipacion || 0), fin = addD(ini, Math.max(1, +cfg.ventana || 14) - 1);
     if (fecha < ini || fecha > fin) fail(400, 'Esa fecha no está disponible');
     if (!slotsDia(cfg).includes(hora)) fail(400, 'Horario no válido');
+    if (!entra(cfg, hora, c.bloques)) fail(400, 'Tu servicio no entra a esa hora (choca con el refrigerio o el cierre). Elige otra.');
     if (minutosHasta(env, fecha, hora) <= 10) fail(400, 'Esa hora ya pasó, elige otra');
     if (!trabaja(cfg, d.barberos.find(y => y.id === c.barberoId), fecha)) fail(400, 'Tu barbero no atiende ese día');
     const antes = { fecha: c.fecha, hora: c.hora };
