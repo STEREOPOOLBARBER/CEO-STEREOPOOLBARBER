@@ -56,12 +56,12 @@ function listaLinks(){const f=S.lkF||'todos';let ls=(S.links||[]).filter(l=>isAd
   <div class="row" style="margin-top:10px">${e==='disponible'?`<button class="btn sm" data-on-click="ad3eeda7f" data-p0="${l.id}">📤 Compartir</button><button class="btn sm" data-on-click="aaf913bd3" data-p0="${l.id}">↗</button><button class="btn sm" data-on-click="a5e8976b2" data-p0="${l.id}">📋</button>`:''}<button class="btn sm r" data-on-click="ad34e7e01" data-p0="${l.id}">🗑️</button></div></div>`}).join('')}
 async function genLink(modo){const nom=$('#lkNom').value.trim(),tel=$('#lkTel').value.replace(/\D/g,'').slice(-9),sid=$('#lkServ').value,bid=$('#lkBarb').value,ade=$('#lkAde').value,dias=+$('#lkVen').value;
  if(!nom)return toast('Escribe el nombre del cliente');const s=S.servicios.find(x=>x.id===sid);
- const l={id:uid(),token:tokenL(),tipo:'personal',creado:Date.now(),creadoPor:S.ses.barberoId||'admin',estado:'disponible',cliente:{nombre:nom,tel},servicioId:sid||'',servicioNombre:s?.nombre||'',barberoId:bid||'',adelanto:ade===''?null:Math.max(0,+ade),nota:$('#lkNota').value.trim(),vence:dias?Date.now()+dias*864e5:null};
+ const l={id:uid(),token:tokenL(),tipo:'personal',creado:Date.now(),creadoPor:S.ses.pid||'',estado:'disponible',cliente:{nombre:nom,tel},servicioId:sid||'',servicioNombre:s?.nombre||'',barberoId:bid||'',adelanto:ade===''?null:Math.max(0,+ade),nota:$('#lkNota').value.trim(),vence:dias?Date.now()+dias*864e5:null};
  const w=modo==='copiar'?null:ventana();
  try{const g=API.saveLink(l).then(()=>linkUrl(l));
   if(modo==='copiar'){await copiarP(g)}else{const url=await g,msg=`Hola ${nom} 👋 Te dejo tu link personal para reservar en *${S.cfg.nombre}*, sobrino 💈${l.nota?`\n🎁 ${l.nota}`:''}\n${url}${l.vence?`\n⏱ Válido hasta el ${fCorta(l.vence)}`:''}`;irA(w,waUrl(tel?waNum(tel):'',msg))}
   toast('🔑 Link generado');renderCompartir()}catch(e){w?.close();toast('❌ '+e.message)}}
-async function linkRapido(modo){const l={id:uid(),token:tokenL(),tipo:'rapido',creado:Date.now(),creadoPor:S.ses.barberoId||'admin',estado:'disponible',cliente:null,barberoId:isAdmin()?'':S.ses.barberoId,adelanto:null,vence:Date.now()+7*864e5};
+async function linkRapido(modo){const l={id:uid(),token:tokenL(),tipo:'rapido',creado:Date.now(),creadoPor:S.ses.pid||'',estado:'disponible',cliente:null,barberoId:isAdmin()?'':S.ses.barberoId,adelanto:null,vence:Date.now()+7*864e5};
  const w=modo==='copiar'?null:ventana();
  try{const g=API.saveLink(l).then(()=>linkUrl(l));
   if(modo==='copiar')await copiarP(g);else{const url=await g;irA(w,modo==='abrir'?url:'https://wa.me/?text='+encodeURIComponent(`💈 Reserva tu corte en *${S.cfg.nombre}*, sobrino 👇\n${url}`))}
@@ -84,16 +84,16 @@ const SRI={[XLSX_SRC]:'sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeB
 function loadScript(src){return new Promise((res,rej)=>{if(document.querySelector(`script[src="${src}"]`))return res();const s=document.createElement('script');s.src=src;s.integrity=SRI[src];s.onload=res;s.onerror=()=>rej(new Error('No se pudo cargar '+src.replace(/^vendor\//,'')));document.head.appendChild(s)})}
 const COLS=['Código','Fecha','Hora','Cliente','Teléfono','Ciudad','Barbero','Servicio','Precio','Adelanto','Adelanto validado','Estado','Nota','Origen','Gratis','Creado'];
 function abrirMenu(){openModal(`<div class="grab"></div>${mHead('☰ Menú')}
- <div class="card" style="padding:12px 14px"><div class="row"><span class="av lg">👤</span><div style="flex:1"><b>${esc(S.ses.nombre||'')}</b><p class="hint" style="margin:0">${S.ses.uid?ROLES[S.ses.rol]?.t||'':S.ses.rol==='barbero'?'💈 Barbero':'👑 Dueño'} · ${Object.values(S.perm).filter(Boolean).length}/${PERMS.length} permisos</p></div></div>${misCitas()}</div>
+ <div class="card" style="padding:12px 14px"><div class="row"><span class="av lg">👤</span><div style="flex:1"><b>${esc(S.ses.nombre||'')}</b><p class="hint" style="margin:0">${ROLES[S.ses.rol]?.t||''} · ${Object.values(S.perm).filter(Boolean).length}/${PERMS.length} permisos</p></div></div>${misCitas()}</div>
  ${API.remote&&can('verMontos')&&can('verTodas')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="abrirReporte">📊 Reporte semanal de caja</button>`:''}
  ${API.remote&&can('dash')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="abrirCalificaciones">⭐ Calificaciones de los clientes</button>`:''}
  ${can('dash')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="aba7c1122">📈 Dashboard del negocio</button>`:''}
  ${can('excel')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="a62e261c1">📊 Excel y respaldo</button>`:''}
- ${can('config')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="a465d46a3">👥 Usuarios y permisos</button>`:''}
+ ${can('config')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="a465d46a3">👥 Equipo y permisos</button>`:''}
  <button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="a127fcd5a">📖 Cómo funciona</button>
  <button class="btn r w" style="padding:14px" data-on-click="a973cd47a">🚪 Cerrar sesión</button>
  <p class="hint" style="text-align:center">👆👆 Doble toque en el nombre → Dashboard · Toca el logo → Excel y respaldo</p>`)}
-function misCitas(){const bid=S.ses.barberoId||(S.usuarios.find(u=>u.id===S.ses.uid)?.barberoId);const cs=S.citas.filter(c=>(bid?c.barberoId===bid:can('verTodas'))&&activa(c)&&startTs(c)>Date.now()-30*60000&&c.estado!=='atendida').sort((a,b)=>startTs(a)-startTs(b));
+function misCitas(){const bid=S.ses.barberoId;const cs=S.citas.filter(c=>(bid?c.barberoId===bid:can('verTodas'))&&activa(c)&&startTs(c)>Date.now()-30*60000&&c.estado!=='atendida').sort((a,b)=>startTs(a)-startTs(b));
  if(!cs.length)return'<p class="hint">Sin citas próximas.</p>';const n=cs[0];return `<p class="hint">📅 ${cs.length} cita(s) próximas · la siguiente <b style="color:var(--blue)">${falta(startTs(n))}</b>: ${esc(n.cliente?.nombre)} (${h12(n.hora)})</p>`}
 function abrirDatos(){openModal(`<div class="grab"></div><div class="mn"><h3 style="margin-bottom:14px">📊 Importar / Exportar Excel<button class="btn sm" data-on-click="a31042dab">📖 Ayuda</button></h3>
  <div class="card"><p class="lb" style="margin-top:0;color:var(--blue)">⬇ Exportar</p>

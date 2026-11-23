@@ -1,6 +1,6 @@
 /* =====================================================================
    STEREO BARBER POOL · API en Cloudflare Workers
-   - D1  (env.DB)    : configuración, barberos, servicios, usuarios,
+   - D1  (env.DB)    : configuración, equipo (personas), servicios,
                        citas, links y sesiones.
    - R2  (env.FOTOS) : fotos (logo, barberos, servicios, cortes, Yape).
    - Login del personal SOLO con Google (verificado aquí, con nonce de un solo uso).

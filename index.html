@@ -287,7 +287,13 @@ th{color:var(--mu);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
         <input class="in" id="cClave" type="password" autocomplete="current-password" placeholder="Tu clave" data-on-keydown="a92851ba0">
         <button class="btn" style="padding:12px" data-on-click="af606fcfd">🔑 Entrar con clave</button>
       </div>
-      <button class="btn p" id="dBtn" style="width:100%;padding:14px;display:none" data-on-click="a424aa69e">Entrar</button>
+      <div id="nBox" style="display:none;flex-direction:column;gap:8px;width:100%">
+        <p class="hint" style="margin:0;text-align:center">Es tu primera vez: crea <b>tu propia clave</b> (mínimo 6, que nadie más sepa).</p>
+        <input class="in" id="nClave" type="password" autocomplete="new-password" placeholder="Tu nueva clave">
+        <input class="in" id="nClave2" type="password" autocomplete="new-password" placeholder="Repítela" data-on-keydown="claveNuevaTecla">
+        <button class="btn p" style="padding:12px" data-on-click="crearClave">🔐 Crear mi clave y entrar</button>
+      </div>
+      <p class="hint" id="sinAcceso" style="display:none;margin:0;text-align:center">Aún no tienes clave: pídesela al dueño (la pone en el Equipo).</p>
     </div>
     <button class="btn sm" style="margin-top:6px" data-on-click="a49d0af14">Cambiar cuenta de Google</button>
   </div>
@@ -329,6 +335,7 @@ th{color:var(--mu);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
 <script src="js/panel/compartir.js"></script>
 <script src="js/panel/dashboard.js"></script>
 <script src="js/panel/config.js"></script>
+<script src="js/panel/equipo.js"></script>
 <script src="js/panel/voz.js"></script>
 <script src="js/panel/acceso.js"></script>
 <script src="js/panel/inicio.js"></script>

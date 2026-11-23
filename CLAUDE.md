@@ -21,7 +21,7 @@ Sistema de reservas de una barbería en Puente Piedra (Lima, Perú). El dueño n
 Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño prueba en staging → se pasa a `main` (merge) → Cloudflare despliega producción. GitHub Actions (`.github/workflows/pruebas.yml`) corre las pruebas en cada push.
 
 ## Estructura
-- `index.html` — panel (dueño, barberos, personal): solo HTML y estilos. Su JS está en `js/panel/` por pantalla (`base`, `agenda`, `filtros`, `escaner`, `clientes`, `calificaciones`, `compartir`, `dashboard`, `config`, `voz`, `acceso`, `inicio`), después de `js/voz.js`,, cargados en ese orden como scripts clásicos (comparten el ámbito global). Modo nube (`/api`) o local (localStorage, solo demo).
+- `index.html` — panel (dueño, barberos, personal): solo HTML y estilos. Su JS está en `js/panel/` por pantalla (`base`, `agenda`, `filtros`, `escaner`, `clientes`, `calificaciones`, `compartir`, `dashboard`, `config`, `equipo`, `voz`, `acceso`, `inicio`), después de `js/voz.js`, cargados en ese orden como scripts clásicos (comparten el ámbito global). Modo nube (`/api`) o local (localStorage, solo demo).
 - `js/reservar.js`, `js/estado.js` — JS del formulario y de la página de estado.
 - `js/voz.js` (guion de voz, frases originales, piezas de fecha y hora; lo usan las 3 páginas) · `js/escena.js` + `css/escena.css` (pantalla «Toca para entrar», narrador y reproductor de la voz grabada; reservar y estado) · `img/` (narrador y logo Stereo).
 - `js/eventos.js` — **despachador de eventos** y registro `ACC` de acciones (generado a partir de los antiguos `onclick`).
@@ -49,7 +49,8 @@ Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño pru
 - **Turnos de 60 min** entre apertura y cierre, sin el refrigerio (`slotsDia`). Días y bloqueos por barbero (`trabaja`).
 - **Adelanto por Yape:** el cliente sube la captura; el dueño o quien tenga permiso `yape` valida.
 - **Política:** el cliente puede reprogramar solo si faltan ≥ `horasReprog` (24 h) y no pasó `maxReprog`; el servidor lo vuelve a comprobar.
-- **Entrada al panel:** Google abre la «puerta» del dispositivo (`brb_g`), luego se elige perfil: dueño con clave (arranque 1111) y barberos/personal con clave o huella. Permisos por rol (`permisos()`), siempre validados en el Worker.
+- **Equipo (una sola verdad):** kv `equipo` = lista única de personas `{id, nombre, rol, permisos, atiende, activo, email, foto, color, esp, dias, comision}` (migración v7 juntó los antiguos `barberos` + `usuarios`). `rol: 'dueno'` tiene todo; el resto, sus `permisos`. `atiende` = sale en agenda/formulario/caja; `d.barberos` se deriva (`datos()`), nunca se guarda. Solo un dueño cambia dueños y siempre queda uno activo (`validarEquipo`).
+- **Entrada al panel (regla única):** Google abre la «puerta» del aparato (`brb_g`): el correo del dueño (`OWNER_EMAILS`) deja elegir a cualquiera del equipo; el correo de una persona, solo a ella. Luego **cada persona entra con SU clave o huella** (sujeto `p_<id>`). No hay clave de arranque: la primera clave la crea uno mismo (`/auth/clave/crear`, si su Google abrió el aparato o si es el dueño en el aparato del dueño) o se la pone el dueño. Permisos siempre en el Worker (`permisos()`; el panel los recibe en `/panel → yo.perm`).
 - **Datos personales** (DNI, celular): el barbero sin permiso `verTel` los ve ocultos; DNI se consulta a RENIEC vía Shalom solo desde el Worker, devolviendo solo el nombre.
 
 ## Seguridad que no se debe romper

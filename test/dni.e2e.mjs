@@ -32,12 +32,12 @@ r = await call('GET', '/dni/44273815'); check('el panel sin sesión → 401', r.
 const adm = await call('POST', '/auth/login', { pin: '5821' });
 r = await call('GET', '/dni/44273815', null, adm.cookie); check('el panel con sesión consulta', r.s === 200 && r.j.nombre.startsWith('Juan'));
 r = await call('GET', '/dni/44273815?crudo=1', null, adm.cookie); check('el dueño ve la respuesta cruda para diagnosticar', r.s === 200 && r.j.crudo?.data?.nombres === 'JUAN CARLOS');
-const pnl = (await call('GET', '/panel', null, adm.cookie)).j, barbs = pnl.barberos, servs = pnl.servicios, usus = pnl.usuarios;
+const pnl = (await call('GET', '/panel', null, adm.cookie)).j, equipo = pnl.equipo, servs = pnl.servicios;
 check('la clave nunca aparece en el panel ni en lo público', !JSON.stringify((await call('GET', '/panel', null, adm.cookie)).j).includes('sk_test') && !JSON.stringify((await call('GET', '/publico')).j).includes('sk_test'));
 let lim = 0, n429 = 0; for (let i = 0; i < 14; i++) { const x = await call('GET', '/publico/dni/2000000' + (i % 10)); if (x.s === 429) { lim = 429; n429 = i; break } }
 check('más de 10 consultas por minuto desde una IP → 429 (límite de Cloudflare)', lim === 429 && n429 <= 10, `corte en ${n429}`);
 // tope diario
-await call('PUT', '/config', { cfg: { ...(await call('GET', '/panel', null, adm.cookie)).j.cfg, dniTopeDia: 3 }, barberos: barbs, servicios: servs, usuarios: usus }, adm.cookie);
+await call('PUT', '/config', { cfg: { ...(await call('GET', '/panel', null, adm.cookie)).j.cfg, dniTopeDia: 3 }, equipo, servicios: servs }, adm.cookie);
 r = await call('GET', '/dni/31000001', null, adm.cookie);
 check('al pasar el tope diario se corta (protege el saldo)', r.s === 429 && /todas las consultas/.test(r.j.error), JSON.stringify(r));
 r = await call('GET', '/dni/44273815', null, adm.cookie);

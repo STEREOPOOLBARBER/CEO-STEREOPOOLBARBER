@@ -233,7 +233,7 @@ async function guardarCita(id){const s=S.servicios.find(x=>x.id===$('#fServ').va
  if(c&&estN!==c.estado){if(c.estado==='por_validar'&&['confirmada','en_silla','atendida'].includes(estN)&&!can('yape'))return toast('🔒 Solo quien valida pagos puede confirmar esta cita');if(['cancelada','no_vino'].includes(estN)&&!can('cancelar'))return toast('🔒 Sin permiso para cancelar');
   if(estN==='en_silla'&&!c.enSillaTs)d.enSillaTs=Date.now();if(estN==='atendida'&&!c.atendidaTs)d.atendidaTs=Date.now();if(estN==='confirmada'&&c.adelanto>0&&c.estado==='por_validar')d.adelantoOk=true}
  try{const vaActiva=ACTIVOS.includes(estN);if(vaActiva&&ocupado(S.citas,d.barberoId,d.fecha,d.hora,id||undefined))throw new Error('Ese horario está ocupado');
-  if(id)await API.updateCita(id,d);else await API.crearCita({...d,enSillaTs:estN==='en_silla'?Date.now():undefined,adelanto:0,adelantoOk:false,origen:'panel',creadoPor:S.ses.uid||S.ses.barberoId||'dueno'});
+  if(id)await API.updateCita(id,d);else await API.crearCita({...d,enSillaTs:estN==='en_silla'?Date.now():undefined,adelanto:0,adelantoOk:false,origen:'panel'});
   closeModal();fijarDia(d.fecha);await reload();toast('✅ Cita guardada')}catch(e){toast('❌ '+e.message)}}
 /* «❌ No vino» desde el aviso de la próxima cita atrasada. */
 const noVino=id=>cambiarEstado(id,'no_vino');
@@ -249,7 +249,7 @@ function walkIn(){const bid=isAdmin()?(S.vista.barb[0]||S.barberos.find(b=>b.act
  <button class="btn pu w" style="margin-top:14px;padding:14px" data-on-click="aeff5c34f">💺 Pasar a silla</button>`)}
 async function guardarWalk(){const s=S.servicios.find(x=>x.id===$('#wServ').value),bid=$('#wBarb').value,now=new Date(),m=now.getHours()*60+now.getMinutes();
  let hora=slotsDia(S.cfg).find(h=>toMin(h)<=m&&m<toMin(h)+CONFIG.DUR)||fromMin(m);if(ocupado(S.citas,bid,hoy(),hora))hora=fromMin(m);
- try{await API.crearCita({fecha:hoy(),hora,barberoId:bid,servicioId:s?.id,servicioNombre:s?.nombre||'',precio:+s?.precio||0,cliente:{nombre:$('#wNom').value.trim()||'Cliente sin cita',tel:$('#wTel').value.replace(/[^\d+ ]/g,'').trim(),ciudad:$('#wCiu').value.trim()},nota:'',estado:'en_silla',enSillaTs:Date.now(),adelanto:0,adelantoOk:false,origen:'walkin',creadoPor:S.ses.uid||S.ses.barberoId||'dueno'});
+ try{await API.crearCita({fecha:hoy(),hora,barberoId:bid,servicioId:s?.id,servicioNombre:s?.nombre||'',precio:+s?.precio||0,cliente:{nombre:$('#wNom').value.trim()||'Cliente sin cita',tel:$('#wTel').value.replace(/[^\d+ ]/g,'').trim(),ciudad:$('#wCiu').value.trim()},nota:'',estado:'en_silla',enSillaTs:Date.now(),adelanto:0,adelantoOk:false,origen:'walkin'});
   closeModal();fijarDia(hoy());await reload();toast('💺 En silla')}catch(e){toast('❌ '+e.message)}}
 async function quitarDemo(){if(!confirm('¿Borrar todas las citas de ejemplo?'))return;lsSet('citas',lsGet('citas',[]).filter(c=>!c.demo));await reload();toast('🧹 Ejemplos borrados')}
 function ayuda(){openModal(mHead('📖 Cómo funciona')+[

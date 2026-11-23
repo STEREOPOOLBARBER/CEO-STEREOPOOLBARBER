@@ -1,5 +1,5 @@
 // Prueba de la Fase 1: el panel solo baja una ventana de días y lo demás se busca/pagina en la base de datos.
-// Requiere wrangler dev con --var ALLOW_PIN:true --var GOOGLE_CLIENT_ID:, adminPin 5821 y muchas citas antiguas sembradas
+// Requiere wrangler dev con --var ALLOW_PIN:true --var GOOGLE_CLIENT_ID:, PIN 5821 del dueño y muchas citas antiguas sembradas
 // (una se llama «Zacarías Antiguo», ver CLOUDFLARE.md).
 const B = process.env.BASE || 'http://127.0.0.1:8787';
 let ok = 0, bad = 0; const check = (n, c, x = '') => { c ? ok++ : bad++; console.log(`${c ? '✅' : '❌'} ${n} ${c ? '' : x}`) };
@@ -30,7 +30,7 @@ r = await call('GET', '/citas/buscar?q=rojas');
 check('sin sesión → 401', r.s === 401);
 // barbero sin permiso de ver todas ni teléfonos
 const pn = (await call('GET', '/panel', null, adm)).j;
-await call('PUT', '/config', { cfg: { ...pn.cfg, permBarbero: { verTel: false } }, barberos: pn.barberos.map(b => b.id === 'b1' ? { ...b, pin: '7391' } : b), servicios: pn.servicios, usuarios: pn.usuarios }, adm);
+await call('PUT', '/config', { cfg: pn.cfg, equipo: pn.equipo.map(b => b.id === 'b1' ? { ...b, pin: '7391', permisos: { crear: true, links: true } } : b), servicios: pn.servicios }, adm);
 const bar = (await call('POST', '/auth/login', { pin: '7391' })).cookie;
 r = await call('GET', '/citas/buscar?q=rojas&limit=50', null, bar);
 check('el barbero solo encuentra sus propias citas', r.j.total > 0 && r.j.items.every(c => c.barberoId === 'b1'), JSON.stringify(r.j).slice(0, 150));

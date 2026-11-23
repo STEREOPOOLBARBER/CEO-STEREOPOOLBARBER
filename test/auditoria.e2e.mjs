@@ -8,18 +8,18 @@ check('la cookie de sesión usa el prefijo __Host-', /^__Host-brb_s=/.test(adm) 
 check('una cookie con el nombre viejo sigue sirviendo (transición)', (await call('GET', '/panel', null, adm.replace('__Host-brb_s', 'brb_s'))).s === 200);
 const pn = (await call('GET', '/panel', null, adm)).j;
 // clave para un barbero y doble ingreso → la sesión anterior se cierra
-await call('PUT', '/acceso/b_b1/clave', { clave: 'clave-segura-1' }, adm);
-const s1 = (await call('POST', '/auth/clave', { sujeto: 'b_b1', clave: 'clave-segura-1' })).cookie;
-const s2 = (await call('POST', '/auth/clave', { sujeto: 'b_b1', clave: 'clave-segura-1' }, null)).cookie;
+await call('PUT', '/acceso/p_b1/clave', { clave: 'clave-segura-1' }, adm);
+const s1 = (await call('POST', '/auth/clave', { sujeto: 'p_b1', clave: 'clave-segura-1' })).cookie;
+const s2 = (await call('POST', '/auth/clave', { sujeto: 'p_b1', clave: 'clave-segura-1' }, null)).cookie;
 check('dos ingresos dan sesiones distintas', s1 && s2 && s1 !== s2);
-const s3 = (await fetch(BASE + '/api/auth/clave', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: BASE, Cookie: s1 }, body: JSON.stringify({ sujeto: 'b_b1', clave: 'clave-segura-1' }) })).headers.get('set-cookie').split(';')[0];
+const s3 = (await fetch(BASE + '/api/auth/clave', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: BASE, Cookie: s1 }, body: JSON.stringify({ sujeto: 'p_b1', clave: 'clave-segura-1' }) })).headers.get('set-cookie').split(';')[0];
 check('al volver a entrar desde el mismo navegador, la sesión anterior se cierra', (await call('GET', '/panel', null, s1)).s === 401 && (await call('GET', '/panel', null, s3)).s === 200);
 // acciones que deben quedar en la bitácora
 const lima = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date()), f = d => { const x = new Date(lima + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + d); if (x.getUTCDay() === 0) x.setUTCDate(x.getUTCDate() + 1); return x.toISOString().slice(0, 10) };
 const c = (await call('POST', '/citas', { fecha: f(3), hora: '10:00', barberoId: 'b1', servicioId: pn.servicios[0].id, servicioNombre: pn.servicios[0].nombre, cliente: { nombre: 'Rita Bitácora', tel: '987111000' }, estado: 'confirmada' }, adm)).j;
 await call('PATCH', '/citas/' + c.id, { estado: 'en_silla' }, adm);
 await call('PATCH', '/citas/' + c.id, { hora: '11:00' }, adm);
-await call('PUT', '/config', { cfg: { ...pn.cfg, eslogan: 'Nuevo eslogan' }, barberos: pn.barberos, servicios: pn.servicios, usuarios: pn.usuarios }, adm);
+await call('PUT', '/config', { cfg: { ...pn.cfg, eslogan: 'Nuevo eslogan' }, equipo: pn.equipo, servicios: pn.servicios }, adm);
 const pub = await call('POST', '/publico/reservas', { servicioId: pn.servicios[0].id, barberoId: 'b2', fecha: f(4), hora: '12:00', cliente: { nombre: 'Cliente Web', tel: '987222333', ciudad: 'Lima' } });
 await call('POST', `/publico/cita/${pub.j.codigo}/reprogramar`, { fecha: f(5), hora: '15:00' });
 await call('DELETE', '/citas/' + c.id, null, adm);

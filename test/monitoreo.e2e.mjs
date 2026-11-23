@@ -1,5 +1,5 @@
 // Prueba de la Fase 4: contador de bloqueos, monitoreo, avisos y respaldos automáticos.
-// Arranque: wrangler dev --test-scheduled --var RESPALDO_MIN:0 --var ALLOW_PIN:true --var GOOGLE_CLIENT_ID: --var SHALOM_API_KEY:sk_test --var DNI_API_URL:http://127.0.0.1:8798 (+ adminPin 5821)
+// Arranque: wrangler dev --test-scheduled --var RESPALDO_MIN:0 --var ALLOW_PIN:true --var GOOGLE_CLIENT_ID: --var SHALOM_API_KEY:sk_test --var DNI_API_URL:http://127.0.0.1:8798 (+ PIN 5821 del dueño)
 import http from 'node:http';
 const BASE = process.env.BASE || 'http://127.0.0.1:8787';
 const dni = http.createServer((q, r) => { r.end(JSON.stringify({ data: { nombres: 'ANA', apellidoPaterno: 'LUZ', apellidoMaterno: 'MAR' } })) }).listen(8798);
@@ -17,7 +17,7 @@ check('el cron de la madrugada crea el respaldo automático', r.j.length === 1, 
 for (let i = 0; i < 3; i++) await call('GET', '/publico/dni/4427381' + i);
 const f = (await call('POST', '/publico/ficha', {})).j.ficha;
 const pn = (await call('GET', '/panel', null, adm)).j;
-await call('PUT', '/config', { cfg: { ...pn.cfg, dniTopeDia: 5 }, barberos: pn.barberos, servicios: pn.servicios, usuarios: pn.usuarios }, adm);
+await call('PUT', '/config', { cfg: { ...pn.cfg, dniTopeDia: 5 }, equipo: pn.equipo, servicios: pn.servicios }, adm);
 for (let i = 0; i < 13; i++) await call('GET', '/publico/dni/5000000' + (i % 10), null, null, { 'X-Ficha': f });
 r = await call('GET', '/seguridad', null, adm);
 const hoy = Object.keys(r.j.dias).sort().pop(), d = r.j.dias[hoy];

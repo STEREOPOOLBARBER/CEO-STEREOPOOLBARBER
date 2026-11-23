@@ -60,7 +60,7 @@ const DEF_CFG={nombre:'Stereo Barber Pool',eslogan:'Barber · Pool · Lima',logo
  waReserva:'💈 *NUEVA RESERVA* — #{codigo}\n\n👤 {cliente}\n📱 {telefono}\n📍 {ciudad}\n✂️ {servicio} — {precio}\n💈 {barbero}\n📅 {fecha} · {hora}\n💸 {pago}\n📝 {nota}\n\n🔎 Estado de la cita: {seguimiento}',
  narrOn:true,narrNombre:'Tío Stereo',narrImg:'',narrAudio:{},splashOn:true,splashImg:'',splashMelt:true,
  narr:{...VOZ.FRASES},
- est:{},adminPin:'1234',bloqueos:[]};
+ est:{},bloqueos:[]};
 const DEF_BARB=()=>[['Jhon','Fades y degradados'],['Brayan','Diseños y freestyle'],['Piero','Cortes clásicos'],['Alexis','Barba y perfilado'],['Renzo','Taper y mullet']].map(([n,e],i)=>({id:'b'+(i+1),nombre:n,esp:e,foto:'',color:COLORES[i],pin:String(i+1).repeat(4),comision:50,dias:[1,2,3,4,5,6],activo:true}));
 const DEF_SERV=()=>[
  {id:'s1',emoji:'✂️',nombre:'Corte clásico',precio:25,desc:'Tijera y máquina, acabado limpio',foto:'',activo:true},
@@ -106,7 +106,7 @@ const API={
   const r=await this.req('POST','/publico/ficha',{turnstile:F.ts||''});if(CONFIG.TURNSTILE_SITEKEY)tsNuevo();F.ficha=r.ficha;F.fichaExp=r.exp;return r.ficha},
  async dni(d,otra){const f=await this.ficha(),r=await fetch(CONFIG.API_URL+'/publico/dni/'+d,{headers:{'X-Ficha':f}}),j=await r.json().catch(()=>({}));
   if(r.status===403&&!otra){F.ficha=null;return this.dni(d,true)}if(!r.ok)throw new Error(j.error||('Error '+r.status));return j},
- async publico(){if(this.remote){const d=await this.req('GET','/publico');d.cfg=mergeCfg(d.cfg);return d}seed();const cs=expirarLocal();const cfg=mergeCfg(lsGet('cfg',{}));delete cfg.adminPin;
+ async publico(){if(this.remote){const d=await this.req('GET','/publico');d.cfg=mergeCfg(d.cfg);return d}seed();const cs=expirarLocal();const cfg=mergeCfg(lsGet('cfg',{}));
   return{cfg,barberos:lsGet('barberos',[]).filter(b=>b.activo!==false).map(({pin,comision,...b})=>b),servicios:lsGet('servicios',[]).filter(s=>s.activo!==false),ocupados:cs.filter(c=>activa(c)).map(c=>({b:c.barberoId,f:c.fecha,h:c.hora}))}},
  async crear(d){if(this.remote)return this.req('POST','/publico/reservas',d);
   const cs=expirarLocal(),cfg=mergeCfg(lsGet('cfg',{})),bs=lsGet('barberos',[]),s=lsGet('servicios',[]).find(x=>x.id===d.servicioId&&x.activo!==false);

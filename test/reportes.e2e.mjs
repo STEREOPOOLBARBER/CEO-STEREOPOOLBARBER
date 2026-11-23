@@ -4,7 +4,7 @@ let ok = 0, bad = 0; const check = (n, c, x = '') => { c ? ok++ : bad++; console
 const call = async (m, p, b, c) => { const r = await fetch(BASE + '/api' + p, { method: m, headers: { ...(b ? { 'Content-Type': 'application/json' } : {}), ...(c ? { Cookie: c } : {}), Origin: BASE }, body: b ? JSON.stringify(b) : undefined }); const t = await r.text(); let j; try { j = JSON.parse(t) } catch { j = t } return { s: r.status, j } };
 const adm = (await (await fetch(BASE + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: BASE }, body: '{"pin":"5821"}' })).headers.get('set-cookie')).split(';')[0];
 const pn = (await call('GET', '/panel', null, adm)).j;
-await call('PUT', '/config', { cfg: { ...pn.cfg, modComision: true }, barberos: pn.barberos.map((b, i) => ({ ...b, comision: i === 0 ? 40 : 50 })), servicios: pn.servicios, usuarios: pn.usuarios }, adm);
+await call('PUT', '/config', { cfg: { ...pn.cfg, modComision: true }, equipo: pn.equipo.map(p => p.atiende ? { ...p, comision: p.id === 'b1' ? 40 : 50 } : p), servicios: pn.servicios }, adm);
 const lima = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date()), dia = new Date(lima + 'T12:00:00Z');
 const add = (f, n) => { const d = new Date(f + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) };
 const esta = add(lima, -((dia.getUTCDay() + 6) % 7)), pasada = add(esta, -7), antes = add(esta, -14);
@@ -36,7 +36,7 @@ await cita(add(pasada, 6), 'b1', 'atendida', 25);
 r = await call('GET', '/reportes/' + pasada, null, adm); check('el guardado no cambia solo (es la foto del lunes)', r.j.ingresos === 140);
 r = await call('POST', `/reportes/${pasada}/rehacer`, {}, adm); check('«rehacer» lo recalcula si corregiste citas', r.j.ingresos === 165);
 // permisos
-await call('PUT', '/config', { cfg: pn.cfg, barberos: pn.barberos.map(b => b.id === 'b1' ? { ...b, pin: '7391' } : b), servicios: pn.servicios, usuarios: pn.usuarios }, adm);
+await call('PUT', '/config', { cfg: pn.cfg, equipo: pn.equipo.map(b => b.id === 'b1' ? { ...b, pin: '7391' } : b), servicios: pn.servicios }, adm);
 const bar = (await (await fetch(BASE + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: BASE }, body: '{"pin":"7391"}' })).headers.get('set-cookie')).split(';')[0];
 check('un barbero no ve el reporte de toda la barbería', (await call('GET', '/reportes/' + pasada, null, bar)).s === 403);
 check('sin sesión → 401', (await call('GET', '/reportes')).s === 401);

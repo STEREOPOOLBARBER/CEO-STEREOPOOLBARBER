@@ -69,7 +69,7 @@ check('cron: «cita confirmada» al validar el Yape de una reserva web', nuevos.
 const ya = recibidos.length; await fetch(BASE + '/__scheduled?cron=*/5+*+*+*+*');
 check('el cron no envía dos veces lo mismo', recibidos.length === ya, `${recibidos.length - ya} de más`);
 // permisos y desconexión
-await call('PUT', '/config', { cfg: pn.cfg, barberos: pn.barberos.map(b => b.id === 'b1' ? { ...b, pin: '7391' } : b), servicios: pn.servicios, usuarios: pn.usuarios }, adm);
+await call('PUT', '/config', { cfg: pn.cfg, equipo: pn.equipo.map(b => b.id === 'b1' ? { ...b, pin: '7391' } : b), servicios: pn.servicios }, adm);
 const bar = (await call('POST', '/auth/login', { pin: '7391' })).cookie;
 check('un barbero no ve la configuración de WhatsApp', (await call('GET', '/whatsapp/config', null, bar)).s === 403);
 check('ni puede enviar a citas de otro barbero', (await call('POST', '/whatsapp/enviar', { id: c3.id }, bar)).s === 403);

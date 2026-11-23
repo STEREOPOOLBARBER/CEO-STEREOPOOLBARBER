@@ -1,5 +1,5 @@
 import { b64uEnc, verificarAfirmacion, verificarAtestacion } from '../webauthn.js';
-import { ALLP, COOKIE, COOKIE_P, ROL_BARBERO, SES_MS, VIEJA, codigo, fail, json, norm, rnd, sha256, str, uid } from '../comun.js';
+import { ALLP, COOKIE, COOKIE_P, SES_MS, VIEJA, codigo, fail, json, norm, rnd, sha256, str, uid } from '../comun.js';
 import { datos } from '../datos.js';
 import { ipDe, limitar } from './seguridad.js';
 
@@ -12,49 +12,32 @@ export const setCookie = (val, maxAge, n = COOKIE) => `${n}=${val}; Path=/; Http
 export const pinValido = p => /^\d{4,6}$/.test(p);
 // El PIN está apagado: el acceso es solo con Google. Solo se enciende con ALLOW_PIN=true (pruebas locales).
 export const pinPermitido = env => env.ALLOW_PIN === 'true';
+/* ---------- quién es quién: todo sale del EQUIPO (worker/datos.js) ----------
+   Sujeto de acceso = 'p_' + id de la persona. Solo existe si la persona está activa. */
+export const esDuenoEmail = (email, env) => (env.OWNER_EMAILS || '').split(/[,\s;]+/).map(norm).filter(Boolean).includes(norm(email));
+export const personaDe = (d, id) => d.equipo.find(p => p.id === id && p.activo !== false) || null;
+export const identDe = p => p ? { rol: p.rol, nombre: p.nombre, sujeto: 'p_' + p.id, pid: p.id, barberoId: p.atiende ? p.id : '' } : null;
+export function porSujeto(sujeto, d) { const m = /^p_([\w-]{1,40})$/.exec(String(sujeto || '')); return m ? identDe(personaDe(d, m[1])) : null }
+/* Lo que abre un correo de Google: el del dueño (Cloudflare, OWNER_EMAILS) abre todo el equipo; el de una persona, solo su perfil. */
 export function porEmail(email, d, env) {
   const e = norm(email); if (!e) return null;
-  if ((env.OWNER_EMAILS || '').split(/[,\s;]+/).map(norm).filter(Boolean).includes(e)) return { rol: 'dueno', nombre: 'Dueño' };
-  const u = d.usuarios.find(x => norm(x.email) === e && x.activo !== false);
-  if (u) return { rol: u.rol, uid: u.id, nombre: u.nombre, barberoId: u.barberoId || '' };
-  const b = d.barberos.find(x => norm(x.email) === e && x.activo !== false);
-  if (b) return { rol: 'barbero', barberoId: b.id, nombre: b.nombre };
-  return null;
+  const p = d.equipo.find(x => x.activo !== false && norm(x.email) === e), dueno = esDuenoEmail(e, env);
+  return dueno || p ? { dueno, propio: p ? 'p_' + p.id : '' } : null;
 }
-
-export function porPin(pin, d) {
-  if (pin === d.cfg.adminPin) return { ident: { rol: 'dueno', nombre: 'Dueño' }, ref: 'admin' };
-  const u = d.usuarios.find(x => x.pin === pin && x.activo !== false);
-  if (u) return { ident: { rol: u.rol, uid: u.id, nombre: u.nombre, barberoId: u.barberoId || '' }, ref: 'u:' + u.id };
-  const b = d.barberos.find(x => x.pin === pin && x.activo !== false);
-  if (b) return { ident: { rol: 'barbero', barberoId: b.id, nombre: b.nombre }, ref: 'b:' + b.id };
-  return null;
-}
-export function pinDeRef(ref, d) {
-  if (ref === 'admin') return d.cfg.adminPin;
-  const [t, id] = ref.split(':'); const x = (t === 'u' ? d.usuarios : d.barberos).find(y => y.id === id && y.activo !== false);
-  return x?.pin;
-}
-export function permisos(id, d) {
-  if (id.rol === 'dueno' || id.rol === 'admin') return { ...ALLP };
-  if (id.uid) { const u = d.usuarios.find(x => x.id === id.uid); return u ? { ...(u.permisos || {}) } : null }
-  if (id.rol === 'barbero') return { ...ROL_BARBERO, ...(d.cfg.permBarbero || {}) };
-  return {};
-}
-/* ----- clave y huella de barberos / personal ----- */
-// "sujeto" = b_<id del barbero> o u_<id del usuario>; solo existe si está activo en la configuración.
-export function porSujeto(sujeto, d) {
-  const s = String(sujeto || ''), tipo = s[0], id = s.slice(2);
-  if (s === 'admin') return { rol: 'dueno', nombre: 'Dueño', sujeto: 'admin' };
-  if (tipo === 'b') { const b = d.barberos.find(x => x.id === id && x.activo !== false); return b ? { rol: 'barbero', barberoId: b.id, nombre: b.nombre, sujeto: s } : null }
-  if (tipo === 'u') { const u = d.usuarios.find(x => x.id === id && x.activo !== false); return u ? { rol: u.rol, uid: u.id, nombre: u.nombre, barberoId: u.barberoId || '', sujeto: s } : null }
-  return null;
-}
+// PIN: solo pruebas locales (ALLOW_PIN=true). En producción no existe.
+export function porPin(pin, d) { const p = d.equipo.find(x => x.pin === pin && x.activo !== false); return p ? { ident: identDe(p), ref: p.id } : null }
+export const pinDeRef = (ref, d) => personaDe(d, ref)?.pin;
+export function permisos(id, d) { const p = personaDe(d, id.pid); return !p ? null : p.rol === 'dueno' ? { ...ALLP } : { ...(p.permisos || {}) } }
 export async function hashClave(clave, salt) {
   const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(clave), 'PBKDF2', false, ['deriveBits']);
   return b64uEnc(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: new TextEncoder().encode(salt), iterations: 100000 }, k, 256));
 }
 export const igualTxt = (a, b) => { if (a.length !== b.length) return false; let r = 0; for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i); return r === 0 };
+/* Clave personal (guía NIST): mínimo 6, máximo 64, sin las muy fáciles. Cada persona tiene la suya; nunca se muestra ni se guarda a la vista. */
+export function validarClave(clave) {
+  if (clave.length < 6 || clave.length > 64) fail(400, 'La clave debe tener entre 6 y 64 caracteres');
+  if (/^(.)\1+$/.test(clave) || /^(0123456789|1234567890|9876543210)/.test(clave) || CLAVES_FLOJAS.includes(clave.toLowerCase())) fail(400, 'Esa clave es muy fácil de adivinar. Usa otra.');
+}
 export const CLAVES_FLOJAS = ['123456', '1234567', '12345678', '123456789', '654321', '111111', '000000', 'abcdef', 'qwerty', 'password', 'contraseña', 'barberia', 'stereo'];
 export async function nuevoReto(env, tipo, sujeto) {
   const c = rnd(32);
@@ -72,28 +55,30 @@ export async function sesion(req, env, d) {
   if (!r || r.exp < Date.now()) return null;
   const s = JSON.parse(r.data);
   let ident = null;
-  if (s.via === 'google') ident = porEmail(s.email, d, env);
-  else if (s.via === 'clave') { const c = await env.DB.prepare('SELECT v FROM claves WHERE sujeto = ?').bind(s.sujeto).first(); if ((c ? c.v : 0) === s.cv && (c || s.sujeto === 'admin')) ident = porSujeto(s.sujeto, d) }
+  if (s.via === 'clave') { const c = await env.DB.prepare('SELECT v FROM claves WHERE sujeto = ?').bind(s.sujeto).first(); if (c && c.v === s.cv) ident = porSujeto(s.sujeto, d) }
   else if (s.via === 'huella') { const h = await env.DB.prepare('SELECT 1 AS x FROM passkeys WHERE id = ? AND sujeto = ?').bind(s.cid, s.sujeto).first(); if (h) ident = porSujeto(s.sujeto, d) }
-  else if (s.via === 'pin' && pinPermitido(env)) { const p = pinDeRef(s.ref, d); if (p && await sha256(p) === s.pinH) ident = s.ident }
+  else if (s.via === 'pin' && pinPermitido(env)) { const p = pinDeRef(s.ref, d); if (p && await sha256(p) === s.pinH) ident = porSujeto('p_' + s.ref, d) }
   if (!ident) return null;
   const perm = permisos(ident, d); if (!perm) return null;
-  return { ...ident, email: s.email, perm };
+  return { ...ident, perm };
 }
 /* ----- puerta: el dispositivo entra con Google y recién ahí se elige el perfil ----- */
 export const exigePuerta = env => !!env.GOOGLE_CLIENT_ID;
-export const sujetoDeEmail = (email, d) => { const e = norm(email), u = d.usuarios.find(x => norm(x.email) === e && x.activo !== false), b = d.barberos.find(x => norm(x.email) === e && x.activo !== false); return u ? 'u_' + u.id : b ? 'b_' + b.id : '' };
+/* La «puerta» del aparato: se abre con Google (o con la invitación de huella) y dice qué perfiles se pueden elegir. */
 export async function puerta(req, env, d) {
   const t = cookieDe(req, COOKIE_P); if (!t) return null;
   const r = await env.DB.prepare('SELECT data, exp FROM sesiones WHERE id = ?').bind(await sha256(t)).first();
   if (!r || r.exp < Date.now()) return null;
   const g = JSON.parse(r.data); if (g.via !== 'puerta') return null;
-  if (g.email) { const i = porEmail(g.email, d, env); return i ? { email: g.email, dueno: i.rol === 'dueno', propio: sujetoDeEmail(g.email, d) } : null }
+  if (g.email) { const i = porEmail(g.email, d, env); return i ? { email: g.email, ...i } : null }
   return g.sujeto && porSujeto(g.sujeto, d) ? { dueno: false, propio: g.sujeto } : null;
 }
+/* Regla única: el aparato que abrió el dueño puede elegir a cualquiera del equipo; el de una persona, solo a ella. */
 export const permitido = (g, sujeto) => g.dueno || sujeto === g.propio;
+/* Crear la primera clave sin la ayuda del dueño: solo uno mismo (su Google abrió el aparato) o el dueño para su propio perfil. */
+export const puedeCrearClave = (g, sujeto, d) => !!g && (sujeto === g.propio || (g.dueno && porSujeto(sujeto, d)?.rol === 'dueno'));
 export async function exigirPuerta(req, env, d, sujeto) {
-  if (!exigePuerta(env)) return null;
+  if (!exigePuerta(env)) return { dueno: true, propio: '' };
   const g = await puerta(req, env, d);
   if (!g || (sujeto !== undefined && !permitido(g, sujeto))) fail(403, 'Primero entra con Google en este dispositivo');
   return g;
@@ -161,30 +146,15 @@ export async function rutasAuth(c) {
     const n = await env.DB.prepare('SELECT (SELECT COUNT(*) FROM passkeys) AS h, (SELECT COUNT(*) FROM claves) AS c').first();
     return json({ google: env.GOOGLE_CLIENT_ID || '', pin: pinPermitido(env), huella: n.h > 0, clave: n.c > 0, puerta: exigePuerta(env) });
   }
-  // Nombres de quienes tienen clave (para elegir quién eres en la pantalla de ingreso).
-  if (path === '/auth/personal' && m === 'GET') {
-    const d = await datos(env); await exigirPuerta(req, env, d);
-    const r = await env.DB.prepare('SELECT sujeto FROM claves').all();
-    return json(r.results.map(x => porSujeto(x.sujeto, d)).filter(Boolean).map(i => ({ sujeto: i.sujeto, nombre: i.nombre })));
-  }
-  // Perfiles que puede elegir este dispositivo (solo si ya entró con Google).
+  // «¿Quién eres?»: las personas del equipo que este aparato puede elegir (solo después de Google).
   if (path === '/auth/perfiles' && m === 'GET') {
-    const d = await datos(env), g = exigePuerta(env) ? await puerta(req, env, d) : { dueno: true };
+    const d = await datos(env), g = exigePuerta(env) ? await puerta(req, env, d) : { dueno: true, propio: '' };
     if (!g) return json({ puerta: false });
     const [c, h] = await Promise.all([env.DB.prepare('SELECT sujeto FROM claves').all(), env.DB.prepare('SELECT sujeto FROM passkeys').all()]);
     const tc = new Set(c.results.map(x => x.sujeto)), th = new Set(h.results.map(x => x.sujeto));
-    const fila = (sujeto, nombre, rol, foto, color) => ({ sujeto, nombre, rol, foto: foto || '', color: color || '', clave: tc.has(sujeto) || (sujeto === 'admin'), huella: th.has(sujeto) });
-    const l = [...(g.dueno && exigePuerta(env) ? [fila('admin', 'Dueño', 'dueno')] : []), ...d.barberos.filter(b => b.activo !== false).map(b => fila('b_' + b.id, b.nombre, 'barbero', b.foto, b.color)), ...d.usuarios.filter(u => u.activo !== false).map(u => fila('u_' + u.id, u.nombre, u.rol))].filter(x => permitido(g, x.sujeto));
-    return json({ puerta: true, email: g.email || '', perfiles: l.map(x => ({ ...x, directo: !g.dueno && !x.clave && !x.huella && !!g.email })) });
-  }
-  // Quien entró con su propio correo de Google y no tiene clave ni huella entra directo.
-  if (path === '/auth/perfil/directo' && m === 'POST') {
-    const d = await datos(env), sujeto = str((await body()).sujeto, 60), g = await exigirPuerta(req, env, d, sujeto);
-    const ident = porSujeto(sujeto, d), k = await env.DB.prepare('SELECT (SELECT COUNT(*) FROM claves WHERE sujeto = ?1) + (SELECT COUNT(*) FROM passkeys WHERE sujeto = ?1) AS n').bind(sujeto).first();
-    if (!g || !g.email || g.dueno || !ident || k.n > 0) fail(403, 'Este perfil necesita clave o huella');
-    await anotar(env, 'google', ident.nombre, true, ident.rol, req);
-    await cerrarPrevia(req, env);
-    return json(ident, 200, { 'Set-Cookie': await abrirSesion(env, { via: 'google', email: g.email }) });
+    const perfiles = d.equipo.filter(p => p.activo !== false).map(p => ({ sujeto: 'p_' + p.id, nombre: p.nombre, rol: p.rol, foto: p.foto || '', color: p.color || '' })).filter(x => permitido(g, x.sujeto))
+      .map(x => ({ ...x, clave: tc.has(x.sujeto), huella: th.has(x.sujeto), crear: !tc.has(x.sujeto) && puedeCrearClave(g, x.sujeto, d) }));
+    return json({ puerta: true, email: g.email || '', perfiles });
   }
   if (path === '/auth/puerta/salir' && m === 'POST') {
     const t = cookieDe(req, COOKIE_P); if (t) await env.DB.prepare('DELETE FROM sesiones WHERE id = ?').bind(await sha256(t)).run();
@@ -196,12 +166,23 @@ export async function rutasAuth(c) {
     await limitar(env, 'ks:' + sujeto, 6, 15 * 60e3);
     const d = await datos(env); await exigirPuerta(req, env, d, sujeto);
     const ident = porSujeto(sujeto, d), row = ident && await env.DB.prepare('SELECT * FROM claves WHERE sujeto = ?').bind(sujeto).first();
-    // Mientras el dueño no cambie su clave, la de arranque es 1111 (solo se acepta tras entrar con Google).
-    const ok = row ? igualTxt(await hashClave(clave, row.salt), row.hash) : sujeto === 'admin' && exigePuerta(env) && igualTxt(clave, '1111');
-    if (!ident || !ok) { await anotar(env, 'clave', ident?.nombre || sujeto, false, 'clave incorrecta', req); fail(403, 'Clave incorrecta') }
+    if (!row || !igualTxt(await hashClave(clave, row.salt), row.hash)) { await anotar(env, 'clave', ident?.nombre || sujeto, false, 'clave incorrecta', req); fail(403, 'Clave incorrecta') }
     await cerrarPrevia(req, env);
-    const cookie = await abrirSesion(env, { via: 'clave', sujeto, cv: row ? row.v : 0 });
+    const cookie = await abrirSesion(env, { via: 'clave', sujeto, cv: row.v });
     await anotar(env, 'clave', ident.nombre, true, ident.rol, req);
+    return json(ident, 200, { 'Set-Cookie': cookie });
+  }
+  // Primera clave: la crea la misma persona (su Google abrió este aparato) o el dueño para su propio perfil. Nunca hay clave de arranque.
+  if (path === '/auth/clave/crear' && m === 'POST') {
+    await limitar(env, 'k:' + ipDe(req), 30, 15 * 60e3);
+    const b = await body(), sujeto = str(b.sujeto, 60), clave = String(b.clave || ''), d = await datos(env), g = await exigirPuerta(req, env, d, sujeto), ident = porSujeto(sujeto, d);
+    if (!ident || !puedeCrearClave(g, sujeto, d)) fail(403, 'Pide al dueño que te dé una clave');
+    validarClave(clave);
+    const salt = rnd(16), r = await env.DB.prepare('INSERT OR IGNORE INTO claves(sujeto, salt, hash, v, upd) VALUES(?, ?, ?, 1, ?)').bind(sujeto, salt, await hashClave(clave, salt), Date.now()).run();
+    if (!r.meta.changes) fail(409, 'Ya tienes una clave: entra con ella');
+    await cerrarPrevia(req, env);
+    const cookie = await abrirSesion(env, { via: 'clave', sujeto, cv: 1 });
+    await anotar(env, 'clave', ident.nombre, true, 'creó su clave', req);
     return json(ident, 200, { 'Set-Cookie': cookie });
   }
   if (path === '/auth/huella/reto' && m === 'GET') {
@@ -256,7 +237,7 @@ export async function rutasAuth(c) {
     catch (e) { await anotar(env, 'google', '', false, e.message, req); throw e }
     if (!await gastarNonce(env, g.nonce)) { await anotar(env, 'google', g.email, false, 'nonce inválido o repetido', req); fail(400, 'La verificación venció. Recarga la página e inténtalo otra vez.') }
     const d = await datos(env), ident = porEmail(g.email, d, env);
-    if (!ident) { await anotar(env, 'google', g.email, false, 'correo no autorizado', req); fail(403, `El correo ${norm(g.email)} no está autorizado. Pide al dueño que lo agregue en ⚙️ Config.`) }
+    if (!ident) { await anotar(env, 'google', g.email, false, 'correo no autorizado', req); fail(403, `El correo ${norm(g.email)} no está autorizado. Pide al dueño que lo agregue en ⚙️ Config → Equipo.`) }
     const cookie = await abrirPuerta(env, { email: norm(g.email) });
     await anotar(env, 'google', g.email, true, 'dispositivo autorizado', req);
     return json({ puerta: true, email: norm(g.email) }, 200, { 'Set-Cookie': cookie });
@@ -288,20 +269,21 @@ export async function rutasAcceso(c) {
     const [c, h] = await Promise.all([env.DB.prepare('SELECT sujeto FROM claves').all(), env.DB.prepare('SELECT id, sujeto, etiqueta, creada FROM passkeys ORDER BY creada').all()]);
     return json({ claves: c.results.map(x => x.sujeto), huellas: h.results });
   }
-  if ((x = path.match(/^\/acceso\/(admin|[bu]_[\w-]+)\/clave$/)) && (m === 'PUT' || m === 'DELETE')) {
+  if ((x = path.match(/^\/acceso\/(p_[\w-]+)\/clave$/)) && (m === 'PUT' || m === 'DELETE')) {
     exigir('config'); const ident = porSujeto(x[1], d); if (!ident) fail(404, 'Esa persona todavía no existe: toca «Guardar configuración» primero.');
+    if (ident.rol === 'dueno' && s.rol !== 'dueno') fail(403, 'Solo el dueño puede cambiar la clave de un dueño');
     if (m === 'DELETE') { await env.DB.prepare('DELETE FROM claves WHERE sujeto = ?').bind(x[1]).run(); await anotar(env, 'clave', ident.nombre, true, 'clave quitada por ' + s.nombre, req); return json({ ok: true }) }
     const clave = String((await body()).clave || '');
-    const minimo = x[1] === 'admin' ? 4 : 6; if (clave.length < minimo || clave.length > 64) fail(400, `La clave debe tener entre ${minimo} y 64 caracteres`);
-    if (/^(.)\1+$/.test(clave) || CLAVES_FLOJAS.includes(clave.toLowerCase())) fail(400, 'Esa clave es muy fácil de adivinar. Usa otra.');
+    validarClave(clave);
     const salt = rnd(16);
     await env.DB.prepare('INSERT INTO claves(sujeto, salt, hash, v, upd) VALUES(?, ?, ?, 1, ?) ON CONFLICT(sujeto) DO UPDATE SET salt = excluded.salt, hash = excluded.hash, v = claves.v + 1, upd = excluded.upd').bind(x[1], salt, await hashClave(clave, salt), Date.now()).run();
     await anotar(env, 'clave', ident.nombre, true, 'clave cambiada por ' + s.nombre, req);
     await auditar(env, quienEs(s), 'Cambió clave', ident.nombre);
     return json({ ok: true });
   }
-  if ((x = path.match(/^\/acceso\/(admin|[bu]_[\w-]+)\/invitacion$/)) && m === 'POST') {
+  if ((x = path.match(/^\/acceso\/(p_[\w-]+)\/invitacion$/)) && m === 'POST') {
     exigir('config'); const ident = porSujeto(x[1], d); if (!ident) fail(404, 'Esa persona todavía no existe: toca «Guardar configuración» primero.');
+    if (ident.rol === 'dueno' && s.rol !== 'dueno') fail(403, 'Solo el dueño puede activar la huella de un dueño');
     await auditar(env, quienEs(s), 'Invitó a activar huella', ident.nombre);
     const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM passkeys WHERE sujeto = ?').bind(x[1]).first(); if (n.n >= 5) fail(409, 'Ya tiene 5 dispositivos. Quita alguno primero.');
     const codigo = codigoInv(), vence = Date.now() + 864e5;

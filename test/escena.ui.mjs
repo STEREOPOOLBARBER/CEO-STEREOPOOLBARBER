@@ -23,7 +23,7 @@ const wav = n => { const b = Buffer.alloc(44 + n * 2); b.write('RIFF', 0); b.wri
 const DUR = { hola: 10, hora: 13, f_manana: 16, 'h_09:00': 19, estado_confirmada: 22 }, narrAudio = {};
 for (const [k, cs] of Object.entries(DUR)) narrAudio[k] = (await api('POST', '/audio', { data: wav(cs * 160) })).key;
 const pn = await api('GET', '/panel');
-const ponerCfg = extra => api('PUT', '/config', { cfg: { ...pn.cfg, narrAudio, resenaUrl: 'https://g.page/r/barberia-prueba/review', ...extra }, barberos: pn.barberos, servicios: pn.servicios, usuarios: pn.usuarios });
+const ponerCfg = extra => api('PUT', '/config', { cfg: { ...pn.cfg, narrAudio, resenaUrl: 'https://g.page/r/barberia-prueba/review', ...extra }, equipo: pn.equipo, servicios: pn.servicios });
 await ponerCfg({});
 const lima = d => new Date(Date.now() - 5 * 3600e3 + d * 864e5).toISOString().slice(0, 10), man = lima(1);
 const sonidos = p => p.evaluate(() => window.__sonidos);

@@ -1,5 +1,5 @@
 // Prueba de pantalla: la campana muestra las notificaciones de la barbería.
-// Requiere wrangler dev en localhost:8787 con --var ALLOW_PIN:true --var GOOGLE_CLIENT_ID: y adminPin 5821 sembrado.
+// Requiere wrangler dev en localhost:8787 con --var ALLOW_PIN:true --var GOOGLE_CLIENT_ID: y el PIN 5821 del dueño sembrado.
 import { createRequire } from 'node:module';
 const { chromium } = createRequire(import.meta.url)(process.env.PW_PATH || 'playwright');
 const B = process.env.BASE || 'http://localhost:8787';
@@ -8,7 +8,7 @@ const call = async (m, p, b, c) => { const r = await fetch(B + '/api' + p, { met
 const lima = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date());
 const dia = n => { const d = new Date(lima + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); if (d.getUTCDay() === 0) d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10) };
 const adm = (await call('POST', '/auth/login', { pin: '5821' })).cookie, pn = (await call('GET', '/panel', null, adm)).j;
-await call('PUT', '/config', { cfg: { ...pn.cfg, yapeNum: '987654321', modAdelanto: true, adelanto: 10, whatsapp: '957292479' }, barberos: pn.barberos, servicios: pn.servicios, usuarios: pn.usuarios }, adm);
+await call('PUT', '/config', { cfg: { ...pn.cfg, yapeNum: '987654321', modAdelanto: true, adelanto: 10, whatsapp: '957292479' }, equipo: pn.equipo, servicios: pn.servicios }, adm);
 const res = (b, f, h, n) => call('POST', '/publico/reservas', { servicioId: pn.servicios[0].id, barberoId: pn.barberos[b].id, fecha: f, hora: h, cliente: { nombre: n, tel: '98765432' + b, ciudad: 'Lima' } });
 await res(0, dia(3), '10:00', 'Ana Yape');
 const r2 = await res(1, dia(4), '11:00', 'Beto Reprog');

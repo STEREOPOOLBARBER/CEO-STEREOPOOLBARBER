@@ -23,7 +23,7 @@ r = await call('GET', '/clientes/987600200/datos', null, adm);
 check('derecho de acceso: descarga todos sus datos', r.s === 200 && /attachment/.test(r.h.get('content-disposition')) && r.j.cliente.nombre === 'Rodrigo Borrame' && r.j.citas.length === 1);
 // derecho de cancelación
 r = await call('POST', '/clientes/987600200/anonimizar', { confirmar: 'si' }, adm); check('anonimizar exige escribir ANONIMIZAR', r.s === 400);
-await call('PUT', '/config', { cfg: pn.cfg, barberos: pn.barberos.map(b => b.id === 'b2' ? { ...b, pin: '7391' } : b), servicios: pn.servicios, usuarios: pn.usuarios }, adm);
+await call('PUT', '/config', { cfg: pn.cfg, equipo: pn.equipo.map(b => b.id === 'b2' ? { ...b, pin: '7391' } : b), servicios: pn.servicios }, adm);
 const bar = (await call('POST', '/auth/login', { pin: '7391' })).cookie;
 r = await call('POST', '/clientes/987600200/anonimizar', { confirmar: 'ANONIMIZAR' }, bar); check('un barbero no puede anonimizar', r.s === 403);
 r = await call('POST', '/clientes/987600200/anonimizar', { confirmar: 'ANONIMIZAR', motivo: 'lo pidió por WhatsApp' }, adm);
@@ -43,7 +43,7 @@ await call('POST', '/citas', { fecha: f(-200), hora: '09:00', barberoId: 'b3', s
 await fetch(BASE + '/__scheduled?cron=*/5+*+*+*+*');
 check('con la retención apagada no se borra nada', (await call('GET', '/clientes/987600300', null, adm)).s === 200);
 const cfg = (await call('GET', '/panel', null, adm)).j;
-await call('PUT', '/config', { cfg: { ...cfg.cfg, retencionMeses: 24, capturasDias: 180 }, barberos: cfg.barberos, servicios: cfg.servicios, usuarios: cfg.usuarios }, adm);
+await call('PUT', '/config', { cfg: { ...cfg.cfg, retencionMeses: 24, capturasDias: 180 }, equipo: cfg.equipo, servicios: cfg.servicios }, adm);
 await fetch(BASE + '/__scheduled?cron=*/5+*+*+*+*');
 check('con retención de 24 meses se anonimiza al cliente inactivo', (await call('GET', '/clientes/987600300', null, adm)).s === 404);
 check('y no toca al cliente reciente', (await call('GET', '/clientes/987600400', null, adm)).s === 200);

@@ -1,5 +1,5 @@
 // Prueba de pantalla: pegar la agenda de WhatsApp y crear todas las citas.
-// Requiere wrangler dev en localhost:8787 con --var ALLOW_PIN:true --var GOOGLE_CLIENT_ID: y adminPin 5821 sembrado.
+// Requiere wrangler dev en localhost:8787 con --var ALLOW_PIN:true --var GOOGLE_CLIENT_ID: y el PIN 5821 del dueño sembrado.
 import { createRequire } from 'node:module';
 const { chromium } = createRequire(import.meta.url)(process.env.PW_PATH || 'playwright');
 const BASE = process.env.BASE || 'http://localhost:8787';

@@ -1,19 +1,14 @@
 import { actualizarCliente, cursorDe, leerCursor, rehacerClientes, telDe } from './clientes.js';
-import { addD, ahoraLocal, codigo, fail, json, uid } from '../comun.js';
+import { PERMS, ROLES, addD, ahoraLocal, codigo, fail, json, norm, str, uid } from '../comun.js';
 import { bumpStmt, citaPorId, datos, expirar, filaCita, guardarCita, insertarCita, kvStmt, leerKV } from '../datos.js';
-import { auditar, pinPermitido, quienEs } from './auth.js';
+import { auditar, identDe, personaDe, pinPermitido, quienEs } from './auth.js';
 import { filtrosCitas, MONTO, ordenCitas } from './filtros.js';
 
 /* ---------- vistas según permisos ---------- */
-export function vistaPanel(d, citas, s) {
-  const cfg = { ...d.cfg }, esConfig = s.perm.config;
-  let barberos = d.barberos, usuarios = d.usuarios;
-  if (!esConfig) {
-    delete cfg.adminPin;
-    barberos = barberos.map(({ pin, email, ...b }) => b);
-    usuarios = usuarios.filter(u => u.id === s.uid).map(({ pin, email, ...u }) => u);
-  }
-  return { cfg, barberos, servicios: d.servicios, usuarios, citas: enmascarar(s, citas) };
+// El equipo completo (con correos) solo lo ve quien configura; el PIN solo existe en pruebas locales.
+export function vistaPanel(d, citas, s, env) {
+  const sinPin = p => { if (pinPermitido(env)) return p; const { pin, ...x } = p; return x };
+  return { cfg: d.cfg, barberos: d.barberos.map(({ pin, email, ...b }) => s.perm.config ? { ...b, email } : b), servicios: d.servicios, equipo: s.perm.config ? d.equipo.map(sinPin) : [], yo: { ...identDe(personaDe(d, s.pid)), perm: s.perm }, citas: enmascarar(s, citas) };
 }
 // Lo que cada persona puede ver de las citas: solo las suyas si no ve todas, y el teléfono oculto si no tiene permiso.
 export function enmascarar(s, citas) {
@@ -80,7 +75,7 @@ export async function rutasCitas(c) {
       env.DB.prepare(`SELECT MIN(fecha) AS f FROM citas WHERE 1 = 1${sb}`).bind(...ab).first(),
     ]);
     const vis = await visitasPorCliente(env, s, r.results.map(x => x.tel)), wa = (await leerKV(env, ['whatsappApi'])).whatsappApi || {};
-    return json({ ...vistaPanel(d, r.results.map(filaCita), s), v: ver, ventana: { desde, hasta }, visitas: vis, primeraFecha: pri?.f || null, wa: { ok: !!wa.conectado?.ok, diaAntes: !!wa.auto?.diaAntes } });
+    return json({ ...vistaPanel(d, r.results.map(filaCita), s, env), v: ver, ventana: { desde, hasta }, visitas: vis, primeraFecha: pri?.f || null, wa: { ok: !!wa.conectado?.ok, diaAntes: !!wa.auto?.diaAntes } });
   }
   if (path === '/citas/conteo' && m === 'GET') return json(await conteoCitas(env, s, Object.fromEntries(new URL(req.url).searchParams)));
   if (path === '/citas/buscar' && m === 'GET') {
@@ -88,20 +83,20 @@ export async function rutasCitas(c) {
   }
   if (path === '/config' && m === 'PUT') {
     exigir('config'); const b = await body();
-    if (!b.cfg || typeof b.cfg !== 'object' || !Array.isArray(b.barberos) || !Array.isArray(b.servicios)) fail(400, 'Datos no válidos');
-    if (!pinPermitido(env)) { delete b.cfg.adminPin; b.barberos = b.barberos.map(({ pin, ...x }) => x); if (Array.isArray(b.usuarios)) b.usuarios = b.usuarios.map(({ pin, ...x }) => x) }
-    { const ant = d.cfg, cambios = Object.keys({ ...ant, ...b.cfg }).filter(k => k !== 'adminPin' && JSON.stringify(ant[k]) !== JSON.stringify(b.cfg[k]));
-      const lista = (a, z, t) => { const ids = new Set(a.map(x => x.id)), nz = new Set(z.map(x => x.id)); return [...z.filter(x => !ids.has(x.id)).map(x => '+' + t + ' ' + x.nombre), ...a.filter(x => !nz.has(x.id)).map(x => '−' + t + ' ' + x.nombre), ...z.filter(x => ids.has(x.id) && JSON.stringify(a.find(y => y.id === x.id)) !== JSON.stringify(x)).map(x => '✎' + t + ' ' + x.nombre)] };
-      const det = [cambios.length ? 'config: ' + cambios.join(', ') : '', ...lista(d.barberos, b.barberos, 'barbero'), ...lista(d.servicios, b.servicios, 'servicio'), ...(Array.isArray(b.usuarios) ? lista(d.usuarios, b.usuarios, 'usuario') : [])].filter(Boolean).join(' · ');
+    if (!b.cfg || typeof b.cfg !== 'object' || !Array.isArray(b.equipo) || !Array.isArray(b.servicios)) fail(400, 'Datos no válidos');
+    const equipo = validarEquipo(b.equipo, d.equipo, s, env), { adminPin, permBarbero, ...cfg } = b.cfg;
+    { const cambios = Object.keys({ ...d.cfg, ...cfg }).filter(k => JSON.stringify(d.cfg[k]) !== JSON.stringify(cfg[k]));
+      const lista = (a, z, t) => { const ids = new Set(a.map(x => x.id)), nz = new Set(z.map(x => x.id)); return [...z.filter(x => !ids.has(x.id)).map(x => '+' + t + ' ' + x.nombre), ...a.filter(x => !nz.has(x.id)).map(x => '−' + t + ' ' + x.nombre), ...z.filter(x => ids.has(x.id) && JSON.stringify(x) !== JSON.stringify(a.find(y => y.id === x.id))).map(x => '✎' + t + ' ' + x.nombre)] };
+      const det = [cambios.length ? 'config: ' + cambios.join(', ') : '', ...lista(d.equipo, equipo, 'persona'), ...lista(d.servicios, b.servicios, 'servicio')].filter(Boolean).join(' · ');
       if (det) await auditar(env, quienEs(s), 'Configuración', '', det) }
-    await env.DB.batch([kvStmt(env, 'cfg', b.cfg), kvStmt(env, 'barberos', b.barberos), kvStmt(env, 'servicios', b.servicios), ...(Array.isArray(b.usuarios) ? [kvStmt(env, 'usuarios', b.usuarios)] : []), bumpStmt(env)]);
+    await env.DB.batch([kvStmt(env, 'cfg', cfg), kvStmt(env, 'equipo', equipo), kvStmt(env, 'servicios', b.servicios), bumpStmt(env)]);
     return json({ ok: true });
   }
   if (path === '/citas' && m === 'POST') {
     exigir('crear'); const b = await body();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(b.fecha || '')) fail(400, 'Fecha no válida');
     const { id, codigo: _c, creada, ...resto } = b;
-    const c = { ...resto, id: uid(), codigo: codigo(), creada: Date.now(), estado: b.estado || 'confirmada', creadoPor: s.uid || s.barberoId || 'dueno' };
+    const c = { ...resto, id: uid(), codigo: codigo(), creada: Date.now(), estado: b.estado || 'confirmada', creadoPor: s.pid };
     if (!s.perm.verTodas) c.barberoId = s.barberoId;
     const nueva = await insertarCita(env, c);
     await auditar(env, quienEs(s), 'Creó cita', c.codigo, `${c.cliente?.nombre || ''} · ${c.fecha} ${c.hora} · ${c.estado}`);
@@ -139,4 +134,25 @@ export async function rutasCitas(c) {
     if (n || u) await rehacerClientes(env);
     return json({ n, u, err });
   }
+}
+
+/* El equipo que manda el panel: se limpia y se valida en el servidor (la única verdad de quién entra y qué puede hacer). */
+export function validarEquipo(lista, anterior, s, env) {
+  const ids = new Set(), correos = new Set(), dia = n => Number.isInteger(n) && n >= 0 && n <= 6;
+  const equipo = lista.map(p => {
+    const id = str(p?.id, 40), rol = ROLES.includes(p?.rol) ? p.rol : 'personal', email = norm(p?.email || '');
+    if (!/^[\w-]{1,40}$/.test(id) || ids.has(id)) fail(400, 'Hay una persona repetida o sin identificación');
+    if (!str(p.nombre, 60)) fail(400, 'Cada persona necesita un nombre');
+    if (email && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || correos.has(email))) fail(400, `El correo ${email} no es válido o ya lo usa otra persona`);
+    ids.add(id); if (email) correos.add(email);
+    const x = { id, nombre: str(p.nombre, 60), rol, permisos: Object.fromEntries(PERMS.map(k => [k, rol !== 'dueno' && !!p.permisos?.[k]])), atiende: !!p.atiende, activo: p.activo !== false, email,
+      foto: /^f_[\w-]+$/.test(p.foto || '') ? p.foto : '', color: /^#[0-9a-f]{6}$/i.test(p.color || '') ? p.color : '', esp: str(p.esp, 80), dias: Array.isArray(p.dias) ? p.dias.filter(dia) : [], comision: Math.min(100, Math.max(0, +p.comision || 0)) };
+    if (pinPermitido(env) && /^\d{4,6}$/.test(p.pin || '')) x.pin = p.pin;
+    return x;
+  });
+  // Solo un dueño toca a los dueños (agregar, quitar o cambiar), y siempre queda al menos uno activo.
+  const duenos = l => JSON.stringify(l.filter(p => p.rol === 'dueno').map(({ pin, ...p }) => p));
+  if (s.rol !== 'dueno' && duenos(anterior) !== duenos(equipo)) fail(403, 'Solo el dueño puede cambiar a los dueños');
+  if (!equipo.some(p => p.rol === 'dueno' && p.activo)) fail(400, 'Debe quedar al menos un dueño activo');
+  return equipo;
 }

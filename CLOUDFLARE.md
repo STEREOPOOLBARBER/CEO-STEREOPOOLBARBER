@@ -169,3 +169,11 @@ La estructura de la base de datos ahora es **versionada** (`MIGRACIONES` en `wor
 - **Estado de la cita:** el Tío Stereo dice el estado con la fecha y hora. Antes de la cita sale un **QR**: en el panel, el **📷** junto al buscador lo lee y abre la cita.
 - **Ya atendido:** el cliente ve su **antes y después**, **califica en anónimo** (estrellas, etiquetas, comentario) y ve el botón de **reseña en Google** (pega tu link en ⚙️ Config → 📝 Formulario). Ves el resultado en ☰ Menú → **⭐ Calificaciones** (cada barbero aparece al juntar 3).
 - En Cloudflare no hay nada que hacer (la base de datos se actualiza sola).
+
+### Equipo y entrada al panel (una sola regla)
+- ⚙️ Config → **👥 Equipo**: una sola lista de personas (antes «Barberos» y «Usuarios» por separado). Cada una con su rol, sus permisos, **«✂️ Atiende clientes»** (sale en la agenda, el formulario y la caja), su correo de Google y su acceso (clave o huella).
+- **Para entrar, todos igual:** primero **Google**; después, en «¿Quién eres?», cada persona con **su propia clave** o su huella.
+- **Dueño:** ya no existe la clave 1111. La primera vez, en «¿Quién eres?» → Dueño → **crea tu clave**. El perfil Dueño solo aparece en un aparato abierto con tu Google de dueño.
+- **Barbero con su propio celular:** pon su correo en el Equipo; la primera vez él crea su clave. **En la tablet del local:** tú le pones una clave en Equipo → su nombre → Acceso propio.
+- Si alguien aparece repetido (por ejemplo Leandro como barbero y como usuario ligados), se juntó solo al actualizar. Si quedan dos con el mismo nombre sin estar ligados, sale un aviso en el Equipo para que elijas cuál queda.
+- **Importante:** al actualizar se cierran todas las sesiones abiertas (cambió el formato de acceso): todos vuelven a entrar una vez.

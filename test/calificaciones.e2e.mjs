@@ -1,6 +1,6 @@
 // Después del corte: fotos de antes y después en el estado de la cita, calificación anónima (una sola vez,
 // hasta 7 días) y el resumen del panel (solo con 3 o más por barbero). También: la voz solo acepta WAV.
-// Requiere wrangler dev con --var ALLOW_PIN:true --var GOOGLE_CLIENT_ID: y adminPin 5821.
+// Requiere wrangler dev con --var ALLOW_PIN:true --var GOOGLE_CLIENT_ID: y el PIN 5821 del dueño.
 const B = process.env.BASE || 'http://127.0.0.1:8787';
 let ok = 0, bad = 0; const check = (n, c, x = '') => { c ? ok++ : bad++; console.log(`${c ? '✅' : '❌'} ${n} ${c ? '' : x}`) };
 const call = async (m, p, b, c) => { const r = await fetch(B + '/api' + p, { method: m, headers: { ...(b ? { 'Content-Type': 'application/json' } : {}), ...(c ? { Cookie: c } : {}), Origin: B }, body: b ? JSON.stringify(b) : undefined }); const tx = await r.text(); let j; try { j = JSON.parse(tx) } catch { j = tx } return { s: r.status, j, ct: r.headers.get('content-type'), cookie: (r.headers.get('set-cookie') || '').split(';')[0] } };
@@ -49,7 +49,7 @@ check('el resumen general', r.j.general.n === 3 && r.j.general.promedio === 4);
 
 // ---- permisos
 const pn = (await call('GET', '/panel', null, adm)).j;
-await call('PUT', '/config', { cfg: pn.cfg, barberos: pn.barberos.map(b => b.id === 'b1' ? { ...b, pin: '7391' } : b), servicios: pn.servicios, usuarios: pn.usuarios }, adm);
+await call('PUT', '/config', { cfg: pn.cfg, equipo: pn.equipo.map(b => b.id === 'b1' ? { ...b, pin: '7391' } : b), servicios: pn.servicios }, adm);
 const bar = (await call('POST', '/auth/login', { pin: '7391' })).cookie;
 check('el barbero sin permiso de dashboard no ve las calificaciones', (await call('GET', '/calificaciones', null, bar)).s === 403);
 check('sin sesión → 401', (await call('GET', '/calificaciones')).s === 401);

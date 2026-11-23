@@ -68,7 +68,7 @@ const DEF_CFG={nombre:'Stereo Barber Pool',eslogan:'Barber · Pool · Lima',logo
  waReserva:'💈 *NUEVA RESERVA* — #{codigo}\n\n👤 {cliente}\n📱 {telefono}\n📍 {ciudad}\n✂️ {servicio} — {precio}\n💈 {barbero}\n📅 {fecha} · {hora}\n💸 {pago}\n📝 {nota}\n\n🔎 Estado de la cita: {seguimiento}',
  narrOn:true,narrNombre:'Tío Stereo',narrImg:'',narrAudio:{},splashOn:true,splashImg:'',splashMelt:true,resenaUrl:'',
  narr:{...VOZ.FRASES},
- est:{},adminPin:'1234',bloqueos:[]};
+ est:{},bloqueos:[]};
 const DEF_BARB=()=>[['Jhon','Fades y degradados'],['Brayan','Diseños y freestyle'],['Piero','Cortes clásicos'],['Alexis','Barba y perfilado'],['Renzo','Taper y mullet']].map(([n,e],i)=>({id:'b'+(i+1),nombre:n,esp:e,foto:'',color:COLORES[i],pin:String(i+1).repeat(4),comision:50,dias:[1,2,3,4,5,6],activo:true}));
 const DEF_SERV=()=>[
  {id:'s1',emoji:'✂️',nombre:'Corte clásico',precio:25,desc:'Tijera y máquina, acabado limpio',foto:'',activo:true},
@@ -88,7 +88,17 @@ function demoCitas(){const h=hoy(),m=addD(h,1),sv=DEF_SERV(),mk=(f,hr,b,s,nom,te
   mk(h,'16:00','b3',0,'Renzo Castillo Vega','977665544','Comas','confirmada',{adelanto:0,adelantoOk:false,origen:'panel'}),
   mk(m,'10:00','b1',1,'Carlos Ramírez Quispe','987654321','Puente Piedra','confirmada'),
   mk(m,'11:00','b4',3,'Anthony Gutiérrez','921098765','Santa Rosa','por_validar')]}
-function seed(){if(!lsGet('cfg',null))lsSet('cfg',DEF_CFG);if(!lsGet('barberos',null))lsSet('barberos',DEF_BARB());if(!lsGet('servicios',null))lsSet('servicios',DEF_SERV());if(!lsGet('citas',null))lsSet('citas',demoCitas())}
+function seed(){if(!lsGet('cfg',null))lsSet('cfg',DEF_CFG);equipoLocal();if(!lsGet('servicios',null))lsSet('servicios',DEF_SERV());if(!lsGet('citas',null))lsSet('citas',demoCitas())}
+/* ---------- equipo en modo local (demo): el mismo modelo que la nube (worker/datos.js) ---------- */
+const barberoDeP=p=>({id:p.id,nombre:p.nombre,esp:p.esp||'',foto:p.foto||'',color:p.color||'',comision:+p.comision||0,dias:p.dias||[],activo:p.activo!==false,email:p.email||''});
+const identDe=p=>p?{rol:p.rol,nombre:p.nombre,sujeto:'p_'+p.id,pid:p.id,barberoId:p.atiende?p.id:''}:null;
+function equipoDesdeLocal(barberos=[],usuarios=[],cfg={}){const pb={...ROLES.barbero.p,...(cfg.permBarbero||{})};
+ const eq=[{id:'dueno',nombre:'Dueño',rol:'dueno',permisos:{},atiende:false,activo:true,email:'',pin:cfg.adminPin||'1234'}];
+ barberos.forEach(b=>eq.push({...barberoDeP(b),rol:'barbero',permisos:{...pb},atiende:true,pin:b.pin||''}));
+ usuarios.forEach(u=>{const t=u.barberoId&&eq.find(p=>p.atiende&&p.id===u.barberoId);if(t)Object.assign(t,{rol:u.rol,permisos:{...(u.permisos||{})}});else eq.push({id:u.id,nombre:u.nombre,rol:u.rol||'personal',permisos:{...(u.permisos||{})},atiende:false,activo:u.activo!==false,email:u.email||'',pin:u.pin||''})});
+ return eq}
+function guardarEquipoLocal(eq){lsSet('equipo',eq);lsSet('barberos',eq.filter(p=>p.atiende).map(barberoDeP))}
+function equipoLocal(){let eq=lsGet('equipo',null);if(!eq){eq=equipoDesdeLocal(lsGet('barberos',null)||DEF_BARB(),lsGet('usuarios',[]),lsGet('cfg',{}));guardarEquipoLocal(eq);try{localStorage.removeItem('brb_usuarios')}catch(e){}}return eq}
 const mergeCfg=c=>({...DEF_CFG,...c,est:{...(c?.est||{})},narr:{...DEF_CFG.narr,...(c?.narr||{})}});
 
 /* ---------- reglas del negocio ---------- */
@@ -108,9 +118,9 @@ const API={
  async authCfg(){return this.req('GET','/auth/config')},
  async google(credential){return this.req('POST','/auth/google',{credential})},
  async logout(){if(this.remote)await this.req('POST','/auth/logout').catch(()=>{})},
- async login(pin){if(this.remote)return this.req('POST','/auth/login',{pin});seed();const cfg=mergeCfg(lsGet('cfg',{}));if(pin&&pin===cfg.adminPin)return{rol:'dueno',nombre:'Dueño'};const u=lsGet('usuarios',[]).find(x=>x.pin===pin&&x.activo!==false);if(u&&pin)return{rol:u.rol,uid:u.id,nombre:u.nombre,barberoId:u.barberoId||''};const b=lsGet('barberos',[]).find(x=>x.pin===pin&&x.activo!==false);if(b&&pin)return{rol:'barbero',barberoId:b.id,nombre:b.nombre};throw new Error('PIN incorrecto')},
- async load(){if(this.remote){const r=await this.req('GET','/panel'+(this._d?'?v='+this._v:''));if(r.same)return this._d;this._v=r.v;return this._d=r}seed();const citas=expirarLocal();return{cfg:lsGet('cfg',{}),barberos:lsGet('barberos',[]),servicios:lsGet('servicios',[]),usuarios:lsGet('usuarios',[]),citas}},
- async saveConfig(cfg,barberos,servicios,usuarios){if(this.remote){const{adminPin,...c}=cfg;return this.req('PUT','/config',{cfg:c,barberos:barberos.map(({pin,...b})=>b),servicios,usuarios:(usuarios||[]).map(({pin,...u})=>u)})}lsSet('cfg',cfg);lsSet('barberos',barberos);lsSet('servicios',servicios);if(usuarios)lsSet('usuarios',usuarios)},
+ async login(pin){if(this.remote)return this.req('POST','/auth/login',{pin});seed();const p=pin&&equipoLocal().find(x=>x.pin===pin&&x.activo!==false);if(!p)throw new Error('PIN incorrecto');return identDe(p)},
+ async load(){if(this.remote){const r=await this.req('GET','/panel'+(this._d?'?v='+this._v:''));if(r.same)return this._d;this._v=r.v;return this._d=r}seed();const citas=expirarLocal();const equipo=equipoLocal();return{cfg:lsGet('cfg',{}),equipo,barberos:equipo.filter(p=>p.atiende).map(barberoDeP),servicios:lsGet('servicios',[]),citas}},
+ async saveConfig(cfg,equipo,servicios){if(this.remote)return this.req('PUT','/config',{cfg,equipo:equipo.map(({pin,...p})=>p),servicios});lsSet('cfg',cfg);guardarEquipoLocal(equipo);lsSet('servicios',servicios)},
  async crearCita(d){if(this.remote)return this.req('POST','/citas',d);const cs=expirarLocal();if(d.hora&&ocupado(cs,d.barberoId,d.fecha,d.hora))throw new Error('Ese horario ya está ocupado');const c={id:uid(),codigo:codigo(),creada:Date.now(),...d};cs.push(c);lsSet('citas',cs);return c},
  async updateCita(id,patch){if(this.remote)return this.req('PATCH','/citas/'+id,patch);const cs=lsGet('citas',[]),c=cs.find(x=>x.id===id);if(!c)throw new Error('La cita ya no existe');if(S.ses.rol==='barbero'&&c.barberoId!==S.ses.barberoId)throw new Error('No es tu cita');Object.assign(c,patch,{upd:Date.now()});lsSet('citas',cs);return c},
  async borrarCita(id){if(this.remote)return this.req('DELETE','/citas/'+id);lsSet('citas',lsGet('citas',[]).filter(c=>c.id!==id))},
@@ -125,7 +135,7 @@ const API={
 };
 
 /* ---------- estado ---------- */
-const S={usuarios:[],perm:{},ses:lsGet('ses',null),cfg:mergeCfg({}),barberos:[],servicios:[],citas:[],tab:'agenda',colap:new Set(),cliQ:'',cajaF:hoy(),draft:null,dirty:false,open:'',known:new Set(),loaded:false};
+const S={equipo:[],perm:{},ses:lsGet('ses',null),cfg:mergeCfg({}),barberos:[],servicios:[],citas:[],tab:'agenda',colap:new Set(),cliQ:'',cajaF:hoy(),draft:null,dirty:false,open:'',known:new Set(),loaded:false};
 const est=k=>({...DEF_EST[k]||DEF_EST.confirmada,...(S.cfg.est||{})[k]});
 const fCortaD=s=>{const d=pYmd(s);return `${d.getDate()} ${MESC[d.getMonth()]}`};
 const lunesDe=f=>addD(f,-((pYmd(f).getDay()+6)%7)); // semana de lunes a domingo
@@ -133,10 +143,11 @@ const lunesDe=f=>addD(f,-((pYmd(f).getDay()+6)%7)); // semana de lunes a domingo
 const ETIQUETAS=['todos','por_validar','confirmada','en_silla','atendida','no_vino','cancelada'];
 const barb=id=>S.barberos.find(b=>b.id===id);
 const cita=id=>S.citas.find(c=>c.id===id);
-const PERMS=[['verTodas','📅 Ver la agenda de todos los barberos'],['verTel','📞 Ver celular de clientes'],['verMontos','💰 Ver precios y caja'],['crear','➕ Crear y editar citas'],['cancelar','🚫 Cancelar, "No vino" y eliminar'],['yape','💸 Validar pagos Yape'],['links','🔗 Generar links para clientes'],['dash','📈 Ver dashboard y clientes'],['excel','📊 Excel y respaldos'],['config','⚙️ Configuración y usuarios']];
+const PERMS=[['verTodas','📅 Ver la agenda de todos los barberos'],['verTel','📞 Ver celular de clientes'],['verMontos','💰 Ver precios y caja'],['crear','➕ Crear y editar citas'],['cancelar','🚫 Cancelar, "No vino" y eliminar'],['yape','💸 Validar pagos Yape'],['links','🔗 Generar links para clientes'],['dash','📈 Ver dashboard y clientes'],['excel','📊 Excel y respaldos'],['config','⚙️ Configuración y equipo']];
 const ALLP=Object.fromEntries(PERMS.map(([k])=>[k,true]));
 const ROLES={dueno:{t:'👑 Dueño',p:ALLP},encargado:{t:'🧑‍💼 Encargado',p:{...ALLP,config:false}},recepcion:{t:'📋 Recepción',p:{verTodas:true,verTel:true,verMontos:true,crear:true,cancelar:true,yape:true,links:true}},barbero:{t:'💈 Barbero',p:{verTel:true,crear:true,links:true}},personal:{t:'⚙️ Personalizado',p:{}}};
-function permsFor(ses){if(!ses)return{};if(ses.rol==='admin'||ses.rol==='dueno')return{...ALLP};if(ses.uid){const u=(S.usuarios||[]).find(x=>x.id===ses.uid);return u?{...(u.permisos||{})}:null}if(ses.rol==='barbero')return{...ROLES.barbero.p,...(S.cfg.permBarbero||{})};return{}}
+/* Permisos: en la nube los decide el Worker (llegan en /panel → yo.perm); en modo local, la persona del equipo. */
+function permisosLocal(ses){const p=equipoLocal().find(x=>x.id===ses?.pid&&x.activo!==false);return !p?null:p.rol==='dueno'?{...ALLP}:{...(p.permisos||{})}}
 const can=p=>!!(S.perm||{})[p];
 const isAdmin=()=>can('verTodas');
 const telV=t=>can('verTel')?t:'••• ••• '+String(t||'').slice(-3);
@@ -190,9 +201,10 @@ async function boot(){
  addEventListener('storage',e=>{if(e.key==='brb_citas')reload(true)});
 }
 async function reload(notify){
- try{const d=await API.load();Object.assign(S,{cfg:mergeCfg(d.cfg),barberos:d.barberos||[],servicios:d.servicios||[],usuarios:d.usuarios||[],citas:(d.citas||[]).map(c=>c.estado==='pendiente_pago'?{...c,estado:'por_validar'}:c)})}catch(e){toast('⚠️ '+e.message);return}
+ let d0;try{const d=d0=await API.load();Object.assign(S,{cfg:mergeCfg(d.cfg),equipo:d.equipo||[],barberos:d.barberos||[],servicios:d.servicios||[],citas:(d.citas||[]).map(c=>c.estado==='pendiente_pago'?{...c,estado:'por_validar'}:c)})}catch(e){toast('⚠️ '+e.message);return}
  if(API.remote){const v=API._v;if(v!==S._vPrev){S._vPrev=v;S.extra=new Map();S.rangosOk=new Set();S.hist=null}S.ventana=API._d?.ventana||null;S.visitas=API._d?.visitas||null;S.primeraFecha=API._d?.primeraFecha||null;S.waOk=!!API._d?.wa?.ok;S.waDiaAntes=!!API._d?.wa?.diaAntes;mezclar([])}
- const pm=permsFor(S.ses);if(pm===null){toast('Tu usuario fue desactivado');localStorage.removeItem('brb_ses');return setTimeout(()=>location.reload(),900)}S.perm=pm;
+ if(API.remote&&d0.yo?.pid){const{perm,...yo}=d0.yo;S.ses={...S.ses,...yo};lsSet('ses',S.ses)}
+ const pm=API.remote?d0.yo?.perm||null:permisosLocal(S.ses);if(pm===null){toast('Tu usuario fue desactivado');localStorage.removeItem('brb_ses');return setTimeout(()=>location.reload(),900)}S.perm=pm;
  if(notify&&S.loaded){const nuevas=S.citas.filter(c=>!S.known.has(c.id)&&mine(c)&&c.origen==='web');if(nuevas.length){toast(`🔔 ${nuevas.length} reserva(s) nueva(s)`);navigator.vibrate?.([120,60,120]);beep()}
   const rep=S.citas.filter(c=>c.reprogTs&&mine(c)&&S.known.has(c.id)&&c.reprogTs>(S.repVisto||0));if(rep.length){toast(`🔁 ${rep.map(c=>c.cliente?.nombre?.split(' ')[0]).join(', ')} reprogramó: ${fLarga(rep[0].fecha)} · ${h12(rep[0].hora)}`);navigator.vibrate?.([120,60,120]);beep()}}
  S.repVisto=Math.max(S.repVisto||0,...S.citas.map(c=>c.reprogTs||0));
@@ -203,7 +215,7 @@ async function reload(notify){
 }
 function renderHeader(){
  $('#hNombre').textContent=S.cfg.nombre;document.title=S.cfg.nombre+' · Panel';logoHTML($('#hLogo'),S.cfg);
- $('#hSub').innerHTML=`${S.cfg.whatsapp?esc(S.cfg.whatsapp):esc(S.cfg.eslogan||'')} <span class="pill" style="color:var(--pur);border-color:var(--pur)">${S.ses.uid?(ROLES[S.ses.rol]?.t||'👤').split(' ')[0]+' '+esc(S.ses.nombre):S.ses.rol==='barbero'?'💈 '+esc(barb(S.ses.barberoId)?.nombre||S.ses.nombre):'👑 Dueño'}</span>`;
+ $('#hSub').innerHTML=`${S.cfg.whatsapp?esc(S.cfg.whatsapp):esc(S.cfg.eslogan||'')} <span class="pill" style="color:var(--pur);border-color:var(--pur)">${(ROLES[S.ses.rol]?.t||'👤').split(' ')[0]} ${esc(S.ses.nombre||'')}</span>`;
  const n=notifs().filter(x=>!S.leidas.has(x.k)).length;const d=$('#hDot');d.style.display=n?'grid':'none';d.textContent=n>99?'99+':n;if($('#notif')?.classList.contains('on'))pintaNotif();
 }
 function goTab(t){S.tab=t;$$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));$$('.sec').forEach(s=>s.classList.toggle('on',s.id==='t-'+t));renderTab();scrollTo(0,0)}

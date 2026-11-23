@@ -11,7 +11,7 @@ const PIN = { ALLOW_PIN: 'true', SIN_LIMITES_CF: 'true', GOOGLE_CLIENT_ID: '' };
 const DNI = { SHALOM_API_KEY: 'sk_test', DNI_API_URL: 'http://127.0.0.1:8798' };
 const GOOGLE = { GOOGLE_CLIENT_ID: 'cid.apps.googleusercontent.com', OWNER_EMAILS: 'dueno@gmail.com', GOOGLE_CERTS_URL: 'http://127.0.0.1:8799/certs' };
 const TS = { TURNSTILE_SECRET: 'secreto', TURNSTILE_SITEKEY: 'sitio', TURNSTILE_VERIFY_URL: 'http://127.0.0.1:8797/verify' };
-const ADMIN = `UPDATE kv SET v=json_set(v,'$.adminPin','5821') WHERE k='cfg';`;
+const ADMIN = `UPDATE kv SET v=json_set(v,'$[0].pin','5821') WHERE k='equipo';`; // el dueño (primera persona del equipo) entra con PIN solo en pruebas
 const SUITES = [
   { n: 'api.e2e', vars: PIN, sql: 'file:test/sembrar.sql' },
   { n: 'acceso.e2e', vars: PIN, sql: ADMIN },
@@ -35,6 +35,7 @@ const SUITES = [
   { n: 'filtros.ui', vars: PIN, sql: ADMIN, ui: true },
   { n: 'calificaciones.e2e', vars: PIN, sql: ADMIN },
   { n: 'escena.ui', vars: PIN, sql: ADMIN, ui: true },
+  { n: 'equipo.e2e', vars: PIN, sql: 'file:test/sembrar-equipo-antiguo.sql', reinicio: true },
   { n: 'csp.ui', vars: PIN, sql: ADMIN, ui: true },
   { n: 'tiemporeal.ui', vars: PIN, sql: ADMIN, ui: true },
   { n: 'monitoreo.e2e', vars: { ...PIN, ...DNI, RESPALDO_MIN: '0', SIN_LIMITES_CF: 'false' }, sql: ADMIN, extra: ['--test-scheduled'] },
@@ -48,12 +49,14 @@ const res = [];
 for (const s of lista) {
   rmSync('.wrangler/state', { recursive: true, force: true });
   const args = ['wrangler', 'dev', '--port', '8787', '--ip', '127.0.0.1', ...(s.extra || []), ...Object.entries(s.vars).flatMap(([k, v]) => ['--var', `${k}:${v}`])];
-  const dev = spawn('npx', args, { stdio: 'ignore', detached: true });
+  let dev = spawn('npx', args, { stdio: 'ignore', detached: true });
   const t0 = Date.now(); let out = '', ok = false;
   try {
     await esperar('http://127.0.0.1:8787/api/auth/config');
     await fetch('http://127.0.0.1:8787/api/publico'); // crea las tablas y los datos iniciales
     if (s.sql) { const f = s.sql.startsWith('file:') ? s.sql.slice(5) : (writeFileSync(join(tmp, 's.sql'), s.sql), join(tmp, 's.sql')); wr('d1', 'execute', 'stereo-barber-db', '--local', '--file', f) }
+    // reinicio: los datos sembrados por SQL quedan y el Worker arranca de nuevo (así corren las migraciones sobre datos antiguos).
+    if (s.reinicio) { try { process.kill(-dev.pid, 'SIGTERM') } catch { } await new Promise(r => setTimeout(r, 3000)); dev = spawn('npx', args, { stdio: 'ignore', detached: true }); await esperar('http://127.0.0.1:8787/api/auth/config') }
     if (s.historial) { if (!hist) { hist = join(tmp, 'hist.sql'); writeFileSync(hist, execFileSync('node', ['test/sembrar-historial.mjs'], { maxBuffer: 64e6 })) } wr('d1', 'execute', 'stereo-barber-db', '--local', '--file', hist) }
     out = await new Promise(res => { const p = spawn('node', [`test/${s.n}.mjs`], { env: { ...process.env, BASE: s.ui ? 'http://localhost:8787' : 'http://127.0.0.1:8787' } }); let o = ''; p.stdout.on('data', d => o += d); p.stderr.on('data', d => o += d); p.on('close', c => { ok = c === 0; res(o) }) });
   } catch (e) { out += '\n' + e.message }

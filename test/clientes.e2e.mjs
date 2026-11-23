@@ -36,7 +36,7 @@ let pag = r.j.items, sig = r.j.siguiente; while (sig) { r = await call('GET', '/
 check('citas por cursor: mismas citas que el total y sin repetir', pag.length === r.j.total && new Set(pag.map(x => x.id)).size === pag.length, `${pag.length}/${r.j.total}`);
 // permisos
 const pnl = (await call('GET', '/panel', null, adm)).j;
-await call('PUT', '/config', { cfg: { ...pnl.cfg, permBarbero: { verTel: false, dash: true } }, barberos: pnl.barberos.map(x => x.id === 'b3' ? { ...x, pin: '7391' } : x), servicios: pnl.servicios, usuarios: pnl.usuarios }, adm);
+await call('PUT', '/config', { cfg: pnl.cfg, equipo: pnl.equipo.map(x => x.id === 'b3' ? { ...x, pin: '7391', permisos: { crear: true, links: true, dash: true } } : x), servicios: pnl.servicios }, adm);
 const bar = (await call('POST', '/auth/login', { pin: '7391' })).cookie;
 r = await call('GET', '/clientes?limit=50', null, bar);
 check('un barbero solo ve los clientes que atendió, sin celular', r.j.total === 7 && r.j.items.every(x => /^•••/.test(x.tel) && !x.dni && x.k === null), JSON.stringify(r.j).slice(0, 200));

@@ -5,6 +5,8 @@ export const DUR = 60;
 export const PERMS = ['verTodas', 'verTel', 'verMontos', 'crear', 'cancelar', 'yape', 'links', 'dash', 'excel', 'config'];
 export const ALLP = Object.fromEntries(PERMS.map(k => [k, true]));
 export const ROL_BARBERO = { verTel: true, crear: true, links: true };
+// Roles del equipo: el dueño tiene todo; los demás, los permisos que el dueño les marque.
+export const ROLES = ['dueno', 'encargado', 'recepcion', 'barbero', 'personal'];
 export const SES_MS = 14 * 864e5;
 // Prefijo __Host-: el navegador solo la acepta con Secure, Path=/ y sin Domain (no la puede pisar un subdominio).
 export const COOKIE = '__Host-brb_s', COOKIE_P = '__Host-brb_g', VIEJA = { [COOKIE]: 'brb_s', [COOKIE_P]: 'brb_g' };

@@ -50,7 +50,7 @@ check('login dueño con PIN', adm.s === 200 && adm.j.rol === 'dueno' && /brb_s=/
 r = await call('GET', '/panel', null, adm.cookie);
 const c1 = r.j.citas?.find(c => c.id === cita.id);
 check('panel ve la reserva por validar con captura', r.s === 200 && c1?.estado === 'por_validar' && c1.yapeCaptura && c1.refFoto, JSON.stringify(c1));
-check('panel del dueño trae PINs para editar', r.j.cfg?.adminPin === '5821');
+check('el dueño ve el equipo completo (con el PIN de pruebas para editar)', r.j.equipo?.find(p => p.rol === 'dueno')?.pin === '5821' && !('adminPin' in (r.j.cfg || {})));
 const v = r.j.v;
 r = await call('GET', '/panel?v=' + v, null, adm.cookie);
 check('panel sin cambios → respuesta mínima', r.j.same === true);
@@ -83,12 +83,12 @@ check('audio que aún no está en la configuración → privado (401)', f2.statu
 f2 = await fetch(`${BASE}/api/audio/${aKey}`, { headers: { Cookie: adm.cookie } });
 check('con sesión se puede oír', f2.status === 200 && f2.headers.get('content-type') === 'audio/wav');
 const pnA = (await call('GET', '/panel', null, adm.cookie)).j;
-await call('PUT', '/config', { cfg: { ...pnA.cfg, narrAudio: { hola: aKey } }, barberos: pnA.barberos, servicios: pnA.servicios, usuarios: pnA.usuarios }, adm.cookie);
+await call('PUT', '/config', { cfg: { ...pnA.cfg, narrAudio: { hola: aKey } }, equipo: pnA.equipo, servicios: pnA.servicios }, adm.cookie);
 f2 = await fetch(`${BASE}/api/audio/${aKey}`);
 check('al guardarlo en la configuración el cliente lo oye sin sesión', f2.status === 200 && f2.headers.get('content-type') === 'audio/wav' && (await f2.arrayBuffer()).byteLength === 44 + 1600);
 r = await call('GET', '/publico');
 check('el formulario recibe cuál audio usar en cada frase', r.j.cfg.narrAudio?.hola === aKey);
-await call('PUT', '/config', { cfg: pnA.cfg, barberos: pnA.barberos, servicios: pnA.servicios, usuarios: pnA.usuarios }, adm.cookie);
+await call('PUT', '/config', { cfg: pnA.cfg, equipo: pnA.equipo, servicios: pnA.servicios }, adm.cookie);
 const barb = await call('POST', '/auth/login', { pin: '4826' });
 r = await call('POST', '/audio', { data: wav(100) }, barb.cookie);
 check('un barbero no puede subir audios', r.s === 403);
@@ -97,7 +97,7 @@ check('diagnóstico solo para quien tiene Config', r.s === 403);
 check('login barbero con PIN', barb.s === 200 && barb.j.rol === 'barbero');
 r = await call('GET', '/panel', null, barb.cookie);
 check('barbero solo ve sus citas y sin PINs', r.s === 200 && r.j.citas.every(c => c.barberoId === 'b1') && !JSON.stringify(r.j).includes('5821'), JSON.stringify(r.j).slice(0, 300));
-r = await call('PUT', '/config', { cfg: {}, barberos: [], servicios: [] }, barb.cookie);
+r = await call('PUT', '/config', { cfg: {}, equipo: [], servicios: [] }, barb.cookie);
 check('barbero no puede cambiar config', r.s === 403);
 const otra = (await call('GET', '/panel', null, adm.cookie)).j.citas.find(c => c.barberoId === 'b2');
 r = await call('PATCH', '/citas/' + otra.id, { estado: 'confirmada' }, barb.cookie);
@@ -120,7 +120,7 @@ r = await fetch(BASE + '/api/citas/' + cita.id, { method: 'DELETE', headers: { C
 check('otro origen bloqueado', r.status === 403);
 // Sin comprobante a tiempo la reserva se libera (plazo corto solo para la prueba)
 const pn = (await call('GET', '/panel', null, adm.cookie)).j;
-await call('PUT', '/config', { cfg: { ...pn.cfg, holdMin: 0.02 }, barberos: pn.barberos, servicios: pn.servicios, usuarios: pn.usuarios }, adm.cookie);
+await call('PUT', '/config', { cfg: { ...pn.cfg, holdMin: 0.02 }, equipo: pn.equipo, servicios: pn.servicios }, adm.cookie);
 const corta = await call('POST', '/publico/reservas', { ...reserva, hora: '17:00' });
 check('reserva con plazo corto creada', corta.s === 200 && corta.j.estado === 'por_validar', JSON.stringify(corta.j));
 await new Promise(x => setTimeout(x, 2200));
@@ -130,7 +130,7 @@ r = await call('GET', '/panel', null, adm.cookie);
 check('la reserva sin comprobante pasó a expirada y libera el horario', r.j.citas.find(c => c.id === corta.j.id)?.estado === 'expirada');
 const otra2 = await call('POST', '/publico/reservas', { ...reserva, hora: '17:00', cliente: { ...reserva.cliente, nombre: 'Otro Cliente' } });
 check('el horario liberado se puede volver a reservar', otra2.s === 200, JSON.stringify(otra2.j));
-await call('PUT', '/config', { cfg: pn.cfg, barberos: pn.barberos, servicios: pn.servicios, usuarios: pn.usuarios }, adm.cookie);
+await call('PUT', '/config', { cfg: pn.cfg, equipo: pn.equipo, servicios: pn.servicios }, adm.cookie);
 // Validar a mano limpia el plazo; avisado se guarda
 const manual = await call('POST', '/publico/reservas', { ...reserva, hora: '18:00' });
 r = await call('PATCH', '/citas/' + manual.j.id, { estado: 'confirmada', adelantoOk: true, avisado: 123 }, adm.cookie);

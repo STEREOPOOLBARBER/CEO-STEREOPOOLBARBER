@@ -1,6 +1,6 @@
 // Filtros de la agenda en el servidor (worker/modulos/filtros.js): cada filtro, los conteos, el orden,
 // la paginación por cursor con cualquier orden y los permisos.
-// Requiere wrangler dev con --var ALLOW_PIN:true --var GOOGLE_CLIENT_ID: y adminPin 5821.
+// Requiere wrangler dev con --var ALLOW_PIN:true --var GOOGLE_CLIENT_ID: y el PIN 5821 del dueño.
 const B = process.env.BASE || 'http://127.0.0.1:8787';
 let ok = 0, bad = 0; const check = (n, c, x = '') => { c ? ok++ : bad++; console.log(`${c ? '✅' : '❌'} ${n} ${c ? '' : x}`) };
 const call = async (m, p, b, c) => { const r = await fetch(B + '/api' + p, { method: m, headers: { ...(b ? { 'Content-Type': 'application/json' } : {}), ...(c ? { Cookie: c } : {}), Origin: B }, body: b ? JSON.stringify(b) : undefined }); const tx = await r.text(); let j; try { j = JSON.parse(tx) } catch { j = tx } return { s: r.status, j, cookie: (r.headers.get('set-cookie') || '').split(';')[0] } };
@@ -86,7 +86,7 @@ check('el conteo con texto mira todas las fechas', r.j.estados.atendida?.n === 3
 
 // ---- permisos: barbero sin ver todas, sin montos y sin clientes
 const pn = (await call('GET', '/panel', null, adm)).j;
-await call('PUT', '/config', { cfg: pn.cfg, barberos: pn.barberos.map(b => b.id === 'b1' ? { ...b, pin: '7391' } : b), servicios: pn.servicios, usuarios: pn.usuarios }, adm);
+await call('PUT', '/config', { cfg: pn.cfg, equipo: pn.equipo.map(b => b.id === 'b1' ? { ...b, pin: '7391' } : b), servicios: pn.servicios }, adm);
 const bar = (await call('POST', '/auth/login', { pin: '7391' })).cookie;
 await igual('el barbero solo ve sus citas aunque pida otro barbero', `${ENE}&estado=${TODOS}&barbero=b2`, 'ABEFK', bar);
 await igual('sin permiso de montos, el filtro de pago no se aplica', `${ENE}&estado=${TODOS}&pago=yape_ok`, 'ABEFK', bar);

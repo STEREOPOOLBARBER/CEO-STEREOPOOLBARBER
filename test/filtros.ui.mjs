@@ -139,7 +139,7 @@ await P.evaluate(() => limpiarVista());
 
 // ---- barbero: sin filtro de barbero ni de pago
 const pn = await api('GET', '/panel');
-await api('PUT', '/config', { cfg: pn.cfg, barberos: pn.barberos.map(b => b.id === 'b1' ? { ...b, pin: '7391' } : b), servicios: pn.servicios, usuarios: pn.usuarios });
+await api('PUT', '/config', { cfg: pn.cfg, equipo: pn.equipo.map(b => b.id === 'b1' ? { ...b, pin: '7391' } : b), servicios: pn.servicios });
 const P2 = await (await br.newContext({ viewport: { width: 412, height: 900 }, timezoneId: 'America/Lima' })).newPage(); P2.on('pageerror', e => errores.push(e.message));
 const bar = await (await P2.context().request.post(B + '/api/auth/login', { data: { pin: '7391' }, headers: { Origin: B } })).json();
 await P2.goto(B + '/index.html'); await P2.evaluate(s => localStorage.setItem('brb_ses', JSON.stringify(s)), bar); await P2.reload(); await P2.waitForSelector('#agChips .chip');

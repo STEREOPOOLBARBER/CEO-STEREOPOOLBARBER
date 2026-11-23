@@ -6,9 +6,8 @@ import { consultarDni } from './dni.js';
 import { anotarSeg, fichaValida, frenar, ipDe, limitar, nuevaFicha, turnstileOk } from './seguridad.js';
 
 export function vistaPublica(d) {
-  const { adminPin, permBarbero, ...cfg } = d.cfg;
   return {
-    cfg,
+    cfg: d.cfg,
     barberos: d.barberos.filter(b => b.activo !== false).map(({ pin, comision, email, ...b }) => b),
     servicios: d.servicios.filter(s => s.activo !== false),
   };

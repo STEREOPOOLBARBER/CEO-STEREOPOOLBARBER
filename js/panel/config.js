@@ -7,16 +7,15 @@ function setB(k){D().cfg[k]=!D().cfg[k];dirty();renderConfig()}
 function acc(id,title,sub,body){return `<div class="acc ${S.open===id?'open':''}" id="acc_${id}"><button data-on-click="a6eb6b3e0" data-p0="${id}"><b>${title}<small>${sub}</small></b><i>›</i></button><div><div class="accb">${body()}</div></div></div>`}
 function accTog(id){const el=$('#acc_'+id);if(!el)return;const abrir=!el.classList.contains('open');$$('.acc.open').forEach(x=>x.classList.remove('open'));S.open=abrir?id:'';if(abrir){el.classList.add('open');if(id==='waapi')cargarWA();setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'start'}),320)}}
 // Interruptor: recibe el NOMBRE de la función y sus datos (no código), así funciona con la CSP estricta.
-const SW_OK=new Set(['togUser','togPB','togBarb','togServ','setB','togPermU']);
+const SW_OK=new Set(['togPersona','togServ','setB']);
 const sw=(on,f,...a)=>`<button class="sw ${on?'on':''}" data-on-click="a6e350824" data-f="${f}" data-a="${esc(JSON.stringify(a))}"></button>`;
 function swAccion(el){const f=el.dataset.f;if(SW_OK.has(f)&&typeof window[f]==='function')window[f](...JSON.parse(el.dataset.a||'[]'))}
-function togPermU(k){S._u.permisos[k]=!S._u.permisos[k];S._u.rol='personal';$('#uRol').value='personal';uPerms()}
 function setLL(la,lo){D().cfg.lat=String(+(+la).toFixed(6));D().cfg.lng=String(+(+lo).toFixed(6));dirty();renderConfig()}
 function ubicAqui(){if(!navigator.geolocation)return toast('Tu navegador no permite la ubicación');toast('📍 Buscando tu ubicación…');navigator.geolocation.getCurrentPosition(p=>{setLL(p.coords.latitude,p.coords.longitude);toast('✅ Ubicación lista · toca Guardar')},e=>toast(e.code===1?'❌ Permite la ubicación en tu navegador (candado junto a la dirección)':e.code===3?'❌ Tardó demasiado: prueba de nuevo o usa «Buscar mi dirección»':'❌ No se pudo obtener tu ubicación: usa «Buscar mi dirección»'),{enableHighAccuracy:true,timeout:15000})}
 async function ubicBuscar(){const c=D().cfg,q=[c.direccion,c.ciudad].filter(Boolean).join(', ');if(!q)return toast('Primero escribe la dirección');toast('🔎 Buscando…');try{const r=await(await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=pe&q='+encodeURIComponent(q))).json();if(!r[0])return toast('No la encontré: usa «Usar donde estoy»');setLL(r[0].lat,r[0].lon);toast('✅ Encontrada · revisa el mapa y toca Guardar')}catch(e){toast('❌ No se pudo buscar')}}
 function mapsCoords(u){const m=String(u).match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)||String(u).match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/)||String(u).match(/[?&](?:q|ll|query)=(-?\d+\.\d+),(-?\d+\.\d+)/);if(m&&!D().cfg.lat&&!D().cfg.lng)setLL(m[1],m[2])}
 const VARS=['cliente','fecha','hora','barbero','servicio','precio','codigo','negocio','direccion','maps','link','adelanto','yape','telefono','ciudad','nota','pago','seguimiento'];
-function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barberos,servicios:S.servicios,usuarios:S.usuarios||[]});S.dirty=false}
+function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,equipo:S.equipo,servicios:S.servicios});S.dirty=false}
  const d=D(),c=d.cfg;applyTheme(c);
  $('#t-config').innerHTML=`
  <div class="row" style="margin-bottom:10px"><span style="font-size:34px">⚙️</span><h2 style="font:800 28px 'Syne';flex:1">Configuración</h2></div>
@@ -47,21 +46,10 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barbero
   <div class="g2"><div><label class="lb">Anticipación (días)</label><input class="in" type="number" min="0" value="${c.anticipacion}" data-on-change="a75ff6b31"></div><div><label class="lb">Reservar hasta (días)</label><input class="in" type="number" min="1" value="${c.ventana}" data-on-change="af40bb7f1"></div></div>
   <p class="hint">⏱️ Turnos de 1 hora · ${sl.length} por día: ${sl.map(h12).join(' · ')||'— revisa el horario —'}</p>
   <label class="lb">Días bloqueados (feriados, vacaciones)</label>
-  <div class="g2"><input class="in" type="date" id="blF" min="${hoy()}"><select class="in" id="blB"><option value="">Toda la barbería</option>${d.barberos.map(b=>`<option value="${b.id}">${esc(b.nombre)}</option>`).join('')}</select></div>
+  <div class="g2"><input class="in" type="date" id="blF" min="${hoy()}"><select class="in" id="blB"><option value="">Toda la barbería</option>${atienden().map(b=>`<option value="${b.id}">${esc(b.nombre)}</option>`).join('')}</select></div>
   <div class="row" style="margin-top:8px"><input class="in" id="blM" placeholder="Motivo"><button class="btn p" data-on-click="a1be48efd">➕</button></div>
-  ${(c.bloqueos||[]).filter(b=>b.fecha>=hoy()).sort((a,b)=>a.fecha.localeCompare(b.fecha)).map(b=>`<div class="li"><span class="av">🚫</span><div class="t"><b>${fLarga(b.fecha)}</b><small>${b.barberoId?esc(d.barberos.find(x=>x.id===b.barberoId)?.nombre||''):'Toda la barbería'}${b.motivo?' · '+esc(b.motivo):''}</small></div><button class="ibtn" data-on-click="ac7a4a56e" data-p0="${b.id}">🗑️</button></div>`).join('')}`})}
- ${acc('usuarios',`👥 Usuarios y permisos (${(d.usuarios||[]).length+1+d.barberos.length})`,'Quién entra, qué puede hacer y sus citas',()=>{const pb={...ROLES.barbero.p,...(c.permBarbero||{})};return `
-  <p class="hint" style="margin-top:0">${API.remote?'Cada persona entra con su cuenta de Google: agrega su correo.':'Cada persona entra con su PIN.'} Recepción, encargado o un barbero ven solo lo que les permites.</p>
-  <div class="li"><span class="av lg">👑</span><div class="t"><b>Dueño</b><small>${API.remote?'Correo en Cloudflare (OWNER_EMAILS)':'PIN '+esc(c.adminPin)} · todos los permisos</small></div></div>
-  ${(d.usuarios||[]).map(u=>`<div class="li"><span class="av lg">${(ROLES[u.rol]?.t||'👤').split(' ')[0]}</span><div class="t"><b>${esc(u.nombre)}</b><small>${ROLES[u.rol]?.t||''} · ${API.remote?esc(u.email||'⚠️ sin correo'):'PIN '+esc(u.pin)} · ${Object.values(u.permisos||{}).filter(Boolean).length}/${PERMS.length} permisos${u.barberoId?' · 💈 '+esc(d.barberos.find(b=>b.id===u.barberoId)?.nombre||''):''}<br>${resumenCitas(u)}</small></div>${sw(u.activo!==false,'togUser',u.id)}<button class="ibtn" data-on-click="a09c9e85a" data-p0="${u.id}">✏️</button></div>`).join('')}
-  <button class="btn p w" style="margin-top:12px" data-on-click="a895e08fc">➕ Agregar usuario</button>
-  <label class="lb" style="margin-top:20px">💈 Barberos (${API.remote?'entran con su cuenta de Google':'entran con su PIN'})</label>
-  ${d.barberos.map(b=>`<div class="li" style="cursor:pointer" data-on-click="a69663813" data-p0="${b.id}">${avatar(b)}<div class="t"><b>${esc(b.nombre)}</b><small>${API.remote?esc(b.email||'⚠️ sin correo'):'PIN '+esc(b.pin)} · ${resumenCitas({barberoId:b.id,id:b.id})}</small></div><span style="color:var(--mu)">›</span></div>`).join('')}
-  <label class="lb">Permisos de los barberos</label>${PERMS.map(([k,t])=>`<div class="perm"><span>${t}</span>${sw(pb[k],'togPB',k)}</div>`).join('')}`})}
- ${acc('barberos',`💈 Barberos (${d.barberos.length})`,API.remote?'Foto, color, correo, días y comisión':'Foto, color, PIN, días y comisión',()=>`
-  ${d.barberos.map(b=>`<div class="li"><span class="bar" style="width:5px;height:38px;border-radius:4px;background:${b.color||'var(--pur)'}"></span>${avatar(b,1)}<div class="t"><b>${esc(b.nombre)}</b><small>${esc(b.esp||'')}${b.esp?' · ':''}${ORDEN.filter(x=>b.dias.includes(x)).map(x=>DIAS[x]).join(' ')} · ${API.remote?esc(b.email||'⚠️ sin correo'):'PIN '+esc(b.pin)}</small></div>${sw(b.activo!==false,'togBarb',b.id)}<button class="ibtn" data-on-click="afda928ce" data-p0="${b.id}">✏️</button></div>`).join('')}
-  <button class="btn p w" style="margin-top:12px" data-on-click="a0c1f4acd">➕ Agregar barbero</button>
-  <p class="hint">Cada barbero entra con ${API.remote?'su cuenta de Google':'su PIN'} y solo ve sus citas. El interruptor lo oculta del formulario sin borrarlo.</p>`)}
+  ${(c.bloqueos||[]).filter(b=>b.fecha>=hoy()).sort((a,b)=>a.fecha.localeCompare(b.fecha)).map(b=>`<div class="li"><span class="av">🚫</span><div class="t"><b>${fLarga(b.fecha)}</b><small>${b.barberoId?esc(d.equipo.find(x=>x.id===b.barberoId)?.nombre||''):'Toda la barbería'}${b.motivo?' · '+esc(b.motivo):''}</small></div><button class="ibtn" data-on-click="ac7a4a56e" data-p0="${b.id}">🗑️</button></div>`).join('')}`})}
+ ${acc('equipo',`👥 Equipo (${d.equipo.length})`,'Quién entra, qué puede hacer y quién atiende',()=>equipoHTML(d))}
  ${acc('servicios',`✂️ Servicios y precios (${d.servicios.length})`,'Cortes con foto de referencia',()=>`
   ${d.servicios.map(s=>`<div class="li"><span class="av lg" style="border-radius:12px;overflow:hidden">${s.foto?`<img data-foto="${s.foto}" style="width:100%;height:100%;object-fit:cover">`:s.emoji}</span><div class="t"><b>${esc(s.nombre)}</b><small>${soles(s.precio)} · ${esc(s.desc||'')}</small></div>${sw(s.activo!==false,'togServ',s.id)}<button class="ibtn" data-on-click="a38880731" data-p0="${s.id}">✏️</button></div>`).join('')}
   <button class="btn p w" style="margin-top:12px" data-on-click="a7600a346">➕ Agregar servicio</button>`)}
@@ -111,11 +99,10 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barbero
   <label class="lb">Veces que el cliente puede reprogramar</label><select class="in" data-on-change="a77c8e8c2">${[0,1,2,3].map(n=>`<option value="${n}" ${+(c.maxReprog??1)===n?'selected':''}>${n===0?'No permitir':n===1?'1 vez':n+' veces'}</option>`).join('')}</select>
   <label class="lb">Texto de la política (lo ve el cliente en su cita)</label><textarea class="in" rows="3" placeholder="Ej: Si no llegas a tiempo, la cita se libera y el adelanto no se devuelve." data-on-change="ac1d45c51">${esc(c.politicaTxt||'')}</textarea>
   <p class="hint">En «Ver estado de cita» el cliente ve solo este texto (escribe ahí tu tolerancia y reglas). El botón <b>📅 Reprogramar</b> solo le aparece si faltan ${c.horasReprog??24} horas o más para su corte.</p>`)}
- ${acc('seguridad','🔐 Seguridad y respaldo',API.remote?'Accesos, respaldo y pruebas':'PIN admin, exportar, ejemplos',()=>`
-  ${API.remote?'<p class="hint" style="margin-top:0">🔒 El acceso es solo con Google. Los dueños se definen en Cloudflare (variable OWNER_EMAILS); barberos y personal, por su correo.</p>':`<label class="lb">PIN de administrador</label><input class="in" inputmode="numeric" maxlength="6" value="${esc(c.adminPin)}" data-on-change="a7ea41258">`}
+ ${acc('seguridad','🔐 Seguridad y respaldo',API.remote?'Accesos, respaldo y pruebas':'Exportar y ejemplos',()=>`
+  ${API.remote?'<p class="hint" style="margin-top:0">🔒 Todos entran primero con Google (los dueños, con el correo puesto en Cloudflare: OWNER_EMAILS) y luego cada uno con su propia clave o huella (⚙️ Config → 👥 Equipo).</p>':''}
   ${API.remote?`<button class="btn p w" style="margin-top:12px;padding:14px" data-on-click="aea4720ac">🛡️ Monitoreo y respaldos</button>`:''}
   ${API.remote?`<button class="btn w" style="margin-top:12px" data-on-click="acae14b6b">🪪 Probar consulta de DNI</button><label class="lb">Tope de consultas DNI por día (0 = sin tope)</label><input class="in" type="number" min="0" value="${c.dniTopeDia??300}" data-on-change="ae4c0f398"><p class="hint">Protege tu saldo de Shalom. Las consultas repetidas salen de la memoria y no cuentan.</p>`:''}
-  ${API.remote?`<button class="btn w" style="margin-top:12px" data-on-click="acfaa7afe">🔑 Mi clave y huella (dueño)</button>`:''}
   ${API.remote?`<div class="g2" style="margin-top:12px"><button class="btn" data-on-click="a30005ea1">🔍 Probar nube</button><button class="btn" data-on-click="ae15fe1d6">📜 Registro de accesos</button></div>`:''}
   <div class="g2" style="margin-top:12px"><button class="btn" data-on-click="adcacc9dc">⬇️ Exportar</button><label class="btn">⬆️ Importar<input type="file" accept=".json" style="display:none" data-on-change="a6ee55804"></label></div>
   <p class="hint">${API.remote?'Para pasar tus datos a la nube: en el panel anterior toca ⬇️ Exportar y aquí ⬆️ Importar (incluye fotos).':'El respaldo guarda configuración, citas y fotos.'}</p>
@@ -125,7 +112,7 @@ function renderConfig(){if(!S.draft){S.draft=clone({cfg:S.cfg,barberos:S.barbero
  hydrate($('#t-config'))}
 function resumenCitas(u){const now=Date.now(),act=S.citas.filter(c=>activa(c)&&c.estado!=='atendida'&&startTs(c)>now-30*60000);const mias=u.barberoId?act.filter(c=>c.barberoId===u.barberoId).sort((a,b)=>startTs(a)-startTs(b)):[];const hoyN=mias.filter(c=>c.fecha===hoy()).length,creo=S.citas.filter(c=>c.creadoPor===u.id).length;
  return (u.barberoId?`📅 ${mias.length} próximas · hoy ${hoyN}${mias[0]?` · siguiente <b style="color:var(--blue)">${falta(startTs(mias[0]))}</b>`:''}`:'')+(creo?`${u.barberoId?' · ':''}✍️ agendó ${creo}`:'')||'Sin citas'}
-function verCitasDe(bid){const b=barb(bid)||D()?.barberos.find(x=>x.id===bid);const now=Date.now(),cs=S.citas.filter(c=>c.barberoId===bid&&activa(c)&&startTs(c)>now-30*60000&&c.estado!=='atendida').sort((a,b)=>startTs(a)-startTs(b));
+function verCitasDe(bid){const b=barb(bid)||D()?.equipo.find(x=>x.id===bid);const now=Date.now(),cs=S.citas.filter(c=>c.barberoId===bid&&activa(c)&&startTs(c)>now-30*60000&&c.estado!=='atendida').sort((a,b)=>startTs(a)-startTs(b));
  openModal(mHead('📅 Citas de '+esc(b?.nombre||''))+(cs.map(c=>`<div class="li"><div class="t"><b>${esc(c.cliente?.nombre)}</b><small>${fLarga(c.fecha)} · ${h12(c.hora)} · ✂️ ${esc(c.servicioNombre)}</small></div><span class="tag cd ${startTs(c)<now?'late':''}">${cdLabel(startTs(c))}</span></div>`).join('')||'<div class="empty"><b>📭</b>Sin citas próximas</div>'))}
 /* ---------- pegar mensaje de WhatsApp: rellena una cita o crea toda una agenda ---------- */
 const nrm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
@@ -174,7 +161,7 @@ function agMarca(){const l=S._ag,vistos=new Set();let n=0;l.forEach((e,i)=>{cons
  const b=$('#agBtn');if(b){b.textContent=n?`✅ Crear ${n} cita${n>1?'s':''}`:'Nada para crear';b.disabled=!n}}
 async function agendaCrear(){const est=$('#agEst').value,l=S._ag.filter(e=>e.ok&&!e._bad&&e.nombre.trim());let n=0,err=[];$('#agBtn').disabled=true;
  for(const e of l){const s=S.servicios.find(x=>x.id===e.servicioId);
-  try{await API.crearCita({fecha:e.fecha,hora:e.hora,barberoId:e.barberoId,servicioId:s?.id,servicioNombre:s?.nombre||'',precio:+s?.precio||0,cliente:{nombre:e.nombre.trim(),tel:e.tel||'',ciudad:'',dni:e.dni||''},nota:'',estado:est,...(est==='atendida'?{atendidaTs:new Date(e.fecha+'T'+e.hora).getTime()}:{}),adelanto:0,adelantoOk:false,origen:'panel',creadoPor:S.ses.uid||S.ses.barberoId||'dueno'});n++}catch(x){err.push(e.nombre)}}
+  try{await API.crearCita({fecha:e.fecha,hora:e.hora,barberoId:e.barberoId,servicioId:s?.id,servicioNombre:s?.nombre||'',precio:+s?.precio||0,cliente:{nombre:e.nombre.trim(),tel:e.tel||'',ciudad:'',dni:e.dni||''},nota:'',estado:est,...(est==='atendida'?{atendidaTs:new Date(e.fecha+'T'+e.hora).getTime()}:{}),adelanto:0,adelantoOk:false,origen:'panel'});n++}catch(x){err.push(e.nombre)}}
  closeModal();if(l[0])fijarDia(l[0].fecha);await reload();toast(`✅ ${n} cita${n!==1?'s':''} creada${n!==1?'s':''}${err.length?` · ❌ fallaron: ${err.join(', ')}`:''}`)}
 
 /* Mover varias citas a otro día (p. ej. una carga masiva que quedó con la fecha equivocada) */
@@ -235,63 +222,18 @@ async function rehacerFichas(b){b.disabled=true;b.textContent='⏳ Reconstruyend
 async function respaldarAhora(b){b.disabled=true;b.textContent='⏳ Creando…';try{const r=await API.req('POST','/respaldos');toast(`✅ Respaldo creado: ${r.citas} citas`);S.alT=0;cargarAlertas();verSeguridad()}catch(e){toast('❌ '+e.message);b.disabled=false;b.textContent='💾 Crear respaldo ahora'}}
 async function probarDni(){const d=prompt('DNI de 8 dígitos para probar la conexión con RENIEC:');if(!d)return;
  try{const r=await API.req('GET','/dni/'+d.replace(/\D/g,'')+'?crudo=1');alert(`Consultas de DNI hoy: ${r.usoHoy}${r.tope?' de '+r.tope:''}\n\n`+'Nombre que usará el sistema: '+(r.nombre||'(no se pudo armar)')+'\n\nRespuesta del servicio:\n'+JSON.stringify(r.crudo,null,1).slice(0,1200))}catch(e){alert('❌ '+e.message)}}
-function togUser(id){const u=D().usuarios.find(x=>x.id===id);u.activo=u.activo===false;dirty();renderConfig()}
-function togPB(k){const c=D().cfg;c.permBarbero={...ROLES.barbero.p,...(c.permBarbero||{})};c.permBarbero[k]=!c.permBarbero[k];dirty();renderConfig()}
-function editUser(id){const u=id?D().usuarios.find(x=>x.id===id):{id:'',nombre:'',pin:'',rol:'recepcion',barberoId:'',permisos:{...ROLES.recepcion.p},activo:true};S._u=clone(u);
- openModal(mHead(id?'✏️ Editar usuario':'➕ Nuevo usuario')+`
- <label class="lb">Nombre</label><input class="in" id="uNom" value="${esc(u.nombre)}" placeholder="Ej: Kiara (recepción)">
- <label class="lb">Correo de Google (para entrar con Google)</label><input class="in" id="uMail" type="email" value="${esc(u.email||'')}" placeholder="ej: kiara@gmail.com">
- <div class="g2">${API.remote?'':`<div><label class="lb">PIN</label><input class="in" id="uPin" inputmode="numeric" maxlength="6" value="${esc(u.pin)}" placeholder="4-6 dígitos"></div>`}<div><label class="lb">Rol</label><select class="in" id="uRol" data-on-change="aa0eea588">${Object.entries(ROLES).filter(([k])=>k!=='dueno').map(([k,r])=>`<option value="${k}" ${u.rol===k?'selected':''}>${r.t}</option>`).join('')}</select></div></div>
- <label class="lb">Vincular a un barbero (ve sus citas)</label><select class="in" id="uBarb" data-on-change="aaee9a791"><option value="">— Ninguno —</option>${D().barberos.map(b=>`<option value="${b.id}" ${u.barberoId===b.id?'selected':''}>${esc(b.nombre)}</option>`).join('')}</select>
- <label class="lb">Permisos</label><div id="uPerms"></div>
- ${accHTML(id&&'u_'+id)}
- <button class="btn p w" style="margin-top:16px;padding:14px" data-on-click="a8613fc93">💾 Listo</button>
- ${id?`<button class="btn r w" style="margin-top:8px" data-on-click="a71761b67" data-p0="${id}">🗑️ Eliminar usuario</button>`:''}`);uPerms();if(id)accCargar('u_'+id)}
-function uPerms(){$('#uPerms').innerHTML=PERMS.map(([k,t])=>`<div class="perm"><span>${t}</span>${sw(S._u.permisos[k],'togPermU',k)}</div>`).join('')}
-function rolUser(r){S._u.rol=r;if(r!=='personal')S._u.permisos={...ROLES[r].p};uPerms()}
-function saveUser(){const u=S._u;u.nombre=$('#uNom').value.trim();u.pin=API.remote?'':$('#uPin').value.replace(/\D/g,'');u.barberoId=$('#uBarb').value;u.email=$('#uMail').value.trim().toLowerCase();
- if(!u.nombre)return toast('Falta el nombre');if(u.email&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(u.email))return toast('Correo no válido');
- if(!API.remote&&!u.email&&u.pin.length<4)return toast('Pon un correo de Google o un PIN de 4 a 6 dígitos');if(u.pin&&u.pin.length<4)return toast('El PIN debe tener 4 a 6 dígitos');
- const usados=[D().cfg.adminPin,...D().barberos.map(b=>b.pin),...D().usuarios.filter(x=>x.id!==u.id).map(x=>x.pin)];if(u.pin&&usados.includes(u.pin))return toast('Ese PIN ya lo usa otra persona');
- if(u.email&&[...D().barberos.map(b=>b.email),...D().usuarios.filter(x=>x.id!==u.id).map(x=>x.email)].includes(u.email))return toast('Ese correo ya lo usa otra persona');
- if(!Object.values(u.permisos).some(Boolean))return toast('Dale al menos un permiso');
- if(u.id){const i=D().usuarios.findIndex(x=>x.id===u.id);D().usuarios[i]=u}else{u.id='u'+uid();D().usuarios.push(u)}closeModal();dirty();renderConfig()}
-function delUser(id){if(!confirm('¿Eliminar este usuario? Ya no podrá entrar.'))return;D().usuarios=D().usuarios.filter(x=>x.id!==id);closeModal();dirty();renderConfig()}
-function tplPreview(s){return tpl(s,{fecha:hoy(),hora:'10:00',barberoId:D().barberos[0]?.id,servicioNombre:'Fade / Degradado',precio:30,codigo:'AB12CD',adelanto:D().cfg.adelanto,cliente:{nombre:'Carlos',tel:'987654321',ciudad:'Puente Piedra'}},D().cfg)}
+function tplPreview(s){return tpl(s,{fecha:hoy(),hora:'10:00',barberoId:atienden()[0]?.id,servicioNombre:'Fade / Degradado',precio:30,codigo:'AB12CD',adelanto:D().cfg.adelanto,cliente:{nombre:'Carlos',tel:'987654321',ciudad:'Puente Piedra'}},D().cfg)}
 const NVARS=['narrador','cliente','servicio','precio','barbero','especialidad','fecha','hora','adelanto','yape','negocio'];
 function insVarN(k,v){const ta=$('#tn_'+k);const p=ta.selectionStart??ta.value.length;ta.value=ta.value.slice(0,p)+'{'+v+'}'+ta.value.slice(ta.selectionEnd??p);D().cfg.narr[k]=ta.value;dirty();ta.focus()}
 async function subirImg(inp,key,max,type){const f=inp.files[0];if(!f)return;try{D().cfg[key]=await API.putFoto(await compressImg(f,max,.85,type));dirty();renderConfig()}catch(e){toast('❌ '+e.message)}}
 function insVar(k,v){const ta=$('#ta_'+k);const p=ta.selectionStart??ta.value.length;ta.value=ta.value.slice(0,p)+'{'+v+'}'+ta.value.slice(ta.selectionEnd??p);setC(k,ta.value);ta.focus()}
 function setEst(k,f,v){const e=D().cfg.est;e[k]={...(e[k]||{}),[f]:v.trim()||DEF_EST[k][f]};dirty()}
 function togDia(x){const a=D().cfg.dias;const i=a.indexOf(x);i<0?a.push(x):a.splice(i,1);dirty();renderConfig()}
-function togBarb(id){const b=D().barberos.find(x=>x.id===id);b.activo=b.activo===false;dirty();renderConfig()}
 function togServ(id){const s=D().servicios.find(x=>x.id===id);s.activo=s.activo===false;dirty();renderConfig()}
 async function subirLogo(inp){const f=inp.files[0];if(!f)return;try{D().cfg.logoImg=await API.putFoto(await compressImg(f,600,.85));dirty();renderConfig()}catch(e){toast('❌ '+e.message)}}
 async function subirYapeQR(inp){const f=inp.files[0];if(!f)return;try{D().cfg.yapeQR=await API.putFoto(await compressImg(f,700,.85));dirty();renderConfig()}catch(e){toast('❌ '+e.message)}}
 function addBloqueo(){const f=$('#blF').value;if(!f)return toast('Elige una fecha');D().cfg.bloqueos=[...(D().cfg.bloqueos||[]),{id:uid(),fecha:f,barberoId:$('#blB').value,motivo:$('#blM').value.trim()}];dirty();renderConfig()}
 function delBloqueo(id){D().cfg.bloqueos=D().cfg.bloqueos.filter(b=>b.id!==id);dirty();renderConfig()}
-function editBarbero(id){const b=id?D().barberos.find(x=>x.id===id):{id:'',nombre:'',esp:'',foto:'',color:COLORES[D().barberos.length%COLORES.length],pin:'',comision:50,dias:[...D().cfg.dias],activo:true};S._b=clone(b);
- openModal(mHead(id?'✏️ Editar barbero':'➕ Nuevo barbero')+`
- <label class="upl"><span class="prev" id="bPrev">${b.foto?`<img data-foto="${b.foto}">`:'💈'}</span><span class="btn sm">📷 Foto del barbero</span><input type="file" accept="image/*" data-on-change="a55f32410"></label>
- <label class="lb">Nombre</label><input class="in" id="bNom" value="${esc(b.nombre)}">
- <label class="lb">Especialidad (se ve en el formulario)</label><input class="in" id="bEsp" value="${esc(b.esp||'')}" placeholder="Ej: Fades y diseños">
- <label class="lb">Correo de Google (para entrar con Google)</label><input class="in" id="bMail" type="email" value="${esc(b.email||'')}" placeholder="ej: jhon@gmail.com">
- <label class="lb">Color en la agenda</label><div class="sws" id="bCol"></div>
- <div class="g2">${API.remote?'':`<div><label class="lb">PIN de acceso</label><input class="in" id="bPin" inputmode="numeric" maxlength="6" value="${esc(b.pin)}" placeholder="4 dígitos"></div>`}<div><label class="lb">Comisión %</label><input class="in" id="bCom" type="number" min="0" max="100" value="${b.comision}"></div></div>
- <label class="lb">Días que trabaja</label><div class="dchips" id="bDias"></div>
- ${accHTML(id&&'b_'+id)}
- <button class="btn p w" style="margin-top:16px;padding:14px" data-on-click="ac48da0da">💾 Listo</button>
- ${id?`<button class="btn r w" style="margin-top:8px" data-on-click="a86516cc0" data-p0="${id}">🗑️ Eliminar barbero</button>`:''}`);bDias();bCol();if(id)accCargar('b_'+id)}
-function bDias(){$('#bDias').innerHTML=ORDEN.map(x=>`<button class="dchip ${S._b.dias.includes(x)?'on':''}" data-on-click="a6a5d3cf3" data-p0="${x}" data-p1="${x}" data-p2="${x}">${DIAS[x]}</button>`).join('')}
-function bCol(){$('#bCol').innerHTML=COLORES.map(x=>`<button class="swc ${S._b.color===x?'on':''}" style="background:${x}" data-on-click="aa2dbbcdc" data-p0="${x}"></button>`).join('')}
-async function fotoBarb(inp){const f=inp.files[0];if(!f)return;try{S._b.foto=await API.putFoto(await compressImg(f,320,.8));$('#bPrev').innerHTML=`<img src="${await API.foto(S._b.foto)}">`}catch(e){toast('❌ '+e.message)}}
-function saveBarbero(){const b=S._b;b.nombre=$('#bNom').value.trim();b.esp=$('#bEsp').value.trim();b.pin=API.remote?'':$('#bPin').value.replace(/\D/g,'');b.email=$('#bMail').value.trim().toLowerCase();b.comision=Math.min(100,Math.max(0,+$('#bCom').value||0));
- if(!b.nombre)return toast('Falta el nombre');if(b.email&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(b.email))return toast('Correo no válido');
- if(!API.remote&&!b.email&&b.pin.length<4)return toast('Pon un correo de Google o un PIN de al menos 4 dígitos');if(b.pin&&b.pin.length<4)return toast('El PIN debe tener al menos 4 dígitos');
- if(b.pin&&(b.pin===D().cfg.adminPin||D().barberos.some(x=>x.id!==b.id&&x.pin===b.pin)||(D().usuarios||[]).some(x=>x.pin===b.pin)))return toast('Ese PIN ya está en uso');
- if(b.email&&[...D().barberos.filter(x=>x.id!==b.id).map(x=>x.email),...(D().usuarios||[]).map(x=>x.email)].includes(b.email))return toast('Ese correo ya lo usa otra persona');
- if(b.id){const i=D().barberos.findIndex(x=>x.id===b.id);D().barberos[i]=b}else{b.id='b'+uid();D().barberos.push(b)}closeModal();dirty();renderConfig()}
-function delBarbero(id){const fut=S.citas.filter(c=>c.barberoId===id&&c.fecha>=hoy()&&activa(c)).length;if(!confirm(fut?`Tiene ${fut} cita(s) próximas. Mejor desactívalo con el interruptor. ¿Eliminar igual?`:'¿Eliminar este barbero?'))return;D().barberos=D().barberos.filter(b=>b.id!==id);closeModal();dirty();renderConfig()}
 function editServicio(id){const s=id?D().servicios.find(x=>x.id===id):{id:'',emoji:'✂️',nombre:'',precio:25,desc:'',foto:'',activo:true};S._s=clone(s);
  openModal(mHead(id?'✏️ Editar servicio':'➕ Nuevo servicio')+`
  <label class="upl"><span class="prev" id="sPrev">${s.foto?`<img data-foto="${s.foto}">`:s.emoji}</span><span class="btn sm">📷 Foto de referencia</span><input type="file" accept="image/*" data-on-change="ae7c93562"></label>
@@ -305,16 +247,16 @@ async function fotoServ(inp){const f=inp.files[0];if(!f)return;try{S._s.foto=awa
 function saveServicio(){const s=S._s;s.emoji=$('#sEmo').value.trim()||'✂️';s.nombre=$('#sNom').value.trim();s.precio=Math.max(0,+$('#sPre').value||0);s.desc=$('#sDes').value.trim();if(!s.nombre)return toast('Falta el nombre');
  if(s.id){const i=D().servicios.findIndex(x=>x.id===s.id);D().servicios[i]=s}else{s.id='s'+uid();D().servicios.push(s)}closeModal();dirty();renderConfig()}
 function delServicio(id){if(!confirm('¿Eliminar este servicio?'))return;D().servicios=D().servicios.filter(s=>s.id!==id);closeModal();dirty();renderConfig()}
-async function guardarConfig(){const d=D();if(!d)return;if(!d.cfg.nombre)return toast('Falta el nombre de la barbería');if(!API.remote&&(d.cfg.adminPin||'').length<4)return toast('El PIN admin debe tener 4+ dígitos');
+async function guardarConfig(){const d=D();if(!d)return;if(!d.cfg.nombre)return toast('Falta el nombre de la barbería');
  if(!slotsDia(d.cfg).length)return toast('⚠️ Revisa el horario: no hay turnos de 1 hora');
- try{await API.saveConfig(d.cfg,d.barberos,d.servicios,d.usuarios);S.draft=null;S.dirty=false;await reload();renderConfig();toast('✅ Configuración guardada')}catch(e){toast('❌ '+e.message)}}
+ try{await API.saveConfig(d.cfg,d.equipo,d.servicios);S.draft=null;S.dirty=false;await reload();renderConfig();toast('✅ Configuración guardada')}catch(e){toast('❌ '+e.message)}}
 async function exportar(){let data;if(API.remote){try{data=await API.req('GET','/exportar')}catch(e){return toast('❌ '+e.message)}}
- else{data={v:4,usuarios:lsGet('usuarios',[]),fecha:new Date().toISOString(),cfg:lsGet('cfg',{}),barberos:lsGet('barberos',[]),servicios:lsGet('servicios',[]),citas:lsGet('citas',[]),links:lsGet('links',[]),fotos:{}};
+ else{data={v:5,fecha:new Date().toISOString(),cfg:lsGet('cfg',{}),equipo:lsGet('equipo',[]),servicios:lsGet('servicios',[]),citas:lsGet('citas',[]),links:lsGet('links',[]),fotos:{}};
   const keys=new Set(JSON.stringify(data).match(/f_[a-z0-9]+/g)||[]);for(const k of keys){const v=await IDB.get(k);if(v)data.fotos[k]=v}}
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,1)],{type:'application/json'}));a.download=`barberia-respaldo-${hoy()}.json`;a.click()}
 function importar(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{try{const d=JSON.parse(r.result);if(!d.cfg||!Array.isArray(d.citas))throw new Error('Archivo no válido');if(!confirm(`¿Reemplazar todo con el respaldo (${d.citas.length} citas)?`))return;
  if(API.remote){toast('⏳ Subiendo respaldo a la nube…');const x=await API.req('POST','/importar',d);S.draft=null;S.dirty=false;API._d=null;await reload();renderConfig();return toast(`✅ ${x.citas} citas y ${x.fotos} fotos en la nube`)}
- if(d.fotos)for(const[k,v]of Object.entries(d.fotos))await IDB.put(k,v);lsSet('cfg',d.cfg);lsSet('barberos',d.barberos||[]);lsSet('servicios',d.servicios||[]);lsSet('citas',d.citas);if(Array.isArray(d.links))lsSet('links',d.links);if(Array.isArray(d.usuarios))lsSet('usuarios',d.usuarios);S.draft=null;S.dirty=false;await reload();renderConfig();toast('✅ Respaldo importado')}catch(e){toast('❌ '+e.message)}};r.readAsText(f)}
+ if(d.fotos)for(const[k,v]of Object.entries(d.fotos))await IDB.put(k,v);lsSet('cfg',d.cfg);guardarEquipoLocal(Array.isArray(d.equipo)?d.equipo:equipoDesdeLocal(d.barberos||[],d.usuarios||[],d.cfg));lsSet('servicios',d.servicios||[]);lsSet('citas',d.citas);if(Array.isArray(d.links))lsSet('links',d.links);S.draft=null;S.dirty=false;await reload();renderConfig();toast('✅ Respaldo importado')}catch(e){toast('❌ '+e.message)}};r.readAsText(f)}
 async function verAccesos(){try{const r=await API.req('GET','/accesos');
  openModal(mHead('📜 Registro de accesos')+`<p class="hint">Últimos ${r.length} intentos de entrada (Google y PIN).</p>`+(r.length?r.map(x=>`<div class="li"><div class="t"><b>${x.ok?'✅':'❌'} ${esc(x.quien||'—')} <small style="color:var(--mu)">· ${x.via==='google'?'Google':'PIN'}</small></b><small>${new Date(x.ts).toLocaleString('es-PE')} · ${esc(x.motivo||'')}${x.ip?' · '+esc(x.ip):''}</small></div></div>`).join(''):'<div class="empty">Todavía no hay accesos</div>'))}catch(e){toast('❌ '+e.message)}}
 async function probarNube(){toast('⏳ Probando…');try{const r=await API.req('GET','/diagnostico');

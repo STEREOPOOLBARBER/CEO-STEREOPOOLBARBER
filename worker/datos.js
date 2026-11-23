@@ -1,4 +1,4 @@
-import { MAX_AUDIO, MAX_FOTO, codigo, fail, uid } from './comun.js';
+import { MAX_AUDIO, MAX_FOTO, ROL_BARBERO, codigo, fail, uid } from './comun.js';
 import { pinPermitido } from './modulos/auth.js';
 import { actualizarCliente, rehacerClientes, telDe } from './modulos/clientes.js';
 
@@ -66,6 +66,8 @@ export const MIGRACIONES = [
     // Qué citas ya calificaron, como huella (hash) para que nadie pueda unir una calificación con su cliente.
     `CREATE TABLE IF NOT EXISTS calif_hechas(h TEXT PRIMARY KEY)`,
   ] },
+  // Una sola lista de personas (equipo): barberos y usuarios se juntan; claves y huellas pasan a 'p_' + id.
+  { v: 7, nombre: 'equipo único', sql: [], despues: unirEquipo },
 ];
 export let schemaListo = null;
 export function asegurarSchema(env) { return schemaListo ||= aplicarMigraciones(env).catch(e => { schemaListo = null; throw e }) }
@@ -74,7 +76,7 @@ async function aplicarMigraciones(env) {
   const hechas = new Set((await env.DB.prepare('SELECT v FROM _migraciones').all()).results.map(r => r.v));
   for (const mg of MIGRACIONES.filter(x => !hechas.has(x.v)).sort((a, b) => a.v - b.v))
   {
-    await env.DB.batch(mg.sql.map(q => env.DB.prepare(q)));
+    if (mg.sql.length) await env.DB.batch(mg.sql.map(q => env.DB.prepare(q)));
     if (mg.despues) await mg.despues(env);
     await env.DB.prepare('INSERT OR IGNORE INTO _migraciones(v, nombre, ts) VALUES(?, ?, ?)').bind(mg.v, mg.nombre, Date.now()).run();
   }
@@ -82,15 +84,14 @@ async function aplicarMigraciones(env) {
 
 /* ---------- base de datos ---------- */
 
-// Primera vez: deja la app lista con barberos y servicios de ejemplo (sin PIN: se entra con Google).
+// Primera vez: deja la app lista con el dueño, barberos y servicios de ejemplo (se entra con Google y la clave de cada uno).
 export const COLORES = ['#ff3fd2', '#8a3ffc', '#4d6bff', '#ffb057', '#3fb950'];
 export const SEED = {
   cfg: { nombre: 'Stereo Barber Pool' },
-  barberos: [['Jhon', 'Fades y degradados'], ['Brayan', 'Diseños y freestyle'], ['Piero', 'Cortes clásicos'], ['Alexis', 'Barba y perfilado'], ['Renzo', 'Taper y mullet']]
-    .map(([nombre, esp], i) => ({ id: 'b' + (i + 1), nombre, esp, foto: '', color: COLORES[i], comision: 50, dias: [1, 2, 3, 4, 5, 6], activo: true })),
+  equipo: [{ id: 'dueno', nombre: 'Dueño', rol: 'dueno', permisos: {}, atiende: false, activo: true, email: '' }, ...[['Jhon', 'Fades y degradados'], ['Brayan', 'Diseños y freestyle'], ['Piero', 'Cortes clásicos'], ['Alexis', 'Barba y perfilado'], ['Renzo', 'Taper y mullet']]
+    .map(([nombre, esp], i) => ({ id: 'b' + (i + 1), nombre, rol: 'barbero', permisos: { ...ROL_BARBERO }, atiende: true, esp, foto: '', color: COLORES[i], comision: 50, dias: [1, 2, 3, 4, 5, 6], activo: true, email: '' }))],
   servicios: [['✂️', 'Corte clásico', 25, 'Tijera y máquina, acabado limpio'], ['🔥', 'Fade / Degradado', 30, 'Low, mid o high fade'], ['💈', 'Taper', 30, 'Degradado suave en patillas y nuca'], ['🧔', 'Corte + Barba', 40, 'Corte completo y perfilado de barba'], ['🪒', 'Barba', 15, 'Perfilado con toalla caliente'], ['🎨', 'Diseño / Freestyle', 35, 'Líneas y figuras a mano alzada']]
     .map(([emoji, nombre, precio, desc], i) => ({ id: 's' + (i + 1), emoji, nombre, precio, desc, foto: '', activo: true })),
-  usuarios: [],
 };
 export let sembrado = false;
 export async function sembrar(env) {
@@ -100,14 +101,40 @@ export async function sembrar(env) {
   if (!pinPermitido(env)) await quitarPines(env);
   sembrado = true;
 }
-// Borra los PIN que quedaron guardados (el acceso es solo con Google). Los que no sean los de ejemplo se conservan.
+// Borra los PIN que quedaron guardados (solo existen en las pruebas locales con ALLOW_PIN).
 export async function quitarPines(env) {
-  const d = await leerKV(env, ['cfg', 'barberos', 'usuarios']); const cambios = [];
-  if (d.cfg?.adminPin) { const { adminPin, ...cfg } = d.cfg; cambios.push(kvStmt(env, 'cfg', cfg)) }
-  const sinPin = a => a.map(({ pin, ...x }) => x);
-  if ((d.barberos || []).some(b => b.pin)) cambios.push(kvStmt(env, 'barberos', sinPin(d.barberos)));
-  if ((d.usuarios || []).some(u => u.pin)) cambios.push(kvStmt(env, 'usuarios', sinPin(d.usuarios)));
-  if (cambios.length) await env.DB.batch(cambios);
+  const { equipo } = await leerKV(env, ['equipo']);
+  if ((equipo || []).some(p => p.pin)) await kvStmt(env, 'equipo', equipo.map(({ pin, ...p }) => p)).run();
+}
+
+/* ---------- EQUIPO: una sola lista de personas (la única verdad de quién entra y quién atiende) ----------
+   Persona: { id, nombre, rol, permisos, atiende, activo, email, foto, color, esp, dias, comision }
+   · rol 'dueno' tiene todos los permisos; los demás, los que el dueño marque.
+   · «atiende» = sale en la agenda, el formulario y la caja (lo que antes era «barbero»). Su id es el barberoId de sus citas.
+   · Sujeto de acceso (clave, huella, puerta) = 'p_' + id. */
+export const barberoDe = p => ({ id: p.id, nombre: p.nombre, esp: p.esp || '', foto: p.foto || '', color: p.color || '', comision: +p.comision || 0, dias: p.dias || [1, 2, 3, 4, 5, 6], activo: p.activo !== false, email: p.email || '', ...(p.pin ? { pin: p.pin } : {}) });
+/* Une las listas antiguas (barberos + usuarios + dueño con PIN/clave aparte) en el equipo. mapa: sujeto viejo → nuevo. */
+export function equipoDesde(barberos = [], usuarios = [], cfg = {}) {
+  const permB = { ...ROL_BARBERO, ...(cfg.permBarbero || {}) }, mapa = { admin: 'p_dueno' };
+  const equipo = [{ id: 'dueno', nombre: 'Dueño', rol: 'dueno', permisos: {}, atiende: false, activo: true, email: '', ...(cfg.adminPin ? { pin: cfg.adminPin } : {}) }]; // PIN: solo pruebas locales
+  for (const b of barberos) { equipo.push({ ...barberoDe(b), rol: 'barbero', permisos: { ...permB }, atiende: true }); mapa['b_' + b.id] = 'p_' + b.id }
+  for (const u of usuarios) {
+    const t = u.barberoId && equipo.find(p => p.atiende && p.id === u.barberoId);
+    if (t) { Object.assign(t, { rol: u.rol || t.rol, permisos: { ...(u.permisos || {}) }, email: t.email || u.email || '' }); mapa['u_' + u.id] = 'p_' + t.id }
+    else { equipo.push({ id: u.id, nombre: u.nombre || '', rol: u.rol || 'personal', permisos: { ...(u.permisos || {}) }, atiende: false, activo: u.activo !== false, email: u.email || '', ...(u.pin ? { pin: u.pin } : {}) }); mapa['u_' + u.id] = 'p_' + u.id }
+  }
+  return { equipo, mapa };
+}
+/* Migración v7: pasa barberos y usuarios al equipo y mueve sus claves y huellas al nuevo sujeto. Las sesiones se cierran. */
+async function unirEquipo(env) {
+  const d = await leerKV(env, ['cfg', 'barberos', 'usuarios', 'equipo']);
+  if (d.equipo || (!d.barberos && !d.usuarios)) return; // instalación nueva: el equipo lo crea sembrar()
+  const { equipo, mapa } = equipoDesde(d.barberos || [], d.usuarios || [], d.cfg || {}), { adminPin, permBarbero, ...cfg } = d.cfg || {};
+  const mover = Object.entries(mapa).flatMap(([v, n]) => [
+    env.DB.prepare('UPDATE OR IGNORE claves SET sujeto = ? WHERE sujeto = ?').bind(n, v), env.DB.prepare('DELETE FROM claves WHERE sujeto = ?').bind(v),
+    env.DB.prepare('UPDATE passkeys SET sujeto = ? WHERE sujeto = ?').bind(n, v), env.DB.prepare('UPDATE invitaciones SET sujeto = ? WHERE sujeto = ?').bind(n, v)]);
+  await env.DB.batch([kvStmt(env, 'equipo', equipo), kvStmt(env, 'cfg', cfg), env.DB.prepare("DELETE FROM kv WHERE k IN ('barberos', 'usuarios')"), ...mover,
+    env.DB.prepare("DELETE FROM claves WHERE substr(sujeto, 1, 2) <> 'p_'"), env.DB.prepare('DELETE FROM retos'), env.DB.prepare('DELETE FROM sesiones'), bumpStmt(env)]);
 }
 
 export async function leerKV(env, keys) {
@@ -115,9 +142,10 @@ export async function leerKV(env, keys) {
   return Object.fromEntries(r.results.map(x => [x.k, JSON.parse(x.v)]));
 }
 export const kvStmt = (env, k, v) => env.DB.prepare('INSERT INTO kv(k, v) VALUES(?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v').bind(k, JSON.stringify(v));
+/* Datos del negocio. «barberos» no se guarda: sale del equipo (las personas que atienden). */
 export async function datos(env) {
-  const d = await leerKV(env, ['cfg', 'barberos', 'servicios', 'usuarios']);
-  return { cfg: d.cfg || {}, barberos: d.barberos || [], servicios: d.servicios || [], usuarios: d.usuarios || [] };
+  const d = await leerKV(env, ['cfg', 'equipo', 'servicios']), equipo = d.equipo || [];
+  return { cfg: d.cfg || {}, equipo, barberos: equipo.filter(p => p.atiende).map(barberoDe), servicios: d.servicios || [] };
 }
 // Cada cambio sube la versión; el panel solo descarga todo cuando la versión cambia.
 export const bumpStmt = env => kvStmt(env, 'ver', Date.now());
