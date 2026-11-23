@@ -36,6 +36,7 @@ const SUITES = [
   { n: 'calificaciones.e2e', vars: PIN, sql: ADMIN },
   { n: 'escena.ui', vars: PIN, sql: ADMIN, ui: true },
   { n: 'equipo.e2e', vars: PIN, sql: 'file:test/sembrar-equipo-antiguo.sql', reinicio: true },
+  { n: 'app.ui', vars: PIN, sql: ADMIN, ui: true },
   { n: 'csp.ui', vars: PIN, sql: ADMIN, ui: true },
   { n: 'tiemporeal.ui', vars: PIN, sql: ADMIN, ui: true },
   { n: 'monitoreo.e2e', vars: { ...PIN, ...DNI, RESPALDO_MIN: '0', SIN_LIMITES_CF: 'false' }, sql: ADMIN, extra: ['--test-scheduled'] },

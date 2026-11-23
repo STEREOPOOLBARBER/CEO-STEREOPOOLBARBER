@@ -1,5 +1,6 @@
 /* ---------- inicio ---------- */
 (async function(){
+ iniciarApp();
  if(!API.remote)seed();else $('#pinBox').style.display='none';
  const _hc=API.remote&&new URLSearchParams(location.search).get('huella');if(_hc)return activarHuella(_hc.slice(0,40));
  let pc={};if(API.remote){try{pc=(await API.req('GET','/publico')).cfg||{}}catch(e){}}else pc=lsGet('cfg',{});

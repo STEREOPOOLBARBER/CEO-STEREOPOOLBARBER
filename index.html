@@ -2,8 +2,15 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <meta name="theme-color" content="#0b0812">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Stereo Panel">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="/img/app/icono-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png">
 <title>Barbería · Panel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
@@ -270,6 +277,24 @@ th{color:var(--mu);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
 #viewer.on{display:flex}#viewer img{max-width:100%;max-height:100%;border-radius:12px}#viewer .x{position:absolute;top:16px;right:16px;color:#fff;font-size:26px}
 .stp>div{flex:1;min-width:0}.stp>div>b{display:block;font-size:15px}
 .stp>b{width:30px;height:30px;border-radius:50%;background:var(--blue);display:grid;place-items:center;flex:none;font-size:14px}
+
+/* ===== Tamaño de app (igual en celular, laptop y PC): una columna de 480 px centrada, como Total Tools ===== */
+:root{--col:480px;--lado:max(0px,calc((100vw - var(--col)) / 2))}
+body{max-width:var(--col);margin:0 auto;min-height:100vh;min-height:100dvh;overflow-x:clip;position:relative}
+@media (min-width:520px){html{background:#050309}body{border-left:1px solid var(--line);border-right:1px solid var(--line)}}
+main{max-width:none;padding-bottom:calc(120px + env(safe-area-inset-bottom))}
+/* Botones que nunca quedan tapados: zona segura del iPhone (muesca y barra de inicio) y altura real visible (dvh) */
+.top{height:auto;min-height:78px;padding-top:calc(12px + env(safe-area-inset-top))}
+.sheet{max-width:var(--col);max-height:94vh;max-height:94dvh}
+.savebar{left:var(--lado);right:var(--lado)}.savebar .btn{max-width:none}
+.toast{bottom:calc(24px + env(safe-area-inset-bottom));max-width:min(92vw,440px)}
+#notif{right:calc(var(--lado) + 12px);width:min(390px,calc(100vw - 24px),calc(var(--col) - 24px));max-height:72dvh}
+.login{left:var(--lado);right:var(--lado);padding:calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom))}
+/* iPhone hace zoom al escribir en campos de menos de 16 px */
+@supports (-webkit-touch-callout:none){input,select,textarea{font-size:16px}}
+/* app instalada: aviso de versión nueva */
+.nuevaver{position:fixed;left:calc(var(--lado) + 12px);right:calc(var(--lado) + 12px);bottom:calc(16px + env(safe-area-inset-bottom));z-index:90;display:flex;align-items:center;gap:10px;background:var(--card2);border:1px solid var(--pur);border-radius:16px;padding:12px 14px;box-shadow:0 12px 36px rgba(0,0,0,.5)}
+.nuevaver span{flex:1;font-weight:700;font-size:14px}
 </style>
 </head>
 <body>
@@ -351,6 +376,7 @@ th{color:var(--mu);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
 <script src="js/panel/equipo.js"></script>
 <script src="js/panel/voz.js"></script>
 <script src="js/panel/acceso.js"></script>
+<script src="js/panel/app.js"></script>
 <script src="js/panel/inicio.js"></script>
 </body>
 </html>

@@ -8,7 +8,7 @@
   "assets": {
     "directory": "./",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/", "/index", "/index.html", "/reservar", "/reservar.html", "/estado", "/estado.html", "/privacidad", "/privacidad.html"]
+    "run_worker_first": ["/api/*", "/sw.js", "/", "/index", "/index.html", "/reservar", "/reservar.html", "/estado", "/estado.html", "/privacidad", "/privacidad.html"]
   },
   "d1_databases": [
     { "binding": "DB", "database_name": "stereo-barber-db" }
@@ -27,6 +27,7 @@
     { "name": "RL_RES", "namespace_id": "4103", "simple": { "limit": 6, "period": 60 } }
   ],
   // Vence cada 5 minutos las reservas que no pagaron a tiempo.
+  "version_metadata": { "binding": "CF_VERSION" },
   "triggers": { "crons": ["*/5 * * * *"] },
   // ID de cliente de Google (dato público). Va en el código para que no se pierda al desplegar.
   "vars": {
@@ -47,6 +48,7 @@
         { "binding": "FOTOS", "bucket_name": "stereo-barber-fotos-staging" }
       ],
       "durable_objects": { "bindings": [{ "name": "AVISOS", "class_name": "Avisos" }] },
+      "version_metadata": { "binding": "CF_VERSION" },
       "ratelimits": [
         { "name": "RL_PUB", "namespace_id": "4201", "simple": { "limit": 120, "period": 60 } },
         { "name": "RL_DNI", "namespace_id": "4202", "simple": { "limit": 10, "period": 60 } },

@@ -186,3 +186,9 @@ La estructura de la base de datos ahora es **versionada** (`MIGRACIONES` en `wor
 - **Ya no trabaja aquí:** Equipo → su nombre → «🚫 Dar de baja»: deja de entrar al instante en todos sus aparatos; sus citas quedan.
 - **Celular o tablet perdido:** ⚙️ Config → 🔐 Seguridad → **📱 Aparatos autorizados** → «Quitar».
 - **Tablet del local:** si un barbero entra en un aparato que no es suyo, se cierra solo tras **15 minutos sin uso**.
+
+### App del panel (instalable)
+- El panel ahora es una **app**: en Android o PC, ☰ Menú → **📲 Instalar la app**; en iPhone, el mismo botón muestra los pasos (Safari → Compartir → Agregar a inicio).
+- **Se actualiza sola:** cuando subimos cambios, sale «Hay una versión nueva → Actualizar», o se aplica al volver a abrir la app. Nunca corta lo que estás haciendo.
+- Se ve **igual en celular, laptop y PC** (una columna como la app de Total Tools) y los botones no quedan tapados por la barra del iPhone ni por el teclado.
+- Emergencia (si algo de la app fallara): en Cloudflare → Variables, poner `SW_APAGADO` = `true` y volver a desplegar; la app vuelve a funcionar como página normal.
