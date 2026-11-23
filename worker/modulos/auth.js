@@ -269,6 +269,18 @@ export async function rutasAuth(c) {
     if (exigePuerta(env) && (!pg || !permitido(pg, g.sujeto))) { const n = await abrirPuertaId(env, { sujeto: g.sujeto }, 90 * 864e5, req); antes.push(n.cookie); pg = { id: n.id, dueno: false, propio: g.sujeto } }
     return entrarComo(req, env, pg, ident, { via: 'huella', cid: g.id }, 'huella', '', antes);
   }
+  // «Activar su celular»: el dueño genera un QR/link (un solo uso, 24 h). Al abrirlo, ESE aparato queda autorizado
+  // para esa persona (90 días, sin Google): entra con su clave y, si quiere, activa su huella o Face ID.
+  if (path === '/auth/activar' && m === 'POST') {
+    await limitar(env, 'pk:' + ipDe(req), 20, 15 * 60e3);
+    const h = await hashInv((await body()).codigo), inv = await env.DB.prepare('DELETE FROM invitaciones WHERE h = ? AND exp > ? RETURNING sujeto').bind(h, Date.now()).first();
+    if (!inv) { await anotar(env, 'activar', '', false, 'link vencido o usado', req); fail(404, 'Este link ya no sirve. Pide uno nuevo al dueño.') }
+    const d = await datos(env), ident = porSujeto(inv.sujeto, d); if (!ident) fail(404, 'Esta persona ya no está activa.');
+    const c = await env.DB.prepare('SELECT temporal FROM claves WHERE sujeto = ?').bind(inv.sujeto).first();
+    await anotar(env, 'activar', ident.nombre, true, 'celular activado', req);
+    const ck = exigePuerta(env) ? { 'Set-Cookie': await abrirPuerta(env, { sujeto: inv.sujeto }, 90 * 864e5, req) } : {};
+    return json({ nombre: ident.nombre, sujeto: inv.sujeto, clave: !!c }, 200, ck);
+  }
   // La huella se activa con una invitación que crea el administrador (código de un solo uso, vale 24 h).
   if (path === '/passkey/opciones' && m === 'POST') {
     await limitar(env, 'pk:' + ipDe(req), 20, 15 * 60e3);
@@ -348,14 +360,14 @@ export async function rutasAcceso(c) {
     exigir('config'); const ident = porSujeto(x[1], d); if (!ident) fail(404, 'Esa persona todavía no existe: toca «Guardar configuración» primero.');
     if (ident.rol === 'dueno' && s.rol !== 'dueno') fail(403, 'Solo el dueño puede cambiar la clave de un dueño');
     if (m === 'DELETE') { await env.DB.prepare('DELETE FROM claves WHERE sujeto = ?').bind(x[1]).run(); await anotar(env, 'clave', ident.nombre, true, 'clave quitada por ' + s.nombre, req); return json({ ok: true }) }
-    const clave = String((await body()).clave || '');
+    const b = await body(), clave = String(b.clave || '');
     validarClave(clave);
-    // La que pone el dueño a otra persona es TEMPORAL: al entrar, esa persona debe crear la suya (el dueño nunca sabe la definitiva).
-    const temporal = x[1] !== s.sujeto;
+    // La que pone el dueño a otra persona queda FIJA (decisión del dueño); con «temporal: true», al entrar debe crear la suya.
+    const temporal = x[1] !== s.sujeto && b.temporal === true;
     await guardarClave(env, x[1], clave, temporal);
     await env.DB.prepare('DELETE FROM intentos WHERE ip = ?').bind('ks:' + x[1]).run();
     await anotar(env, 'clave', ident.nombre, true, (temporal ? 'clave temporal puesta por ' : 'clave cambiada por ') + s.nombre, req);
-    await auditar(env, quienEs(s), temporal ? 'Dio clave temporal' : 'Cambió su clave', ident.nombre);
+    await auditar(env, quienEs(s), temporal ? 'Dio clave temporal' : x[1] === s.sujeto ? 'Cambió su clave' : 'Puso la clave', ident.nombre);
     return json({ ok: true, temporal });
   }
   // Desbloquear a alguien que se equivocó varias veces con su clave.
@@ -395,8 +407,7 @@ export async function rutasAcceso(c) {
   if ((x = path.match(/^\/acceso\/(p_[\w-]+)\/invitacion$/)) && m === 'POST') {
     exigir('config'); const ident = porSujeto(x[1], d); if (!ident) fail(404, 'Esa persona todavía no existe: toca «Guardar configuración» primero.');
     if (ident.rol === 'dueno' && s.rol !== 'dueno') fail(403, 'Solo el dueño puede activar la huella de un dueño');
-    await auditar(env, quienEs(s), 'Invitó a activar huella', ident.nombre);
-    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM passkeys WHERE sujeto = ?').bind(x[1]).first(); if (n.n >= 5) fail(409, 'Ya tiene 5 dispositivos. Quita alguno primero.');
+    await auditar(env, quienEs(s), 'Activar celular (QR)', ident.nombre);
     const codigo = codigoInv(), vence = Date.now() + 864e5;
     await env.DB.prepare('INSERT INTO invitaciones(h, sujeto, exp) VALUES(?, ?, ?)').bind(await hashInv(codigo), x[1], vence).run();
     return json({ codigo, vence });

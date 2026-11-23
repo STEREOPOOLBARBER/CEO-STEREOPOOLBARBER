@@ -2,7 +2,7 @@
 (async function(){
  iniciarApp();
  if(!API.remote)seed();else $('#pinBox').style.display='none';
- const _hc=API.remote&&new URLSearchParams(location.search).get('huella');if(_hc)return activarHuella(_hc.slice(0,40));
+ const _q=new URLSearchParams(location.search),_hc=API.remote&&(_q.get('activar')||_q.get('huella'));if(_hc)return activarCelular(_hc.slice(0,40)); // QR «Activar su celular» (y links viejos ?huella=)
  let pc={};if(API.remote){try{pc=(await API.req('GET','/publico')).cfg||{}}catch(e){}}else pc=lsGet('cfg',{});
  const cfg=mergeCfg(pc);applyTheme(cfg);$('#lgNombre').textContent=cfg.nombre;logoHTML($('#lgLogo'),cfg);
  $('#lgHint').innerHTML=API.remote?'':'Modo local · PIN admin: <b>1234</b><br>Barberos de ejemplo: 1111, 2222, 3333…<br>Cámbialos en ⚙️ Config.';

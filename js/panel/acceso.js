@@ -19,17 +19,17 @@ function elegirPerfil(suj){const p=(S.perf||[]).find(x=>x.sujeto===suj);if(!p)re
 async function loginClave(){const q=S.selP,c=$('#cClave').value;if(!q)return toast('Elige quién eres');if(!c)return toast('Escribe tu clave');
  try{const r=await API.req('POST','/auth/clave',{sujeto:q,clave:c});$('#cClave').value='';lsSet('ultimoPerfil',q);
   if(r.cambiar){S._tmp=c;$('#cBox').style.display='none';$('#olvBtn').style.display='none';$('#tBox').style.display='flex';setTimeout(()=>$('#tClave').focus(),50);return}
-  await entrar(r)}catch(e){toast('❌ '+e.message);$('#cClave').value=''}}
+  await entrar(r);if(!r.bloqueo)ofrecerHuella()}catch(e){toast('❌ '+e.message);$('#cClave').value=''}}
 const dosClaves=(a,b)=>{const x=$(a).value;if(x.length<6){toast('La clave debe tener al menos 6 caracteres');return null}if(x!==$(b).value){toast('Las dos claves no coinciden');return null}return x};
 /* Clave temporal que puso el dueño → la persona crea la suya y entra. */
 ACC.cambiarTemporal=async function(){const n=dosClaves('#tClave','#tClave2');if(!n)return;
- try{const r=await API.req('POST','/auth/clave/cambiar',{sujeto:S.selP,actual:S._tmp,nueva:n});S._tmp=null;await entrar(r)}catch(e){toast('❌ '+e.message)}};
+ try{const r=await API.req('POST','/auth/clave/cambiar',{sujeto:S.selP,actual:S._tmp,nueva:n});S._tmp=null;await entrar(r);if(!r.bloqueo)ofrecerHuella()}catch(e){toast('❌ '+e.message)}};
 /* ¿Olvidaste tu clave? → clave nueva + confirmar con su propio Google. */
 ACC.olvideClave=function(){$('#cBox').style.display='none';this.style.display='none';$('#rBox').style.display='flex';gPintar('#rG',recuperarConGoogle).catch(e=>toast('❌ '+e.message))};
 async function recuperarConGoogle(g){const n=dosClaves('#rClave','#rClave2');if(!n)return gPintar('#rG',recuperarConGoogle).catch(()=>{});
  try{const r=await API.req('POST','/auth/clave/recuperar',{sujeto:S.selP,credential:g.credential,nueva:n});await entrar(r)}catch(e){toast('❌ '+e.message);gPintar('#rG',recuperarConGoogle).catch(()=>{})}}
 async function crearClave(){const a=$('#nClave').value,b=$('#nClave2').value;if(a.length<6)return toast('La clave debe tener al menos 6 caracteres');if(a!==b)return toast('Las dos claves no coinciden');
- try{const r=await API.req('POST','/auth/clave/crear',{sujeto:S.selP,clave:a});lsSet('ultimoPerfil',S.selP);await entrar(r)}catch(e){toast('❌ '+e.message)}}
+ try{const r=await API.req('POST','/auth/clave/crear',{sujeto:S.selP,clave:a});lsSet('ultimoPerfil',S.selP);await entrar(r);if(!r.bloqueo)ofrecerHuella()}catch(e){toast('❌ '+e.message)}}
 ACC.crearClave=function(){crearClave()};
 ACC.claveNuevaTecla=function(event){if(event.key==='Enter')crearClave()};
 async function salirPuerta(){try{await API.req('POST','/auth/puerta/salir',{})}catch(e){}localStorage.removeItem('brb_ses');location.reload()}
@@ -61,19 +61,15 @@ ACC.miHuellaActivar=async function(){this.disabled=true;
   lsSet('huellaAqui',S.ses.pid);closeModal();toast('✅ Listo: la próxima vez entra con tu huella o Face ID')}
  catch(e){this.disabled=false;toast(e.name==='NotAllowedError'?'No se completó. Vuelve a intentarlo.':e.name==='InvalidStateError'?'Este aparato ya tiene tu huella activada.':'❌ '+e.message)}};
 
-/* Página que abre el barbero con el link que le manda el administrador */
-async function activarHuella(cod){
- const L=$('#login');L.innerHTML='<div class="logo">👆</div><h2>Activar mi huella</h2><p class="hint" id="pkMsg">Revisando tu link…</p>';
+/* Página que abre el barbero con el QR o link que le genera el dueño («Activar su celular»).
+   Ese aparato queda autorizado para él (sin Google); después entra con su clave y puede activar su huella o Face ID. */
+async function activarCelular(cod){history.replaceState(null,'',location.pathname);
+ const L=$('#login');L.innerHTML='<div class="logo">📲</div><h2>Activar mi celular</h2><p class="hint" id="pkMsg" style="text-align:center">Activando…</p>';
  const msg=t=>$('#pkMsg').innerHTML=t;
- if(!hayHuella())return msg('Este navegador no permite huella. Abre el link en <b>Safari</b> (iPhone) o <b>Chrome</b> (Android), no dentro de WhatsApp.');
- let o;try{o=await API.req('POST','/passkey/opciones',{codigo:cod})}catch(e){return msg('❌ '+esc(e.message))}
- msg(`Hola <b>${esc(o.nombre)}</b>. Toca el botón y pon tu huella o tu rostro cuando el teléfono te lo pida.`);
- const b=document.createElement('button');b.className='btn p';b.style.cssText='width:260px;padding:14px;margin-top:14px';b.textContent='👆 Activar huella';L.appendChild(b);
- b.onclick=async()=>{b.disabled=true;
-  try{await API.req('POST','/passkey/registrar',{codigo:cod,...await crearPasskey(o.publicKey)});
-   b.remove();msg('✅ <b>Listo, '+esc(o.nombre)+'.</b> Tu huella quedó activada. Ya puedes entrar con ella.');
-   const a=document.createElement('a');a.className='btn p';a.style.cssText='width:260px;padding:14px;margin-top:14px;text-decoration:none;display:inline-flex;justify-content:center';a.href=location.pathname;a.textContent='Ir al panel';L.appendChild(a)
-  }catch(e){b.disabled=false;msg(e.name==='NotAllowedError'?'No se completó. Vuelve a tocar el botón.':e.name==='InvalidStateError'?'Este teléfono ya tiene una huella activada para tu usuario.':'❌ '+esc(e.message))}}}
+ let r;try{r=await API.req('POST','/auth/activar',{codigo:cod})}catch(e){return msg('❌ '+esc(e.message))}
+ lsSet('ultimoPerfil',r.sujeto);
+ msg(`✅ <b>Listo, ${esc(r.nombre)}.</b> Este celular quedó activado.<br>${r.clave?'Ahora entra con la clave que te dio el dueño.':'Ahora crea tu clave.'}${hayHuella()?' Luego podrás entrar con tu huella o Face ID.':''}`);
+ const b=document.createElement('a');b.className='btn p';b.style.cssText='width:260px;padding:14px;margin-top:14px;text-decoration:none;display:inline-flex;justify-content:center';b.href=location.pathname;b.textContent='Entrar';L.appendChild(b)}
 
 /* Bloque del administrador dentro de cada persona */
 const accHTML=(suj)=>API.remote&&suj&&can('config')?`<div class="card" id="acc" style="margin-top:16px;padding:12px"><b>🔐 Acceso propio</b><p class="hint" style="margin-top:4px">Cargando…</p></div>`:'';
@@ -81,22 +77,27 @@ async function accCargar(suj){const el=$('#acc');if(!el)return;
  let a;try{a=await API.req('GET','/acceso')}catch(e){el.innerHTML='<b>🔐 Acceso propio</b><p class="hint">❌ '+esc(e.message)+'</p>';return}
  const tiene=a.claves.includes(suj),hs=a.huellas.filter(h=>h.sujeto===suj),tmp=(a.temporales||[]).includes(suj),bloq=(a.bloqueados||[]).includes(suj);
  if(suj===S.ses?.sujeto){el.innerHTML=`<b>🔐 Tu acceso</b><p class="hint" style="margin-top:4px">Tu clave la cambias tú en ☰ Menú → <b>🔑 Mi clave</b>.</p>`;return}
- el.innerHTML=`<b>🔐 Acceso propio</b><p class="hint" style="margin-top:4px">La clave que pongas es <b>temporal</b>: al entrar, la persona crea la suya (tú nunca la sabrás).</p>
+ el.innerHTML=`<b>🔐 Acceso</b><p class="hint" style="margin-top:4px">1) Ponle su <b>clave</b>. 2) Toca <b>«Activar su celular»</b> y que escanee el QR. Desde ahí entra con su clave o su huella / Face ID, sin Google.</p>
  ${bloq?`<div class="banner" style="margin-top:8px">🔒 Bloqueado por intentos fallidos. <button class="btn sm" data-on-click="accDesbloquear" data-p0="${suj}">🔓 Desbloquear</button></div>`:''}
  <label class="lb">Clave ${tiene?`<span class="tag" style="margin-left:6px">${tmp?'temporal (aún no la cambia)':'activa'}</span>`:''}</label>
  <input class="in" id="accC" type="text" autocomplete="off" placeholder="${tiene?'Escribe una nueva para cambiarla':'Mínimo 6 caracteres'}">
- <div class="g2" style="margin-top:8px"><button class="btn sm" data-on-click="a24ebc3ff">🎲 Generar</button><button class="btn sm p" data-on-click="aa9971596" data-p0="${suj}">💾 Dar clave temporal</button></div>
+ <label class="chk" style="margin-top:6px"><input type="checkbox" id="accTmp"><span>Que la cambie por una suya al entrar</span></label>
+ <div class="g2" style="margin-top:8px"><button class="btn sm" data-on-click="a24ebc3ff">🎲 Generar</button><button class="btn sm p" data-on-click="aa9971596" data-p0="${suj}">💾 Guardar clave</button></div>
  ${tiene?`<button class="btn sm r w" style="margin-top:8px" data-on-click="a6d74157b" data-p0="${suj}">Quitar clave</button>`:''}
+ <button class="btn p w" style="margin-top:12px;padding:12px" data-on-click="aa6a3b664" data-p0="${suj}">📲 Activar su celular (QR)</button><div id="accInv"></div>
  <label class="lb">Huella / Face ID</label>
- ${hs.length?hs.map(h=>`<div class="li"><div class="t"><b>👆 ${esc(h.etiqueta)}</b><small>${new Date(h.creada).toLocaleDateString('es-PE')}</small></div><button class="btn sm r" data-on-click="a0e985dcd" data-p0="${h.id}" data-p1="${suj}">Quitar</button></div>`).join(''):'<p class="hint" style="margin-top:0">Sin dispositivos registrados.</p>'}
- <button class="btn w" style="margin-top:8px" data-on-click="aa6a3b664" data-p0="${suj}">👆 Invitar a activar huella</button><div id="accInv"></div>`}
+ ${hs.length?hs.map(h=>`<div class="li"><div class="t"><b>👆 ${esc(h.etiqueta)}</b><small>${new Date(h.creada).toLocaleDateString('es-PE')}</small></div><button class="btn sm r" data-on-click="a0e985dcd" data-p0="${h.id}" data-p1="${suj}">Quitar</button></div>`).join(''):'<p class="hint" style="margin-top:0">Aún no la activa. Se le ofrece al entrar con su clave en su celular.</p>'}`}
 function accGenerar(){const a='abcdefghjkmnpqrstuvwxyz23456789',r=crypto.getRandomValues(new Uint8Array(8));$('#accC').value=[...r].map(x=>a[x%a.length]).join('')}
-async function accClave(suj){const c=$('#accC').value;if(c.length<6)return toast('Mínimo 6 caracteres');
- try{await API.req('PUT','/acceso/'+suj+'/clave',{clave:c});toast('✅ Clave temporal lista');prompt('Clave temporal (pásasela; al entrar creará la suya):',c);accCargar(suj)}catch(e){toast('❌ '+e.message)}}
+async function accClave(suj){const c=$('#accC').value,temporal=!!$('#accTmp')?.checked;if(c.length<6)return toast('Mínimo 6 caracteres');
+ try{await API.req('PUT','/acceso/'+suj+'/clave',{clave:c,temporal});toast('✅ Clave guardada');await accCargar(suj);
+  $('#accInv').innerHTML=`<div class="banner" style="margin-top:8px">🔑 Clave de esta persona: <b class="syne" style="font-size:18px;user-select:all">${esc(c)}</b><br><small>Pásasela en persona. ${temporal?'Al entrar creará la suya.':'Puede seguir usándola o cambiarla en ☰ → 🔑 Mi clave.'}</small></div>`}catch(e){toast('❌ '+e.message)}}
 async function accQuitar(suj){if(!confirm('¿Quitar la clave? Se cierra su sesión.'))return;try{await API.req('DELETE','/acceso/'+suj+'/clave');accCargar(suj)}catch(e){toast('❌ '+e.message)}}
 async function accHuellaDel(id,suj){if(!confirm('¿Quitar este dispositivo?'))return;try{await API.req('DELETE','/acceso/huella/'+id);accCargar(suj)}catch(e){toast('❌ '+e.message)}}
-async function accInvitar(suj){try{const r=await API.req('POST','/acceso/'+suj+'/invitacion'),url=location.origin+location.pathname+'?huella='+r.codigo;
- $('#accInv').innerHTML=`<p class="hint">Link de un solo uso, vale 24 horas. Que lo abra en <b>Safari o Chrome</b> (no dentro de WhatsApp).</p><input class="in" readonly value="${esc(url)}" data-on-click="a5c3a010b"><div class="g2" style="margin-top:8px"><button class="btn sm" data-on-click="a71d0100d" data-p0="${url}">📋 Copiar</button><a class="btn sm" style="text-decoration:none;text-align:center" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent('Activa tu huella para entrar al panel: '+url)}">💬 WhatsApp</a></div>`}catch(e){toast('❌ '+e.message)}}
+async function accInvitar(suj){try{const r=await API.req('POST','/acceso/'+suj+'/invitacion'),url=location.origin+'/?activar='+r.codigo;
+ $('#accInv').innerHTML=`<div class="card" style="margin-top:8px;text-align:center"><p class="hint" style="margin-top:0">Que lo escanee con la <b>cámara de su celular</b> y lo abra en <b>Safari o Chrome</b>. Sirve <b>una sola vez</b> y por <b>24 horas</b>.</p>
+ <div id="accQR" style="display:inline-block;padding:10px;background:#fff;border-radius:12px"></div>
+ <input class="in" readonly value="${esc(url)}" data-on-click="a5c3a010b" style="margin-top:8px"><div class="g2" style="margin-top:8px"><button class="btn sm" data-on-click="a71d0100d" data-p0="${url}">📋 Copiar</button><a class="btn sm" style="text-decoration:none;text-align:center" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent('Abre este link en tu celular (Safari o Chrome) para activar tu acceso al panel: '+url)}">💬 WhatsApp</a></div></div>`;
+ try{new QRCode($('#accQR'),{text:url,width:200,height:200,colorDark:'#000000',colorLight:'#ffffff'})}catch(e){$('#accQR').remove()}}catch(e){toast('❌ '+e.message)}}
 
 ACC.accDesbloquear=async function(){try{await API.req('POST','/acceso/'+this.dataset.p0+'/desbloquear');toast('🔓 Desbloqueado');accCargar(this.dataset.p0)}catch(e){toast('❌ '+e.message)}};
 

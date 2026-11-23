@@ -60,7 +60,8 @@ Solo el administrador (permiso `config`) configura el acceso de cada persona, en
 ### Entrada simple
 1. **Dueño:** «Entrar con Google» con tu correo (el de `OWNER_EMAILS`) → **entras directo**, sin clave. Enseguida te pregunta «¿Entrar la próxima vez con tu huella o Face ID?» → Sí.
 2. **Las veces siguientes:** abre la app y toca **«👆 Entrar con huella / Face ID»**. Nada que escribir. También se activa en otro aparato desde ☰ Menú → «👆 Huella / Face ID» (justo después de entrar).
-3. **Equipo:** su Google (el que pusiste en Equipo) → «¿Quién eres?» → su clave o su huella (la fase 2 lo simplifica más).
+3. **Barberos (sin Google):** en ⚙️ Config → Equipo → la persona → **🔐 Acceso**: le pones su **clave** (queda fija; marca «Que la cambie al entrar» si prefieres que ponga una suya) y tocas **«📲 Activar su celular (QR)»**. Él escanea el QR con la cámara de su celular (o le mandas el link por WhatsApp), toca «Entrar», pone su clave y acepta activar su huella o Face ID. El QR sirve una sola vez y por 24 horas.
+   - La clave solo funciona en celulares que tú activaste. Si cambia de celular, le haces otro QR. Si alguien tiene correo en Equipo, también puede entrar con su Google.
 4. Si quitas un aparato (⚙️ Config → Aparatos) o sacas un correo de `OWNER_EMAILS`, esa entrada se cierra al instante. Recomendado: activa la **Verificación en 2 pasos** de tu cuenta de Google.
 Pruebas: `test/google.e2e.mjs`, `test/perfiles.ui.mjs` y `test/huella.ui.mjs` (con GOOGLE_CLIENT_ID de prueba); `acceso.e2e`/`acceso.ui` corren con `--var GOOGLE_CLIENT_ID:` vacío.
 

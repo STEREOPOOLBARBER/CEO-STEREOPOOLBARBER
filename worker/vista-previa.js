@@ -12,8 +12,9 @@ export async function conVistaPrevia(req, env, url, extraHead = '') {
   const nombre = d.cfg.nombre || 'Barbería', q = url.searchParams, panel = /\/index(\.html)?$|\/$/.test(url.pathname) && !/^\/cita\b/.test(url.pathname);
   let titulo, desc;
   if (panel) {
-    titulo = q.get('huella') ? `Activa tu huella · ${nombre}` : `${nombre} · Panel`;
-    desc = q.get('huella') ? 'Toca para activar tu huella o Face ID y entrar sin escribir clave.' : 'Agenda, citas y clientes de la barbería.';
+    const act = q.get('huella') || q.get('activar');
+    titulo = act ? `Activa tu acceso · ${nombre}` : `${nombre} · Panel`;
+    desc = act ? 'Ábrelo en tu celular para activar tu acceso al panel (clave, huella o Face ID).' : 'Agenda, citas y clientes de la barbería.';
   } else if (/\/privacidad(\.html)?$/.test(url.pathname)) {
     titulo = `Aviso de privacidad · ${nombre}`; desc = 'Cómo cuidamos tus datos personales (Ley 29733).';
   } else if (q.get('c') || /\/estado(\.html)?$|^\/cita\b/.test(url.pathname)) {
@@ -22,7 +23,7 @@ export async function conVistaPrevia(req, env, url, extraHead = '') {
     titulo = `${nombre} · Reserva tu cita`; desc = 'Elige tu corte, tu barbero y tu horario en 1 minuto. Reserva online 💈✂️';
   }
   const logo = typeof d.cfg.logoImg === 'string' && fotosPublicas(d).has(d.cfg.logoImg) ? `${url.origin}/api/fotos/${d.cfg.logoImg}` : `${url.origin}/logo.jpg`;
-  const tags = [['og:type', 'website'], ['og:site_name', nombre], ['og:title', titulo], ['og:description', desc], ['og:url', url.origin + (/^\/cita\b/.test(url.pathname) ? '/cita/' : url.pathname + (q.get('huella') || q.get('c') ? '' : url.search))], ['og:locale', 'es_PE'],
+  const tags = [['og:type', 'website'], ['og:site_name', nombre], ['og:title', titulo], ['og:description', desc], ['og:url', url.origin + (/^\/cita\b/.test(url.pathname) ? '/cita/' : url.pathname + (q.get('huella') || q.get('activar') || q.get('c') ? '' : url.search))], ['og:locale', 'es_PE'],
     ...(logo ? [['og:image', logo], ['og:image:alt', `Logo de ${nombre}`], ['twitter:card', 'summary']] : [['twitter:card', 'summary']]), ['twitter:title', titulo], ['twitter:description', desc], ['description', desc]]
     .map(([k, v]) => `<meta ${k.startsWith('og:') ? 'property' : 'name'}="${k}" content="${esc(v)}">`).join('');
   const res = new HTMLRewriter()

@@ -156,7 +156,7 @@ const dueno2 = r.cookie;
 // ---- Fase 2: clave temporal, aparato compartido con bloqueo, recuperar con Google, aparatos y dar de baja
 const pnD = (await call('GET', '/panel', null, dueno2)).j;
 await call('PUT', '/config', { cfg: pnD.cfg, equipo: pnD.equipo.map(b => b.id === 'b1' ? { ...b, email: 'jhon@gmail.com', activo: true } : b), servicios: pnD.servicios }, dueno2);
-r = await call('PUT', '/acceso/p_b2/clave', { clave: 'TemporalB2x' }, dueno2);
+r = await call('PUT', '/acceso/p_b2/clave', { clave: 'TemporalB2x', temporal: true }, dueno2);
 check('el dueño da una clave temporal', r.s === 200 && r.j.temporal === true, JSON.stringify(r.j));
 r = await call('POST', '/auth/clave', { sujeto: 'p_b2', clave: 'TemporalB2x' }, puertaD);
 check('en la tablet del local, la temporal pide crear la propia', r.j.cambiar === true && !/brb_s=/.test(r.cookie));
@@ -194,6 +194,17 @@ await new Promise(ok => setTimeout(ok, 5500));
 check('en un aparato ajeno, tras el tiempo sin uso la sesión se cierra sola', (await call('GET', '/panel', null, piero)).s === 401);
 check('en su propio aparato no se cierra', (await call('GET', '/panel', null, duenoR)).s === 200);
 
+// Fase 2: el dueño activa el celular de un barbero con un QR (sin Google del barbero)
+r = await call('POST', '/auth/clave', { sujeto: 'p_b1', clave: 'Recuperada55' }); check('en un celular no activado, la clave sola no entra', r.s === 403);
+const invQR = await call('POST', '/acceso/p_b1/invitacion', {}, duenoR);
+r = await call('POST', '/auth/activar', { codigo: invQR.j.codigo }); const puertaQR = galleta(r.raw, 'brb_g');
+check('al abrir el QR, ese celular queda autorizado para el barbero', r.s === 200 && !!puertaQR && r.j.clave === true, JSON.stringify(r.j));
+r = await call('GET', '/auth/perfiles', null, puertaQR);
+check('en su celular solo aparece él', r.j.perfiles?.length === 1 && r.j.perfiles[0].sujeto === 'p_b1', JSON.stringify(r.j));
+r = await call('POST', '/auth/clave', { sujeto: 'p_b1', clave: 'Recuperada55' }, puertaQR);
+check('entra con su clave, sin bloqueo automático (es su celular)', r.s === 200 && r.j.bloqueo === 0, JSON.stringify(r.j));
+check('ya dentro, puede activar su huella o Face ID', (await call('POST', '/acceso/mi-huella/opciones', {}, galleta(r.raw, 'brb_s'))).s === 200);
+r = await call('POST', '/auth/clave', { sujeto: 'p_dueno', clave: 'NoImporta99' }, puertaQR); check('desde su celular no se puede probar la clave de otro', r.s === 403);
 // Si se quita el aparato del dueño, su entrada con Google se cierra al instante
 const apD = (await call('GET', '/acceso/aparatos', null, duenoR)).j.find(a => a.quien === 'dueno@gmail.com' && a.actual === false);
 r = await entrar({ email: 'dueno@gmail.com' }); const duenoG2 = galleta(r.raw, 'brb_s'), apG2 = (await call('GET', '/acceso/aparatos', null, duenoR)).j.filter(a => a.quien === 'dueno@gmail.com').sort((a, z) => z.creado - a.creado)[0];

@@ -8,7 +8,7 @@ check('la cookie de sesión usa el prefijo __Host-', /^__Host-brb_s=/.test(adm) 
 check('una cookie con el nombre viejo sigue sirviendo (transición)', (await call('GET', '/panel', null, adm.replace('__Host-brb_s', 'brb_s'))).s === 200);
 const pn = (await call('GET', '/panel', null, adm)).j;
 // clave para un barbero y doble ingreso → la sesión anterior se cierra
-await call('PUT', '/acceso/p_b1/clave', { clave: 'clave-temporal-0' }, adm); // temporal: el barbero crea la suya
+await call('PUT', '/acceso/p_b1/clave', { clave: 'clave-temporal-0', temporal: true }, adm); // temporal: el barbero crea la suya
 await call('POST', '/auth/clave/cambiar', { sujeto: 'p_b1', actual: 'clave-temporal-0', nueva: 'clave-segura-1' });
 const s1 = (await call('POST', '/auth/clave', { sujeto: 'p_b1', clave: 'clave-segura-1' })).cookie;
 const s2 = (await call('POST', '/auth/clave', { sujeto: 'p_b1', clave: 'clave-segura-1' }, null)).cookie;
