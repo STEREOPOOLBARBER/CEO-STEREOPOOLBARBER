@@ -70,6 +70,12 @@ export const MIGRACIONES = [
   { v: 7, nombre: 'equipo único', sql: [], despues: unirEquipo },
   // Clave temporal: la que pone el dueño sirve solo para que la persona cree la suya.
   { v: 8, nombre: 'clave temporal', sql: [`ALTER TABLE claves ADD COLUMN temporal INTEGER NOT NULL DEFAULT 0`] },
+  // Avisos al celular (Web Push): tipo 'cita' (ref = id de la cita, el cliente) o 'panel' (ref = id de la persona, pu = su aparato).
+  // «estado» guarda lo último avisado a ese celular (estado, fecha, hora y avisos ya enviados) para no repetir.
+  { v: 9, nombre: 'avisos al celular', sql: [
+    `CREATE TABLE IF NOT EXISTS suscripciones(id TEXT PRIMARY KEY, endpoint TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, tipo TEXT NOT NULL, ref TEXT NOT NULL, pu TEXT NOT NULL DEFAULT '', origen TEXT NOT NULL DEFAULT '', estado TEXT NOT NULL DEFAULT '{}', creado INTEGER NOT NULL)`,
+    `CREATE INDEX IF NOT EXISTS ix_susc_ref ON suscripciones(tipo, ref)`,
+  ] },
 ];
 export let schemaListo = null;
 export function asegurarSchema(env) { return schemaListo ||= aplicarMigraciones(env).catch(e => { schemaListo = null; throw e }) }

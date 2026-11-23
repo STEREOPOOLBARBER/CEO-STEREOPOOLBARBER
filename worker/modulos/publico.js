@@ -1,6 +1,7 @@
 import { ACTIVOS, DEF, addD, ahoraLocal, codigo, fail, json, minutosHasta, reglaReprog, slotsDia, str, toMin, trabaja, uid } from '../comun.js';
 import { plazoCalificar, yaCalificada } from './calificaciones.js';
 import { promoPara, promosPublicas } from './promos.js';
+import { avisarEquipo, pushBaseCita } from './push.js';
 import { audiosPublicos, bumpStmt, citaPorId, datos, expirar, filaCita, fotosPublicas, guardarCita, guardarFoto, insertarCita } from '../datos.js';
 import { auditar, sesion } from './auth.js';
 import { consultarDni } from './dni.js';
@@ -16,7 +17,7 @@ export function vistaPublica(d, hoy) {
 }
 
 /* ---------- reserva pública ---------- */
-export async function reservar(req, env, b) {
+export async function reservar(req, env, b, fondo = p => p) {
   await frenar(env, 'RL_RES', 'r:' + ipDe(req));
   await limitar(env, 'r:' + ipDe(req), 15, 60 * 60e3);
   if (!await turnstileOk(env, b.turnstile, ipDe(req))) { await anotarSeg(env, 'robot'); fail(400, 'No pudimos verificar que no eres un robot. Inténtalo de nuevo.') }
@@ -73,7 +74,7 @@ export async function reservar(req, env, b) {
   for (const barb of candidatos) {
     const c = { id: uid(), codigo: codigo(), creada: Date.now(), ...base, barberoId: barb.id, consentimiento: { ts: Date.now(), aviso: 'privacidad.html', version: 1 } };
     const extra = link ? [env.DB.prepare('UPDATE links SET data = ? WHERE id = ?').bind(JSON.stringify({ ...link, estado: 'usado', citaId: c.id, usado: Date.now() }), link.id)] : [];
-    try { await insertarCita(env, c, extra); await auditar(env, 'Cliente', 'Reservó', c.codigo, `${c.cliente?.nombre || ''} · ${c.fecha} ${c.hora}`); return json({ id: c.id, codigo: c.codigo, expira: c.expira, barberoId: c.barberoId, estado: c.estado, precio: c.precio, promo: c.promo?.titulo || '' }) }
+    try { await insertarCita(env, c, extra); await auditar(env, 'Cliente', 'Reservó', c.codigo, `${c.cliente?.nombre || ''} · ${c.fecha} ${c.hora}`); fondo(avisarEquipo(env, c, 'reserva')); return json({ id: c.id, codigo: c.codigo, expira: c.expira, barberoId: c.barberoId, estado: c.estado, precio: c.precio, promo: c.promo?.titulo || '' }) }
     catch (e) { if (e.status !== 409) throw e }
   }
   fail(409, 'Ese horario se acaba de ocupar 😕');
@@ -82,7 +83,8 @@ export async function reservar(req, env, b) {
 
 /* Rutas públicas: formulario, estado de cita, reprogramar, fotos y audios públicos. */
 export async function rutasPublicas(c) {
-  const { req, env, path, m, body, d, s, exigir, propia } = c;
+  const { req, env, path, m, body, ctx } = c;
+  const fondo = p => ctx ? ctx.waitUntil(p) : p; // avisos al celular sin hacer esperar al cliente
   let x;
   if (path === '/publico' && m === 'GET') {
     await expirar(env);
@@ -147,6 +149,7 @@ export async function rutasPublicas(c) {
     Object.assign(c, { fecha, hora, reprog: (c.reprog || 0) + 1, reprogDe: antes, reprogTs: Date.now(), upd: Date.now() });
     await guardarCita(env, c);
     await auditar(env, 'Cliente', 'Reprogramó', c.codigo, `${c.cliente?.nombre || ''} · ${antes.fecha} ${antes.hora} → ${fecha} ${hora}`);
+    await pushBaseCita(env, c); fondo(avisarEquipo(env, c, 'reprog'));
     return json({ ok: true, fecha, hora });
   }
   // El cliente confirma que irá (desde el link de su cita): reduce los «no vino».
@@ -159,10 +162,11 @@ export async function rutasPublicas(c) {
     if (!c.asistencia) {
       await env.DB.batch([env.DB.prepare('UPDATE citas SET data = json_set(data, ?, json(?)) WHERE id = ?').bind('$.asistencia', JSON.stringify({ ts: Date.now(), via: 'link' }), c.id), bumpStmt(env)]);
       await auditar(env, 'Cliente', 'Confirmó asistencia', c.codigo, 'desde el link de su cita');
+      fondo(avisarEquipo(env, c, 'asistencia'));
     }
     return json({ ok: true });
   }
-  if (path === '/publico/reservas' && m === 'POST') return reservar(req, env, await body());
+  if (path === '/publico/reservas' && m === 'POST') return reservar(req, env, await body(), fondo);
   if ((x = path.match(/^\/publico\/reservas\/([\w-]+)\/captura$/)) && m === 'POST') {
     const b = await body(); const c = await citaPorId(env, x[1]);
     if (!c || c.codigo !== b.codigo) fail(404, 'Reserva no encontrada');
@@ -171,6 +175,7 @@ export async function rutasPublicas(c) {
     if (c.expira < Date.now()) fail(410, 'Se venció el tiempo de pago');
     Object.assign(c, { yapeCaptura: await guardarFoto(env, b.data), estado: 'por_validar', expira: null, upd: Date.now() });
     await guardarCita(env, c);
+    fondo(avisarEquipo(env, c, 'yape'));
     return json({ ok: true });
   }
 

@@ -1,8 +1,9 @@
 import { addD, ahoraLocal, fail, json, rnd, str, toMin } from '../comun.js';
-import { bumpStmt, datos, filaCita, kvStmt, leerKV } from '../datos.js';
+import { bumpStmt, citaPorId, datos, filaCita, kvStmt, leerKV } from '../datos.js';
 import { b64uDec, b64uEnc } from '../webauthn.js';
 import { auditar, quienEs } from './auth.js';
 import { cifrar, descifrar } from './respaldos.js';
+import { avisarEquipo } from './push.js';
 
 /* ---------- WhatsApp automático (API oficial de Meta · WhatsApp Cloud API) ----------
    Listo para conectar un número nuevo desde ⚙️ Config → «🤖 WhatsApp automático».
@@ -104,6 +105,7 @@ export async function rutasWhatsappPublicas(c) {
       if (!ci) continue;
       await env.DB.batch([env.DB.prepare('UPDATE citas SET data = json_set(data, ?, json(?)) WHERE id = ?').bind('$.asistencia', JSON.stringify({ ts: Date.now(), via: 'whatsapp' }), ci.id), bumpStmt(env)]);
       await auditar(env, 'Cliente', 'Confirmó asistencia', ci.codigo, 'respondió por WhatsApp');
+      const cc = await citaPorId(env, ci.id); if (cc) { const p = avisarEquipo(env, cc, 'asistencia'); c.ctx ? c.ctx.waitUntil(p) : await p }
     }
   }
   return json({ ok: true });

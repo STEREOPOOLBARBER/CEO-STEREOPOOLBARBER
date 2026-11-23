@@ -69,7 +69,7 @@ export async function sesion(req, env, d) {
   else if (s.via === 'pin' && pinPermitido(env)) { const p = pinDeRef(s.ref, d); if (p && await sha256(p) === s.pinH) ident = porSujeto('p_' + s.ref, d) }
   if (!ident) return null;
   const perm = permisos(ident, d); if (!perm) return null;
-  return { ...ident, perm, bloqueo: s.comp ? BLOQUEO_MIN : 0 };
+  return { ...ident, perm, bloqueo: s.comp ? BLOQUEO_MIN : 0, pu: s.pu || '' };
 }
 /* ----- puerta: el dispositivo entra con Google y recién ahí se elige el perfil ----- */
 export const exigePuerta = env => !!env.GOOGLE_CLIENT_ID;
@@ -342,6 +342,7 @@ export async function rutasAcceso(c) {
     await env.DB.batch([kvStmt(env, 'equipo', equipo), bumpStmt(env),
       env.DB.prepare('DELETE FROM claves WHERE sujeto = ?').bind(x[1]), env.DB.prepare('DELETE FROM passkeys WHERE sujeto = ?').bind(x[1]), env.DB.prepare('DELETE FROM invitaciones WHERE sujeto = ?').bind(x[1]),
       env.DB.prepare('DELETE FROM intentos WHERE ip = ?').bind('ks:' + x[1]),
+      env.DB.prepare("DELETE FROM suscripciones WHERE tipo = 'panel' AND ref = ?").bind(p.id), // sus avisos al celular
       env.DB.prepare("DELETE FROM sesiones WHERE json_extract(data, '$.sujeto') = ? OR (json_extract(data, '$.via') = 'puerta' AND json_extract(data, '$.email') = ? AND ? <> '')").bind(x[1], norm(p.email), norm(p.email))]);
     await auditar(env, quienEs(s), 'Dio de baja', p.nombre); await anotar(env, 'baja', p.nombre, true, 'dado de baja por ' + s.nombre, req);
     return json({ ok: true });
@@ -355,6 +356,7 @@ export async function rutasAcceso(c) {
   if ((x = path.match(/^\/acceso\/aparatos\/([a-f0-9]{64})$/)) && m === 'DELETE') {
     exigir('config');
     const r = await env.DB.prepare("DELETE FROM sesiones WHERE (id = ? AND json_extract(data, '$.via') = 'puerta') OR json_extract(data, '$.pu') = ?").bind(x[1], x[1]).run();
+    await env.DB.prepare('DELETE FROM suscripciones WHERE pu = ?').bind(x[1]).run(); // ese aparato deja de recibir avisos
     await auditar(env, quienEs(s), 'Quitó un aparato', '', `${r.meta.changes} sesión(es) cerradas`);
     return json({ ok: true });
   }

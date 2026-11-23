@@ -21,7 +21,7 @@ Sistema de reservas de una barbería en Puente Piedra (Lima, Perú). El dueño n
 Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño prueba en staging → se pasa a `main` (merge) → Cloudflare despliega producción. GitHub Actions (`.github/workflows/pruebas.yml`) corre las pruebas en cada push.
 
 ## Estructura
-- `index.html` — panel (dueño, barberos, personal): solo HTML y estilos. Su JS está en `js/panel/` por pantalla (`base`, `agenda`, `filtros`, `escaner`, `clientes`, `calificaciones`, `promos`, `compartir`, `dashboard`, `config`, `equipo`, `voz`, `acceso`, `app`, `inicio`), después de `js/voz.js`, cargados en ese orden como scripts clásicos (comparten el ámbito global). Modo nube (`/api`) o local (localStorage, solo demo).
+- `index.html` — panel (dueño, barberos, personal): solo HTML y estilos. Su JS está en `js/panel/` por pantalla (`base`, `agenda`, `filtros`, `escaner`, `clientes`, `calificaciones`, `promos`, `compartir`, `dashboard`, `config`, `equipo`, `voz`, `acceso`, `app`, `avisos`, `inicio`), después de `js/voz.js`, cargados en ese orden como scripts clásicos (comparten el ámbito global). Modo nube (`/api`) o local (localStorage, solo demo).
 - `js/reservar.js`, `js/estado.js` — JS del formulario y de la página de estado.
 - `js/voz.js` (guion de voz, frases originales, piezas de fecha y hora; lo usan las 3 páginas) · `js/escena.js` + `css/escena.css` (pantalla «Toca para entrar», narrador y reproductor de la voz grabada; reservar y estado) · `img/` (narrador y logo Stereo).
 - `js/eventos.js` — **despachador de eventos** y registro `ACC` de acciones (generado a partir de los antiguos `onclick`).
@@ -33,6 +33,7 @@ Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño pru
   - `comun.js` — constantes, utilidades, hora de Lima y reglas de agenda (`slotsDia`, `trabaja`, `reglaReprog`). Sin dependencias.
   - `datos.js` — D1: **migraciones versionadas** (`MIGRACIONES`), kv, citas (insertar/guardar/expirar), fotos y audios en R2.
   - `modulos/filtros.js` — filtros y órdenes de la agenda (los usan `/citas/buscar` y `/citas/conteo`).
+  - `modulos/push.js` — avisos al celular (Web Push sin librerías: VAPID ES256 + cifrado RFC 8291). Ver «Avisos al celular».
   - `modulos/promos.js` — promociones: kv `promos` (máx. 12), `GET/PUT /promos` (permiso `config`), `promosPublicas` (en `/publico`), `promoPara` (precio al reservar), `POST /publico/promos/visto` (contadores `promo:<id>:v|c`, sin avisar a los paneles).
   - `modulos/calificaciones.js` — calificación anónima (`POST /publico/cita/:c/calificar`, migración v6) y resumen del panel (`GET /calificaciones`).
   - `modulos/publico.js` (formulario, estado, reprogramar) · `modulos/auth.js` (Google, puerta, perfiles, clave, huella, accesos) · `modulos/citas.js` (panel, búsqueda paginada, configuración, citas) · `modulos/clientes.js` (ficha de cliente, cursor, búsqueda sin acentos) · `modulos/config.js` (links, fotos, exportar/importar) · `modulos/dni.js` · `modulos/seguridad.js` (límites, Turnstile, ficha) · `modulos/monitoreo.js` · `modulos/respaldos.js`.
@@ -84,6 +85,13 @@ Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño pru
 - **El precio lo pone el Worker** en `reservar()` con `promoPara(d, servicio, fecha)` (la más barata que valga ese día; no en reservas con link personal). La cita guarda `promo = {id, titulo, precioNormal}`; la agenda muestra la etiqueta 🏷️.
 - Cliente: fila deslizable en `/cita/CODIGO` (`promosHTML`, «Vuelve con una promo» si ya fue atendido) → «Reservar» lleva a `reservar.html?promo=ID` (servicio elegido, días marcados «Promo», precio rebajado). `js/reservar.js` repite la regla solo para mostrar (`promoEl`): **si cambias la regla, cámbiala en los dos lados**.
 - Fotos de promos activas son públicas (`fotosPublicas`). Panel: ☰ → 🏷️ Promociones (`js/panel/promos.js`), con vistas, toques, citas y monto atendido.
+
+## Avisos al celular (Web Push)
+- `worker/modulos/push.js`. Claves VAPID: secreto `VAPID_PRIVADA` (JWK) o se crean solas en `kv.vapid`. Tabla `suscripciones` (migración v9): `tipo` `cita` (ref = id de cita) o `panel` (ref = id de persona, `pu` = su aparato). Solo se envía a servicios de avisos conocidos (FCM, Mozilla, Apple, Windows): nada de direcciones arbitrarias. 404/410 → se borra.
+- **Equipo** (inmediato, `ctx.waitUntil`): `avisarEquipo(env, cita, 'reserva'|'yape'|'asistencia'|'reprog')` desde `publico.js` y el webhook de WhatsApp. Le llega al dueño, a quien tiene `verTodas` y al barbero de la cita (`yape`: además con permiso `yape`). Nunca celular ni DNI. Aparato quitado o baja → se borran sus suscripciones; al cerrar sesión el panel las apaga (`pushQuitarAparato`).
+- **Cliente** (cron `pushAuto`): compara la cita con `suscripciones.estado` y manda un aviso por vuelta: `confirmada`, `cambio`, `horas2` (≤ 2 h), `dia` (día anterior desde `PUSH_HORA_DIA`, 18:00), `calificar`. Si el propio cliente reprograma, `pushBaseCita` evita avisarle su propio cambio. Se borran 7 días después de la cita o si se anonimiza.
+- Navegador: `sw.js` (panel) y `sw-cita.js` (servido en `/cita/sw.js`, alcance `/cita/`, sin caché) tienen el mismo bloque `push`/`notificationclick` (abre solo direcciones propias). Permiso solo al tocar «Activar». iPhone: solo con la app instalada.
+- Pruebas: servicio simulado en 127.0.0.1:8795 con `PUSH_PERMITIR_LOCAL=true` (solo con `ALLOW_PIN`); `test/push.e2e.mjs` descifra cada aviso y verifica la firma.
 
 ## Reporte semanal de caja
 - `modulos/reportes.js`: semana lunes–domingo (Lima). Cron: los lunes desde las 8 a. m. guarda el de la semana anterior en `reportes` (migración v4) y avisa en la 🔔 (`/api/alertas` con `accion: 'reporte'`). Montos con la misma regla que la Caja (`ingreso()`), comisiones si `modComision`, comparación con la semana previa. Solo `verMontos` + `verTodas`. `GET /api/reportes/:fecha` (en curso = al momento, sin guardar), `POST …/rehacer` (config).

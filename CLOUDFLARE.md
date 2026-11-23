@@ -86,6 +86,12 @@ El link que recibe el cliente ahora es **`tudominio/cita/CODIGO`** (WhatsApp, QR
 - El celular recuerda las citas que abrió («Mis citas» en `/cita`): solo código y fecha.
 - No hay que hacer nada en Cloudflare: se publica sola con el push.
 
+### Avisos al celular
+- **Tú y tus barberos:** ☰ Menú → **🔔 Avisos en este celular** → Activar (y «Enviarme un aviso de prueba»). Llegan: nueva reserva, comprobante de Yape, cliente confirmó que viene y reprogramó. El barbero recibe solo los de sus citas. Al cerrar sesión o quitar el aparato, se apagan.
+- **Clientes:** en su app «Mi cita» tocan **Activar**. Reciben: cita confirmada, cambio de fecha u hora, recordatorio el día anterior (desde las 6 p. m.) y 2 horas antes, y «¿cómo te atendimos?».
+- **iPhone:** solo funcionan con la app instalada en la pantalla de inicio (regla de Apple). Android y PC: siempre.
+- **No hay que configurar nada en Cloudflare:** la clave de firma se crea sola. (Opcional: secreto `VAPID_PRIVADA` si algún día quieres fijarla tú.) Los recordatorios de WhatsApp siguen igual, como respaldo.
+
 ### Promociones
 En el panel: **☰ Menú → 🏷️ Promociones → Nueva promoción**. Eliges el servicio, el precio promo (menor al normal), desde/hasta y, si quieres, solo ciertos días (ej.: martes y miércoles). Puedes pausarla, ordenarla o borrarla.
 - El cliente la ve en su app «Mi cita» y en el formulario (servicio con precio tachado y días marcados «Promo»). Al reservar ese servicio un día válido, **el sistema pone el precio promo solo**; en la agenda la cita sale con la etiqueta 🏷️.

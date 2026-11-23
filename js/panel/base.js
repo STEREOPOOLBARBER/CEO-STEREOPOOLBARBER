@@ -117,7 +117,7 @@ const API={
  async dni(d){return this.req('GET','/dni/'+d)},
  async authCfg(){return this.req('GET','/auth/config')},
  async google(credential){return this.req('POST','/auth/google',{credential})},
- async logout(){if(this.remote)await this.req('POST','/auth/logout').catch(()=>{})},
+ async logout(){if(this.remote){if(typeof pushQuitarAparato==='function')await pushQuitarAparato();await this.req('POST','/auth/logout').catch(()=>{})}},
  async login(pin){if(this.remote)return this.req('POST','/auth/login',{pin});seed();const p=pin&&equipoLocal().find(x=>x.pin===pin&&x.activo!==false);if(!p)throw new Error('PIN incorrecto');return identDe(p)},
  async load(){if(this.remote){const r=await this.req('GET','/panel'+(this._d?'?v='+this._v:''));if(r.same)return this._d;this._v=r.v;return this._d=r}seed();const citas=expirarLocal();const equipo=equipoLocal();return{cfg:lsGet('cfg',{}),equipo,barberos:equipo.filter(p=>p.atiende).map(barberoDeP),servicios:lsGet('servicios',[]),citas}},
  async saveConfig(cfg,equipo,servicios){if(this.remote)return this.req('PUT','/config',{cfg,equipo:equipo.map(({pin,...p})=>p),servicios});lsSet('cfg',cfg);guardarEquipoLocal(equipo);lsSet('servicios',servicios)},

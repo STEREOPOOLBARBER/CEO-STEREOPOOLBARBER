@@ -26,6 +26,10 @@ export async function swPanel(req, env) {
 const COD = /^[A-Z0-9]{6}$/;
 export async function rutaCita(req, env, url) {
   const p = url.pathname, c = (url.searchParams.get('c') || '').trim().toUpperCase();
+  if (p === '/cita/sw.js') { // avisos al celular del cliente (alcance /cita/)
+    const r = await env.ASSETS.fetch(new URL('/sw-cita.js', url));
+    return new Response(r.body, { status: r.status, headers: { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' } });
+  }
   if (/^\/(estado|reservar)(\.html)?$/.test(p) && COD.test(c)) return Response.redirect(url.origin + '/cita/' + c, 301);
   const m = p.match(/^\/cita(?:\/([A-Za-z0-9]{6}))?(\/app\.webmanifest)?\/?$/);
   if (!m) return null;

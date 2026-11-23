@@ -101,6 +101,7 @@ function pintar(){const c=P.cfg,i=E.info;clearInterval(E.timer);
   ${viva&&confirmable(i)?(i.asistencia?`<div class="aviso ok">${ic('check-circulo')}<span><b>Confirmaste que vienes.</b> ¡Te esperamos!</span></div>`:`<button class="btn p mt" data-on-click="confirmarAsistencia">${ic('check')}Confirmo que voy</button>`):''}
   ${puedeRep(i)?`<button class="btn sec mt" data-on-click="reprogramar">${ic('calendario')}Cambiar día u hora</button><p class="nota">Puedes cambiarla hasta ${i.horasReprog||24} h antes.</p>`:''}
  </section>
+ ${['por_validar','confirmada','en_silla'].includes(i.estado)?'<section class="card avisos" id="avisosCard" hidden></section>':''}
  ${viva&&confirmable(i)?`<section class="card qr"><p class="h3" style="justify-content:center">${ic('qr')}Muéstralo al llegar</p><div id="qrCita"></div><p>Tu barbero lo escanea y encuentra tu cita al instante.</p></section>`:''}
  ${i.estado==='atendida'?atendidaHTML(i):''}
  ${promosHTML(i)}
@@ -114,7 +115,7 @@ function pintar(){const c=P.cfg,i=E.info;clearInterval(E.timer);
  ${mapaHTML(c)}
  ${c.politicaTxt?`<section class="card"><details><summary>Política de la barbería</summary><div>${esc(c.politicaTxt)}</div></details></section>`:''}`,
  `${c.whatsapp?`<button class="btn wa" data-on-click="escribirBarberia">${ic('mensaje')}WhatsApp</button>`:''}<button class="btn" data-on-click="actualizarCita" aria-label="Actualizar">${ic('actualizar')}Actualizar</button>`);
- qrCita(i);promosVistas();
+ qrCita(i);promosVistas();pintarAvisos();
  let n=0;E.timer=setInterval(async()=>{const x=$('#fl');if(x)x.textContent=fl();if(++n%30)return;try{const nuevo=await API.estado(E.codigo);const cambio=nuevo.estado!==E.info.estado||nuevo.fecha!==E.info.fecha||nuevo.hora!==E.info.hora;E.info=nuevo;if(cambio){pintar();hablar(nuevo)}}catch(_){}},1000)}
 function mapaHTML(c){const la=parseFloat(c.lat),lo=parseFloat(c.lng),dir=esc(c.direccion||c.ciudad||''),hay=isFinite(la)&&isFinite(lo)&&(la||lo);
  const ir=hay?`https://www.google.com/maps/dir/?api=1&destination=${la},${lo}`:c.maps||'';if(!dir&&!ir)return'';
@@ -143,6 +144,29 @@ function promosHTML(i){const L=P.promos||[];if(!L.length)return'';
 function promosVistas(){const ids=(P.promos||[]).map(p=>p.id).filter(id=>{try{if(sessionStorage.getItem('pv_'+id))return false;sessionStorage.setItem('pv_'+id,1)}catch(e){}return true});
  if(ids.length)API.req('POST','/publico/promos/visto',{ids,tipo:'v'}).catch(()=>{})}
 ACC.promoReservar=function(){const id=this.dataset.p0;API.req('POST','/publico/promos/visto',{ids:[id],tipo:'c'}).catch(()=>{}).finally(()=>{location.href='/reservar.html?promo='+encodeURIComponent(id)})};
+
+/* ---------- avisos al celular (Web Push): confirmada, recordatorios, cambios y «¿cómo te atendimos?» ----------
+   El permiso se pide solo al tocar el botón. iPhone: solo con la app instalada (regla de Apple). */
+const pushSoportado=()=>'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
+const b64uBytes=t=>Uint8Array.from(atob(t.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((t.length+3)%4)),c=>c.charCodeAt(0));
+async function subActual(){const reg=await navigator.serviceWorker.getRegistration('/cita/');return reg?reg.pushManager.getSubscription():null}
+async function pintarAvisos(){const el=$('#avisosCard');if(!el)return;let html='';
+ const cab=(t,s)=>`<div class="t"><b>${t}</b><small>${s}</small></div>`;
+ if(!pushSoportado()){if(esIOS()&&!instalada())html=cab('Recibe avisos de tu cita','En iPhone primero descarga la app; luego actívalos desde el ícono.')+`<button class="btn sec" data-on-click="instalarApp">${ic('descargar')}Descargar</button>`}
+ else if(Notification.permission==='denied')html=cab('Avisos bloqueados','Los bloqueaste en este navegador. Puedes activarlos en su configuración.')
+ else{const on=lsGet('avisos_'+E.codigo,0)&&!!await subActual().catch(()=>null);
+  html=on?cab('Avisos activados','Te avisaremos si tu cita cambia y antes de tu hora.')+`<button class="btn sec" data-on-click="avisosApagar">Apagar</button>`
+   :cab('Recibe avisos de tu cita','Te avisamos cuando se confirme, el día anterior y 2 horas antes.')+`<button class="btn p" data-on-click="avisosActivar">${ic('reloj')}Activar</button>`}
+ el.innerHTML=html;el.hidden=!html}
+ACC.avisosActivar=async function(){this.disabled=true;
+ try{if(await Notification.requestPermission()!=='granted'){toast('Sin permiso no podemos avisarte');return pintarAvisos()}
+  const reg=await navigator.serviceWorker.register('/cita/sw.js',{scope:'/cita/'});
+  const lista=reg.active?reg:await new Promise(res=>{const w=reg.installing||reg.waiting;if(!w)return res(reg);w.addEventListener('statechange',()=>{if(w.state==='activated')res(reg)})});
+  const{clave}=await API.req('GET','/publico/push/clave');
+  const sub=await lista.pushManager.getSubscription()||await lista.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64uBytes(clave)});
+  await API.req('POST','/publico/cita/'+E.codigo+'/push',sub.toJSON());lsSet('avisos_'+E.codigo,1);toast('Listo: te avisaremos');pintarAvisos()}
+ catch(e){this.disabled=false;toast(e.message||'No se pudo activar')}};
+ACC.avisosApagar=async function(){try{const sub=await subActual();if(sub)await API.req('DELETE','/publico/cita/'+E.codigo+'/push',sub.toJSON())}catch(e){}lsSet('avisos_'+E.codigo,0);toast('Avisos apagados');pintarAvisos()};
 
 /* ---------- descargar la app: el aviso del navegador o los pasos (iPhone no deja instalar con un botón) ---------- */
 ACC.instalarApp=async function(){
