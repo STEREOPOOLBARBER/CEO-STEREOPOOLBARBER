@@ -150,7 +150,7 @@ function render(){clearInterval(timerInt);[s0,s1,s2,s3,s4,s5][F.step]()}
 
 /* paso 0: servicio */
 function s0(){if(!P.servicios.length)return shell('<div class="empty">✂️<br>La barbería aún no publicó sus servicios.</div>');
- const u=lsGet('ultima',null),prev=u&&u.codigo&&u.fecha>=hoy()?`<a class="warn" style="display:block;text-decoration:none;border-color:var(--pur);color:var(--tx);background:rgba(138,63,252,.12)" href="estado.html?c=${encodeURIComponent(u.codigo)}">📋 Tienes una cita el <b>${fLarga(u.fecha)}</b> · ${h12(u.hora)}<br><small style="color:var(--mu)">Toca para ver su estado</small></a>`:'';
+ const u=lsGet('ultima',null),prev=u&&u.codigo&&u.fecha>=hoy()?`<a class="warn" style="display:block;text-decoration:none;border-color:var(--pur);color:var(--tx);background:rgba(138,63,252,.12)" href="/cita/${encodeURIComponent(u.codigo)}">📋 Tienes una cita el <b>${fLarga(u.fecha)}</b> · ${h12(u.hora)}<br><small style="color:var(--mu)">Toca para ver su estado</small></a>`:'';
  shell(`${prev}<h2>${esc(P.cfg.txtBienvenida||'¿Qué te hacemos hoy?')}</h2>${P.servicios.map(s=>`<button class="opt ${F.serv===s.id?'on':''}" data-on-click="aab7eb6b8" data-p0="${s.id}"><span class="em">${s.foto?`<img data-foto="${s.foto}" alt="">`:s.emoji}</span><span class="t"><b>${esc(s.nombre)}</b><small>${esc(s.desc||'')} · ⏱️ 1 h</small></span><span class="pr">${soles(s.precio)}</span></button>`).join('')}`)}
 /* paso 1: barbero */
 function s1(){shell(`<h2>Elige tu barbero</h2>
@@ -239,7 +239,7 @@ async function enviarCap(){if(F.busy)return;F.busy=true;const b=$('#bCap');b.dis
 function vencido(){clearInterval(timerInt);say('vencido');$('#app').innerHTML=`<div class="ok"><b>⌛</b><h2>Se acabó el tiempo</h2><p style="color:var(--mu)">Tu horario se liberó porque no recibimos el comprobante a tiempo. Puedes volver a reservar.</p></div><div class="foot"><button class="btn p" data-on-click="a79618d45">🔄 Reservar de nuevo</button></div>`}
 /* paso 5: listo */
 function s5(){const cfg=P.cfg,s=serv(),c=F.cita,np=!c.expira&&sinPagoF();lsSet('ultima',{codigo:c.codigo,fecha:F.fecha,hora:F.hora});
- const base=(cfg.linkBase||'').trim()||location.origin+location.pathname,seg=(()=>{try{const u=new URL(base,location.href);u.pathname=u.pathname.replace(/reservar(\.html)?$/,'estado.html').replace(/\/$/,'/estado.html');if(!/estado\.html$/.test(u.pathname))u.pathname=u.pathname.replace(/[^/]*$/,'estado.html');u.search='?c='+c.codigo;u.hash='';return u.href}catch(e){return `${base}?c=${c.codigo}`}})(),plant=(cfg.waReserva||'')+((cfg.waReserva||'').includes('{seguimiento}')?'':'\n\n🔎 Estado de la cita: {seguimiento}');
+ const base=(cfg.linkBase||'').trim()||location.origin+location.pathname,seg=(()=>{try{return new URL(base,location.href).origin+'/cita/'+c.codigo}catch(e){return location.origin+'/cita/'+c.codigo}})(),plant=(cfg.waReserva||'')+((cfg.waReserva||'').includes('{seguimiento}')?'':'\n\n🔎 Estado de la cita: {seguimiento}');
  const msg=tpl(plant,{seguimiento:seg,cliente:F.cli.nombre,telefono:F.cli.tel,ciudad:F.cli.ciudad,servicio:s.nombre,precio:soles(s.precio),barbero:barbNom(c.barberoId),fecha:fLarga(F.fecha),hora:h12(F.hora),codigo:c.codigo,negocio:cfg.nombre,direccion:cfg.direccion||cfg.ciudad,nota:F.nota,adelanto:soles(adel()),pago:np?'':`Adelanto ${soles(adel())} enviado por Yape (adjunto captura)`});
  shell(`<div class="ok"><b>✅</b><h2>${esc(cfg.txtFinal||'¡Reserva recibida!')}</h2><p style="color:var(--mu)">Tu código</p><div class="code">${esc(c.codigo)}</div></div>
  <div class="card"><div class="res"><span>✂️</span><span><b>${esc(s.nombre)}</b> · ${soles(s.precio)}</span><span>💈</span><span>${esc(barbNom(c.barberoId))}</span><span>📅</span><span>${fLarga(F.fecha)} · ${h12(F.hora)}</span><span>📍</span><span>${esc(cfg.direccion||cfg.ciudad)}</span></div></div>
@@ -254,8 +254,8 @@ function nv(){const s=serv(),b=P.barberos.find(x=>x.id===(F.cita?.barberoId||F.b
 const say=k=>Escena.decir(k,nv(),{fecha:F.fecha,hora:F.hora});
 
 /* =================== INICIO =================== */
-// El estado de una cita vive en estado.html (los links antiguos reservar.html?c=… se redirigen).
-{const cc=new URLSearchParams(location.search).get('c');if(cc)location.replace('estado.html?c='+encodeURIComponent(cc))}
+// El estado de una cita vive en /cita/CODIGO (el Worker ya redirige reservar.html?c=…; esto cubre el modo sin Worker).
+{const cc=new URLSearchParams(location.search).get('c');if(cc)location.replace('/cita/'+encodeURIComponent(cc))}
 function linkBloqueado(t,m){$('#app').innerHTML=`<div class="ok"><b>🔒</b><h2>${t}</h2><p style="color:var(--mu)">${m}</p></div><div class="foot">${P.cfg.whatsapp?`<button class="btn g" data-on-click="ae74f37bc" data-p0="${waNum(P.cfg.whatsapp)}">💬 Escribir a la barbería</button>`:''}<button class="btn" data-on-click="a08d935a8">Reservar normal</button></div>`}
 async function cargarLink(){const t=new URLSearchParams(location.search).get('l');if(!t)return true;let l=null;try{l=await API.link(t)}catch(e){}
  if(!l){linkBloqueado('Link no válido','Este link no existe o fue eliminado.');return false}

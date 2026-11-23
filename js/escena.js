@@ -24,7 +24,7 @@ const Escena=(()=>{
  const guardar=(k,v)=>{try{localStorage.setItem('brb_'+k,JSON.stringify(v))}catch(e){}};
  const escH=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
  const plantilla=(s,v)=>String(s||'').replace(/\{(\w+)\}/g,(m,k)=>k in v?v[k]:m).replace(/\s+([,.!?])/g,'$1').trim();
- const IMG={narr:'img/narrador.webp',logo:'img/logo-stereo.webp',drip:'img/logo-derretido.webp'};
+ const IMG={narr:'/img/narrador.webp',logo:'/img/logo-stereo.webp',drip:'/img/logo-derretido.webp'};
  const E={cfg:null,hoy:()=>'',audio:null,foto:async()=>'',entrado:false,quiereEntrar:false,pendiente:null};
 
  /* =================== VOZ GRABADA =================== */
@@ -135,7 +135,9 @@ const Escena=(()=>{
  function iniciar({cfg,hoy,audio,foto}){E.cfg=cfg;E.hoy=hoy;E.audio=audio;E.foto=foto||E.foto;narrador();
   ['hola','holaLink'].forEach(k=>VOZ.claves(k).forEach(x=>{const a=cfg.narrAudio?.[x];if(a)datos(a).catch(()=>{})})); // el saludo ya descargado al tocar
   const sp=$('#splash');
-  if(!sp||cfg.splashOn===false){sp?.remove();SPL.done=true;entrar();return}
+  // App instalada: abre directo (sin la pantalla de «Toca para entrar»); la voz suena al primer toque.
+  const app=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+  if(!sp||cfg.splashOn===false||app){sp?.remove();SPL.done=true;entrar();return}
   if(cfg.splashImg)E.foto(cfg.splashImg).then(u=>u&&logo(u));
   sp.classList.add('listo');if(E.quiereEntrar)entrar()}
  /* Si la página no pudo cargar, se quita la pantalla de carga para mostrar el error. */

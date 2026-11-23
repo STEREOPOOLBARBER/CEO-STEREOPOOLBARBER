@@ -8,7 +8,7 @@
   "assets": {
     "directory": "./",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/sw.js", "/", "/index", "/index.html", "/reservar", "/reservar.html", "/estado", "/estado.html", "/privacidad", "/privacidad.html"]
+    "run_worker_first": ["/api/*", "/sw.js", "/", "/index", "/index.html", "/reservar", "/reservar.html", "/estado", "/estado.html", "/cita", "/cita/*", "/privacidad", "/privacidad.html"]
   },
   "d1_databases": [
     { "binding": "DB", "database_name": "stereo-barber-db" }

@@ -35,7 +35,7 @@ export async function enviarPlantilla(env, c, tipo, w, d) {
   w = w || await leerWA(env); d = d || await datos(env);
   const tel = telWA(c.cliente?.tel); if (tel.length < 11) fail(400, 'La cita no tiene un celular válido');
   const hoy = ahoraLocal(env).fecha, b = d.barberos.find(x => x.id === c.barberoId), negocio = d.cfg.nombre || 'la barbería';
-  const link = `${w.urlBase || ''}/estado.html?c=${c.codigo}`, fecha = c.fecha === hoy ? 'hoy' : c.fecha === addD(hoy, 1) ? 'mañana ' + FECHA_L(c.fecha) : FECHA_L(c.fecha);
+  const link = `${(w.urlBase || '').replace(/\/+$/, '')}/cita/${c.codigo}`, fecha = c.fecha === hoy ? 'hoy' : c.fecha === addD(hoy, 1) ? 'mañana ' + FECHA_L(c.fecha) : FECHA_L(c.fecha);
   const plantilla = tipo === 'confirmacion' ? w.tplConfirmacion : w.tplRecordatorio;
   const params = tipo === 'confirmacion' ? [c.cliente?.nombre?.split(' ')[0], negocio, fecha, H12(c.hora), link] : [c.cliente?.nombre?.split(' ')[0], negocio, fecha, H12(c.hora), b?.nombre || 'tu barbero', link];
   const j = await meta(env, w, `${w.phoneId}/messages`, { messaging_product: 'whatsapp', to: tel, type: 'template', template: { name: plantilla, language: { code: w.idioma }, components: [{ type: 'body', parameters: params.map(tx) }] } });

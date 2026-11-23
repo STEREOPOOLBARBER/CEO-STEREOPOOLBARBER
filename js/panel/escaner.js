@@ -1,12 +1,12 @@
 /* =================== 📷 ESCANEAR EL QR DE LA CITA ===================
-   El cliente muestra el QR de su página de estado (estado.html?c=CODIGO). Aquí la cámara lo lee y se abre
+   El cliente muestra el QR de su página de estado (/cita/CODIGO; también entiende el link antiguo estado.html?c=). Aquí la cámara lo lee y se abre
    la tarjeta de esa cita, lista para «Pasar a silla».
    · Android / Chrome: BarcodeDetector del navegador.
    · iPhone / Safari (no lo tiene): vendor/jsqr.min.js, que se carga solo la primera vez que hace falta.
    · Sin cámara o sin permiso: se escribe el código a mano.
    El barbero solo encuentra sus propias citas: lo decide el Worker en /citas/buscar.
    ===================================================================== */
-const codigoDeQR=t=>{const s=String(t||'').trim(),m=s.match(/[?&]c=([A-Za-z0-9]{6})(?:[&#]|$)/)||s.match(/^([A-Za-z0-9]{6})$/);return m?m[1].toUpperCase():''};
+const codigoDeQR=t=>{const s=String(t||'').trim(),m=s.match(/\/cita\/([A-Za-z0-9]{6})(?:[/?#]|$)/)||s.match(/[?&]c=([A-Za-z0-9]{6})(?:[&#]|$)/)||s.match(/^([A-Za-z0-9]{6})$/);return m?m[1].toUpperCase():''};
 const ESC={st:null,t:null,leer:null};
 function pararCamara(){clearTimeout(ESC.t);ESC.st?.getTracks().forEach(x=>x.stop());ESC.st=null;ESC.leer=null}
 async function lectorQR(){

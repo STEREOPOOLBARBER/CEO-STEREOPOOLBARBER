@@ -32,7 +32,7 @@ import { rutasPublicas } from './modulos/publico.js';
 import { respaldoDiario } from './modulos/respaldos.js';
 import { frenar, ipDe } from './modulos/seguridad.js';
 import { conVistaPrevia } from './vista-previa.js';
-import { swPanel } from './app.js';
+import { swPanel, rutaCita } from './app.js';
 import { avisar, rutasTiempoReal, versionActual } from './modulos/tiempo-real.js';
 export { Avisos } from './modulos/tiempo-real.js';
 
@@ -70,7 +70,7 @@ export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     if (url.pathname === '/sw.js') return swPanel(req, env);
-    if (!url.pathname.startsWith('/api/')) return conVistaPrevia(req, env, url);
+    if (!url.pathname.startsWith('/api/')) return (await rutaCita(req, env, url)) || conVistaPrevia(req, env, url);
     if (!env.DB) return json({ error: 'Falta conectar la base de datos (D1). En Cloudflare: Settings → Bindings → agrega D1 con el nombre DB.' }, 503);
     try {
       const path = url.pathname.slice(4), res = await api(req, env, path);

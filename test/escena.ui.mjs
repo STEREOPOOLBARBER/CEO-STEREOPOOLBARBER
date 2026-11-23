@@ -51,17 +51,34 @@ check('el código ya no tiene voz de robot (speechSynthesis)', !/speechSynthesis
 
 // ---- estado de la cita: el narrador dice el estado con su fecha y hora, y el QR para el barbero
 const cf = await api('POST', '/citas', { fecha: man, hora: '09:00', barberoId: 'b2', servicioId: 's1', servicioNombre: 'Corte', precio: 25, cliente: { nombre: 'Rosa Estado', tel: '966000222' }, estado: 'confirmada' });
-const E = await nueva(); await E.goto(B + '/estado.html?c=' + cf.codigo); await E.waitForSelector('#splash.listo', { timeout: 8000 });
+const E = await nueva(); await E.goto(B + '/cita/' + cf.codigo); await E.waitForSelector('#splash.listo', { timeout: 8000 });
 await E.click('#splash'); await E.waitForSelector('#nBub.on', { timeout: 6000 }); await esperaSonidos(E, 3);
 check('en el estado el narrador dice «confirmada» + mañana + a las nueve', /confirmada/i.test(await E.locator('#nBub').innerText()) && JSON.stringify(await sonidos(E)) === '[22,16,19]', JSON.stringify(await sonidos(E)));
-check('antes de ser atendido aparece el QR para mostrar al llegar', await E.locator('#qrCita img, #qrCita canvas').count() > 0 && /muéstralo al llegar/i.test(await E.locator('.qrc').innerText()));
-check('el QR lleva el link de esta cita', await E.evaluate(c => document.querySelector('#qrCita').title.includes('estado.html?c=' + c), cf.codigo));
+check('antes de ser atendido aparece el QR para mostrar al llegar', await E.locator('#qrCita img, #qrCita canvas').count() > 0 && /muéstralo al llegar/i.test(await E.locator('.qr').innerText()));
+check('el QR lleva el link de esta cita', await E.evaluate(c => document.querySelector('#qrCita').title.endsWith('/cita/' + c), cf.codigo));
+
+// ---- la app del cliente: /cita/CODIGO con fondo blanco, sin emojis, botón de descargar y su propio manifiesto
+check('la página de la cita no muestra emojis (solo íconos), tampoco el narrador', !/\p{Extended_Pictographic}/u.test((await E.locator('#nBub').innerText()) + (await E.locator('#app').innerText()) + (await E.locator('#foot').innerText())), (await E.locator('#app').innerText()).slice(0, 200));
+check('fondo blanco', await E.evaluate(() => getComputedStyle(document.body).backgroundColor) === 'rgb(255, 255, 255)');
+check('la página enlaza el manifiesto de SU cita', await E.locator(`link[rel="manifest"][href="/cita/${cf.codigo}/app.webmanifest"]`).count() === 1);
+const mf = await (await ctx.request.get(`${B}/cita/${cf.codigo}/app.webmanifest`)).json();
+check("el manifiesto abre directo la cita, instalable y en blanco", mf.start_url === "/cita/" + cf.codigo && mf.scope === "/cita/" && mf.display === "standalone" && mf.background_color === "#ffffff" && mf.icons.length >= 2, JSON.stringify(mf));
+check('un código inválido no tiene manifiesto', (await ctx.request.get(`${B}/cita/ab/app.webmanifest`)).status() === 404);
+const red = await ctx.request.get(`${B}/reservar.html?c=${cf.codigo}`, { maxRedirects: 0 });
+check('los links antiguos (reservar.html?c=, estado.html?c=) pasan a /cita/CODIGO', red.status() === 301 && red.headers().location.endsWith('/cita/' + cf.codigo), red.status());
+await E.click('text=Descargar'); await E.waitForSelector('#modal.on .pasosi');
+check('«Descargar» explica cómo agregarla a inicio cuando el navegador no tiene botón', /agregar|instalar/i.test(await E.locator('#hoja').innerText()));
+await E.click('#modal [data-cerrar]'); await E.waitForSelector('#modal.on', { state: 'detached' });
+const M = await nueva(); await M.goto(B + '/cita'); await M.waitForSelector('#splash.listo'); await M.click('#splash'); await M.waitForSelector('#cod');
+check('la app sin código recuerda las citas que abrió este celular', /mis citas/i.test(await M.locator('#app').innerText()) && await M.locator(`[data-on-click="abrirCita"][data-p0="${cf.codigo}"]`).count() === 1);
+await M.click(`[data-on-click="abrirCita"][data-p0="${cf.codigo}"]`); await M.waitForSelector('.card.estado');
+check('…y la abre con un toque', new URL(M.url()).pathname === '/cita/' + cf.codigo && /confirmada/i.test(await M.locator('.card.estado').innerText()));
 
 // ---- atendida: fotos, calificación anónima y reseña
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 const fa = (await api('POST', '/fotos', { data: PNG })).key, fd = (await api('POST', '/fotos', { data: PNG })).key;
 const at = await api('POST', '/citas', { fecha: lima(0), hora: '09:00', barberoId: 'b3', servicioId: 's1', servicioNombre: 'Corte', precio: 25, cliente: { nombre: 'Lalo Atendido', tel: '966000333' }, estado: 'atendida', fotoAntes: fa, fotoDespues: fd });
-const A = await nueva(); await A.goto(B + '/estado.html?c=' + at.codigo); await A.waitForSelector('#splash.listo', { timeout: 8000 }); await A.click('#splash');
+const A = await nueva(); await A.goto(B + '/cita/' + at.codigo); await A.waitForSelector('#splash.listo', { timeout: 8000 }); await A.click('#splash');
 await A.waitForSelector('.fotos img'); await A.waitForFunction(() => [...document.querySelectorAll('.fotos img')].every(i => i.complete && i.naturalWidth > 0), null, { timeout: 8000 }).catch(() => { });
 check('el cliente atendido ve su antes y después', await A.evaluate(() => [...document.querySelectorAll('.fotos img')].filter(i => i.naturalWidth > 0).length) === 2);
 check('la reseña de Google se ofrece a todos (antes de calificar)', (await A.locator('a:has-text("reseña")').getAttribute('href')) === 'https://g.page/r/barberia-prueba/review');
@@ -82,7 +99,7 @@ await ponerCfg({});
 // ---- panel: 📷 leer el QR abre la cita
 const lejos = lima(80), cl = await api('POST', '/citas', { fecha: lejos, hora: '10:00', barberoId: 'b4', servicioId: 's1', servicioNombre: 'Corte', precio: 25, cliente: { nombre: 'Quique Qr', tel: '966000444' }, estado: 'confirmada' });
 const P = await nueva(); await P.goto(B + '/index.html'); await P.evaluate(s => localStorage.setItem('brb_ses', JSON.stringify(s)), adm); await P.reload(); await P.waitForSelector('#agChips .chip');
-check('el QR se entiende como link o como código', await P.evaluate(c => codigoDeQR('https://x.workers.dev/estado.html?c=' + c) === c && codigoDeQR(c.toLowerCase()) === c && codigoDeQR('https://otra.cosa/?q=1') === '', cl.codigo));
+check('el QR se entiende como link o como código', await P.evaluate(c => codigoDeQR('https://x.workers.dev/cita/' + c) === c && codigoDeQR('https://x.workers.dev/estado.html?c=' + c) === c && codigoDeQR(c.toLowerCase()) === c && codigoDeQR('https://otra.cosa/?q=1') === '', cl.codigo));
 await P.click('[data-on-click="abrirEscaner"]'); await P.waitForSelector('#escCod');
 check('el 📷 abre el lector (con opción de escribir el código)', true);
 await P.fill('#escCod', cl.codigo); await P.click('#mbody >> text=Buscar'); await P.waitForSelector('#c_' + cl.id, { timeout: 8000 });

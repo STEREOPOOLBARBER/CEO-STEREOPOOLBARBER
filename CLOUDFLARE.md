@@ -79,8 +79,12 @@ La caja verde de **Nueva cita** acepta (1) el mensaje de un cliente (rellena DNI
 ### Política y reprogramación
 ⚙️ Config → **📜 Política**: minutos de tolerancia, hasta cuántas horas antes se puede reprogramar (24 por defecto), cuántas veces (1 por defecto, o «No permitir») y un texto libre. En «Ver estado de cita» el cliente ve la política y el botón **📅 Reprogramar mi cita** solo si faltan al menos esas horas; el servidor vuelve a comprobarlo (`POST /api/publico/cita/:codigo/reprogramar`). Mismo barbero, solo días/horas libres. El panel marca la cita «🔁 Reprogramada (antes …)» y avisa. Prueba: `npm run test:reprog`.
 
-### Página de estado de cita (`estado.html`)
-Página solo para consultar la cita: `estado.html?c=CODIGO` (o escribir el código). Muestra estado, cuenta regresiva, datos, política, mapa, botón de WhatsApp y **Reprogramar** (si faltan ≥ 24 h). Los mensajes de WhatsApp (`{seguimiento}`) ya apuntan aquí; los links viejos `reservar.html?c=` siguen funcionando. Tiene su propia vista previa en WhatsApp («Tu cita en …»).
+### App del cliente «Mi cita» (`/cita/CODIGO`)
+El link que recibe el cliente ahora es **`tudominio/cita/CODIGO`** (WhatsApp, QR, formulario y panel ya lo usan; los links viejos `estado.html?c=` y `reservar.html?c=` pasan solos a la dirección nueva).
+- Fondo blanco, sin emojis, con los colores de ⚙️ Config → Marca. Muestra el estado con sus pasos, cuenta regresiva, «Confirmo que voy», «Cambiar día u hora» (si faltan ≥ 24 h), QR para mostrar al llegar, detalles, mapa, política y abajo WhatsApp y Actualizar.
+- Botón **Descargar**: en Android instala la app; en iPhone explica los 3 toques (Safari → Compartir → Agregar a inicio). El ícono abre **directo su cita** (cada cita tiene su manifiesto: `/cita/CODIGO/app.webmanifest`). Instalada, no sale «Toca para entrar».
+- El celular recuerda las citas que abrió («Mis citas» en `/cita`): solo código y fecha.
+- No hay que hacer nada en Cloudflare: se publica sola con el push.
 
 ### Rendimiento: el panel ya no descarga toda la historia (Fase 1)
 - `GET /api/panel` trae solo la **ventana** de citas: 35 días atrás → 120 días adelante (más los Yape pendientes) y un conteo de visitas por cliente para la fidelidad.

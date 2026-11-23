@@ -26,8 +26,8 @@ Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño pru
 - `js/voz.js` (guion de voz, frases originales, piezas de fecha y hora; lo usan las 3 páginas) · `js/escena.js` + `css/escena.css` (pantalla «Toca para entrar», narrador y reproductor de la voz grabada; reservar y estado) · `img/` (narrador y logo Stereo).
 - `js/eventos.js` — **despachador de eventos** y registro `ACC` de acciones (generado a partir de los antiguos `onclick`).
 - **CSP estricta: prohibido el JavaScript en línea** (`script-src 'self'`, `script-src-attr 'none'`). Nunca escribir `onclick="…"`, `onchange="…"` ni `<script>` dentro del HTML. Para un botón nuevo: `data-on-click="nombreAccion"` (también `data-on-change`, `data-on-input`, `data-on-keydown`) y, junto al código de esa pantalla, `ACC.nombreAccion = function (event) { … }` (`this` = el elemento). Los datos van en `data-p0`, `data-p1`… (`this.dataset.p0`). Si `test/csp.ui.mjs` encuentra una acción sin registrar o una violación de CSP, falla.
-- `reservar.html` — formulario público de reservas (con el narrador «Tío Stereo»). `reservar.html?c=…` redirige a `estado.html`.
-- `estado.html` — página pública para ver el estado de una cita (`?c=CODIGO`): narrador, QR antes de la cita, reprogramar; ya atendida: fotos, calificación anónima y reseña de Google.
+- `reservar.html` — formulario público de reservas (con el narrador «Tío Stereo»). `reservar.html?c=…` y `estado.html?c=…` → 301 a `/cita/CODIGO` (Worker, `worker/app.js rutaCita`).
+- `estado.html` + `js/estado.js` — **app del cliente «Mi cita»**, servida en `/cita/CODIGO` (sin código: `/cita`, con «Mis citas» del aparato en `brb_misCitas`). Fondo blanco, **sin emojis** (íconos de `img/iconos.svg` con `ic()`; el globo del narrador se limpia con `sinEmojis`), colores de la marca. Manifiesto por cita `/cita/CODIGO/app.webmanifest` (`id '/cita/'`, `start_url` = su cita; no consulta la base). Sin service worker. Narrador, QR antes de la cita, confirmar, reprogramar, botón «Descargar» (`beforeinstallprompt` o pasos de iPhone); ya atendida: fotos, calificación anónima y reseña de Google. Todo link al estado usa `/cita/CODIGO` (`estadoUrl`, `reservar.js`, `whatsapp.js`).
 - `worker/` — API (Cloudflare Worker), **monolito modular**:
   - `index.js` — solo entrada: seguridad común (límite público, mismo origen), migraciones, enrutador por módulos, cron.
   - `comun.js` — constantes, utilidades, hora de Lima y reglas de agenda (`slotsDia`, `trabaja`, `reglaReprog`). Sin dependencias.
@@ -75,7 +75,7 @@ Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño pru
 ## WhatsApp
 - **Manual (siempre disponible):** ⏰ en la agenda (citas de mañana y próximas 3 h) → abre WhatsApp con `waRecuerda` y el link de estado; guarda `cita.recordado`.
 - **Automático (API oficial de Meta, `modulos/whatsapp.js`):** configuración en `kv.whatsappApi` (token y app secret **cifrados**, o secretos `WHATSAPP_TOKEN`/`WHATSAPP_APP_SECRET`). Envío solo con **plantillas** (`recordatorio_cita` 6 variables, `cita_confirmada` 5). Cron: día anterior (desde la hora elegida), 2 h antes, confirmación al validar Yape de reservas web; una vez por cita (`cita.wa.<tipo>`), tabla `wa_mensajes` (migración v3). Webhook `/api/whatsapp/webhook` (verify token + firma `X-Hub-Signature-256`): estados (entregado/leído) y respuestas «sí/voy» → `cita.asistencia`.
-- **Confirmar asistencia:** `POST /api/publico/cita/:codigo/confirmar` (botón en `estado.html`) → `cita.asistencia = {ts, via}`; en la agenda «👍 Confirmó que viene».
+- **Confirmar asistencia:** `POST /api/publico/cita/:codigo/confirmar` (botón en `/cita/CODIGO`) → `cita.asistencia = {ts, via}`; en la agenda «👍 Confirmó que viene».
 - Pruebas con Meta simulado: `WHATSAPP_API_URL` (`test/whatsapp.e2e.mjs`).
 
 ## Reporte semanal de caja
@@ -87,8 +87,8 @@ Flujo futuro: trabajar en `desarrollo` → `npm test` → push → el dueño pru
 - `js/voz.js`: `GUION` de cada momento = trozos grabados (claves `momento`, `momento_2`…) + huecos `{fecha}` / `{hora}`. Piezas: `f_hoy`, `f_manana`, `f_el`, `f_dow_0..6`, `f_d_1..31`, `f_m_1..12`, `h_HH:MM` (una por turno de `slotsDia`). `VOZ.claves(momento,{fecha,hora,hoy})` da el orden. Si cambias el guion, cuida la compatibilidad de las claves ya grabadas.
 - `js/escena.js`: el primer toque («Toca para entrar») desbloquea Web Audio (y `navigator.audioSession.type='playback'` en iPhone) y encadena las piezas; sin Web Audio usa un `<audio>`. `Escena.estado()` sirve para pruebas.
 
-## Después del corte (estado.html)
-- QR con `estado.html?c=CODIGO` mientras la cita está por validar o confirmada; el 📷 del panel (`js/panel/escaner.js`: BarcodeDetector o `vendor/jsqr.min.js` con SRI) abre la cita.
+## Después del corte (/cita/CODIGO)
+- QR con `/cita/CODIGO` mientras la cita está por validar o confirmada; el 📷 del panel (`js/panel/escaner.js`: BarcodeDetector o `vendor/jsqr.min.js` con SRI) abre la cita (`codigoDeQR` entiende `/cita/X`, `?c=X` y el código solo).
 - Atendida: fotos por `GET /publico/cita/:c/foto/(antes|despues)`; calificación anónima (sin nombre/celular/código, solo el mes; huella aparte en `calif_hechas`; 7 días; una vez); el panel la muestra por barbero con 3 o más. Reseña (`cfg.resenaUrl`) **a todos** (Google prohíbe pedirla solo a los contentos).
 
 ## Filtros de la agenda

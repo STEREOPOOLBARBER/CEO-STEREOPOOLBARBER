@@ -34,7 +34,7 @@ r = await call('POST', '/whatsapp/enviar', { id: c1.id, tipo: 'recordatorio' }, 
 const env1 = recibidos.at(-1).body;
 check('envía la plantilla de recordatorio al celular con 51', r.s === 200 && env1.to === '51987222111' && env1.template.name === 'recordatorio_cita' && env1.template.language.code === 'es', JSON.stringify(env1));
 const ps = env1.template.components[0].parameters.map(p => p.text);
-check('con los datos de la cita (nombre, negocio, «mañana», hora, barbero, link)', ps[0] === 'Marco' && /^mañana /.test(ps[2]) && ps[3] === '10:00 a. m.' && ps[4] === 'Jhon' && new RegExp('/estado\\.html\\?c=' + c1.codigo + '$').test(ps[5]), ps.join(' | '));
+check('con los datos de la cita (nombre, negocio, «mañana», hora, barbero, link)', ps[0] === 'Marco' && /^mañana /.test(ps[2]) && ps[3] === '10:00 a. m.' && ps[4] === 'Jhon' && new RegExp('/cita/' + c1.codigo + '$').test(ps[5]), ps.join(' | '));
 let ct = (await call('GET', '/panel', null, adm)).j.citas.find(x => x.id === c1.id);
 check('la cita guarda el envío (id del mensaje)', ct.wa?.recordatorio?.id?.startsWith('wamid.'), JSON.stringify(ct.wa));
 // webhook

@@ -154,8 +154,8 @@ const telV=t=>can('verTel')?t:'••• ••• '+String(t||'').slice(-3);
 const monV=n=>can('verMontos')?soles(n):'S/ •••';
 const mine=c=>isAdmin()||c.barberoId===S.ses?.barberoId;
 const scope=()=>S.citas.filter(mine);
-// Link de «Ver estado de cita»: la página estado.html junto al formulario.
-function estadoUrl(cod){const f=formUrl();let u;try{u=new URL(f,location.href)}catch(e){return 'estado.html?c='+cod}u.pathname=/\/reservar(\.html)?$/.test(u.pathname)?u.pathname.replace(/reservar(\.html)?$/,'estado.html'):u.pathname.replace(/[^/]*$/,'estado.html');u.search='?c='+cod;u.hash='';return u.href}
+// Link de «Ver estado de cita»: la app del cliente /cita/CODIGO, en el mismo dominio del formulario.
+function estadoUrl(cod){try{return new URL(formUrl(),location.href).origin+'/cita/'+cod}catch(e){return '/cita/'+cod}}
 function formUrl(q=''){let base=(S.cfg.linkBase||'').trim();if(!base){try{if(/^https?:/.test(location.href))base=new URL(CONFIG.FORM_URL,location.href).href}catch(e){}}if(!base)base=CONFIG.FORM_URL;return base+q}
 const pagoOn=()=>S.cfg.modAdelanto&&+S.cfg.adelanto>0;
 function tpl(s,c,cfg=S.cfg){const b=barb(c?.barberoId);const v={cliente:c?.cliente?.nombre||'',telefono:c?.cliente?.tel||'',ciudad:c?.cliente?.ciudad||'',negocio:cfg.nombre,fecha:c?.fecha?fLarga(c.fecha):'',hora:c?.hora?h12(c.hora):'',barbero:b?.nombre||'',servicio:c?.servicioNombre||'',precio:c?soles(c.precio):'',codigo:c?.codigo||'',direccion:cfg.direccion||cfg.ciudad,maps:cfg.maps||'',link:formUrl(),seguimiento:c?.codigo?estadoUrl(c.codigo):'',adelanto:soles(c?.adelanto||cfg.adelanto),yape:cfg.yapeNum||'',nota:c?.nota||'',pago:''};
