@@ -172,10 +172,13 @@ function cargarGoogle(){return window.google?.accounts?Promise.resolve():new Pro
 async function gPintar(el='#gbtn',cb=loginGoogle){await cargarGoogle();const n=(await API.req('GET','/auth/nonce')).nonce;
  google.accounts.id.initialize({client_id:GCFG.google,callback:cb,nonce:n,ux_mode:'popup',auto_select:false});
  $(el).innerHTML='';google.accounts.id.renderButton($(el),{theme:'filled_black',size:'large',shape:'pill',text:'signin_with',locale:'es'})}
-async function loginGoogle(r){try{const x=await API.google(r.credential);if(x.puerta){await initLoginNube();return}await entrar(x)}catch(e){toast('❌ '+e.message);gPintar().catch(()=>{})}}
+async function loginGoogle(r){try{const x=await API.google(r.credential);if(x.puerta){await initLoginNube();return}await entrar(x);if(x.ofrecerHuella)ofrecerHuella()}catch(e){toast('❌ '+e.message);gPintar().catch(()=>{})}}
 async function initLoginNube(){let ac={google:'',pin:true};try{ac=await API.authCfg()}catch(e){}
- GCFG=ac;$('#pinBox').style.display=ac.pin?'flex':'none';await loginExtras(ac);if($('#pfBox').style.display==='flex')return;
- $('#lgHint').innerHTML=ac.google?'Entra con la cuenta de Google que el dueño autorizó.':'⚠️ Falta configurar GOOGLE_CLIENT_ID en Cloudflare.';
+ GCFG=ac;$('#pinBox').style.display=ac.pin?'flex':'none';
+ // Huella / Face ID: sin escribir nada (la passkey dice quién es). Sale primero si este aparato ya la tiene.
+ $('#hTop').style.display=ac.huella&&hayHuella()?'inline-flex':'none';$('#hTop').classList.toggle('p',!!lsGet('huellaAqui',''));
+ await loginExtras(ac);if($('#pfBox').style.display==='flex'){$('#hTop').style.display='none';return}
+ $('#lgHint').innerHTML=ac.google?'<b>Dueño:</b> entra con tu Google. <b>Equipo:</b> con el Google que el dueño autorizó.':'⚠️ Falta configurar GOOGLE_CLIENT_ID en Cloudflare.';
  if(ac.google)gPintar().catch(e=>toast('❌ '+e.message))}
 async function logout(){if(S.dirty&&!confirm('Tienes cambios sin guardar en Config. ¿Salir igual?'))return;if(!confirm('¿Cerrar sesión?'))return;await API.logout();localStorage.removeItem('brb_ses');location.reload()}
 /* ---------- tiempo real: WebSocket con el Durable Object «Avisos» ----------

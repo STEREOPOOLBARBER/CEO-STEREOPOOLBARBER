@@ -57,8 +57,9 @@ export async function sesion(req, env, d) {
   const id = await sha256(t), r = await env.DB.prepare('SELECT data, exp FROM sesiones WHERE id = ?').bind(id).first();
   if (!r || r.exp < Date.now()) return null;
   const s = JSON.parse(r.data), ahora = Date.now();
+  let ap = null;
   if (exigePuerta(env) && s.via !== 'pin') {
-    const ap = s.pu && await env.DB.prepare('SELECT exp FROM sesiones WHERE id = ?').bind(s.pu).first();
+    ap = s.pu && await env.DB.prepare('SELECT exp, data FROM sesiones WHERE id = ?').bind(s.pu).first();
     if (!ap || ap.exp < ahora) return null; // el aparato fue quitado o venció
     if (s.comp && ahora - (s.ult || 0) > (+env.BLOQUEO_SEG || BLOQUEO_MIN * 60) * 1e3) { /* BLOQUEO_SEG: solo para pruebas */ await env.DB.prepare('DELETE FROM sesiones WHERE id = ?').bind(id).run(); return null }
     if (s.comp && ahora - (s.ult || 0) > 60e3) await env.DB.prepare("UPDATE sesiones SET data = json_set(data, '$.ult', ?) WHERE id = ?").bind(ahora, id).run();
@@ -66,10 +67,12 @@ export async function sesion(req, env, d) {
   let ident = null;
   if (s.via === 'clave') { const c = await env.DB.prepare('SELECT v FROM claves WHERE sujeto = ?').bind(s.sujeto).first(); if (c && c.v === s.cv) ident = porSujeto(s.sujeto, d) }
   else if (s.via === 'huella') { const h = await env.DB.prepare('SELECT 1 AS x FROM passkeys WHERE id = ? AND sujeto = ?').bind(s.cid, s.sujeto).first(); if (h) ident = porSujeto(s.sujeto, d) }
+  // Dueño con su Google: vale mientras ese aparato siga autorizado y el correo siga siendo de un dueño (OWNER_EMAILS).
+  else if (s.via === 'google' && ap) { const g = JSON.parse(ap.data), p = porSujeto(s.sujeto, d); if (g.email && esDuenoEmail(g.email, env) && p?.rol === 'dueno') ident = p }
   else if (s.via === 'pin' && pinPermitido(env)) { const p = pinDeRef(s.ref, d); if (p && await sha256(p) === s.pinH) ident = porSujeto('p_' + s.ref, d) }
   if (!ident) return null;
   const perm = permisos(ident, d); if (!perm) return null;
-  return { ...ident, perm, bloqueo: s.comp ? BLOQUEO_MIN : 0, pu: s.pu || '' };
+  return { ...ident, perm, bloqueo: s.comp ? BLOQUEO_MIN : 0, pu: s.pu || '', via: s.via, desde: s.ts || 0 };
 }
 /* ----- puerta: el dispositivo entra con Google y recién ahí se elige el perfil ----- */
 export const exigePuerta = env => !!env.GOOGLE_CLIENT_ID;
@@ -95,11 +98,14 @@ export async function exigirPuerta(req, env, d, sujeto) {
 }
 /* Nombre del aparato para la lista «Aparatos autorizados» (sin guardar la huella del navegador completa). */
 export const aparatoDe = req => { const u = req.headers.get('User-Agent') || '', so = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad' : /Android/.test(u) ? 'Android' : /Windows/.test(u) ? 'Windows' : /Mac OS/.test(u) ? 'Mac' : /Linux/.test(u) ? 'Linux' : 'Aparato', nav = /Edg\//.test(u) ? 'Edge' : /SamsungBrowser/.test(u) ? 'Samsung' : /CriOS|Chrome\//.test(u) ? 'Chrome' : /FxiOS|Firefox\//.test(u) ? 'Firefox' : /Safari\//.test(u) ? 'Safari' : ''; return nav ? `${so} · ${nav}` : so };
-export async function abrirPuerta(env, data, ms = SES_MS, req) {
-  const t = rnd();
-  await env.DB.prepare('INSERT INTO sesiones(id, data, exp) VALUES(?, ?, ?)').bind(await sha256(t), JSON.stringify({ via: 'puerta', ...data, ap: req ? aparatoDe(req) : 'Aparato', creado: Date.now(), uso: Date.now() }), Date.now() + ms).run();
-  return setCookie(t, ms / 1000, COOKIE_P);
+export async function abrirPuertaId(env, data, ms = SES_MS, req) {
+  const t = rnd(), id = await sha256(t);
+  await env.DB.prepare('INSERT INTO sesiones(id, data, exp) VALUES(?, ?, ?)').bind(id, JSON.stringify({ via: 'puerta', ...data, ap: req ? aparatoDe(req) : 'Aparato', creado: Date.now(), uso: Date.now() }), Date.now() + ms).run();
+  return { id, cookie: setCookie(t, ms / 1000, COOKIE_P) };
 }
+export const abrirPuerta = async (...a) => (await abrirPuertaId(...a)).cookie;
+/* La persona «dueño» que corresponde a un correo de OWNER_EMAILS: la que tiene ese correo o, si no, el primer dueño activo. */
+export const duenoDe = (email, d) => identDe(d.equipo.find(p => p.activo !== false && p.rol === 'dueno' && norm(p.email) === norm(email)) || d.equipo.find(p => p.activo !== false && p.rol === 'dueno'));
 /* Bitácora: quién hizo qué (citas, configuración, accesos, respaldos). Se guarda 180 días. */
 export async function auditar(env, quien, accion, objeto = '', detalle = '') {
   try { await env.DB.prepare('INSERT INTO auditoria(ts, quien, accion, objeto, detalle) VALUES(?, ?, ?, ?, ?)').bind(Date.now(), String(quien || '?').slice(0, 80), accion, String(objeto).slice(0, 80), String(detalle).slice(0, 400)).run() } catch { }
@@ -108,12 +114,14 @@ export const quienEs = s => s ? (s.nombre || s.email || 'Panel') + (s.rol ? ` ($
 // Al entrar a un perfil se cierra la sesión anterior de ese navegador: cada ingreso estrena sesión.
 export async function cerrarPrevia(req, env) { const t = cookieDe(req); if (t) await env.DB.prepare('DELETE FROM sesiones WHERE id = ?').bind(await sha256(t)).run() }
 /* Abre la sesión de una persona en este aparato. «comp» = aparato que no es suyo (se bloquea solo por inactividad). */
-async function entrarComo(req, env, g, ident, data, via, motivo) {
+async function entrarComo(req, env, g, ident, data, via, motivo, antes = [], extra = {}) {
   await cerrarPrevia(req, env);
   const comp = exigePuerta(env) && !!g && !(ident.sujeto === g.propio || (g.dueno && ident.rol === 'dueno'));
-  const cookie = await abrirSesion(env, { ...data, sujeto: ident.sujeto, pu: g?.id || '', comp, ult: Date.now() });
+  const cookie = await abrirSesion(env, { ...data, sujeto: ident.sujeto, pu: g?.id || '', comp, ult: Date.now(), ts: Date.now() });
   await anotar(env, via, ident.nombre, true, motivo || ident.rol, req);
-  return json({ ...ident, bloqueo: comp ? BLOQUEO_MIN : 0 }, 200, { 'Set-Cookie': cookie });
+  const h = new Headers({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+  for (const k of [...antes, cookie]) h.append('Set-Cookie', k); // «antes»: la puerta del aparato, si se abrió en este mismo paso
+  return new Response(JSON.stringify({ ...ident, bloqueo: comp ? BLOQUEO_MIN : 0, ...extra }), { status: 200, headers: h });
 }
 const guardarClave = async (env, sujeto, clave, temporal) => { const salt = rnd(16); await env.DB.prepare('INSERT INTO claves(sujeto, salt, hash, v, upd, temporal) VALUES(?, ?, ?, 1, ?, ?) ON CONFLICT(sujeto) DO UPDATE SET salt = excluded.salt, hash = excluded.hash, v = claves.v + 1, upd = excluded.upd, temporal = excluded.temporal').bind(sujeto, salt, await hashClave(clave, salt), Date.now(), temporal ? 1 : 0).run(); return env.DB.prepare('SELECT v FROM claves WHERE sujeto = ?').bind(sujeto).first() };
 export async function abrirSesion(env, data) {
@@ -158,6 +166,20 @@ export async function gastarNonce(env, n) {
 }
 export const anotar = (env, via, quien, ok, motivo, req) => env.DB.prepare('INSERT INTO accesos(ts, via, quien, ok, motivo, ip) VALUES(?,?,?,?,?,?)').bind(Date.now(), via, str(quien, 120), ok ? 1 : 0, str(motivo, 120), ipDe(req)).run().catch(() => { });
 
+
+/* ---------- huella / Face ID (passkey): lo mismo para la invitación del dueño y para «activar en este aparato» ---------- */
+async function opcionesHuella(env, req, d, ident) {
+  const ex = await env.DB.prepare('SELECT id FROM passkeys WHERE sujeto = ?').bind(ident.sujeto).all(), u = new URL(req.url);
+  return { nombre: ident.nombre, publicKey: { challenge: await nuevoReto(env, 'create', ident.sujeto), rp: { id: u.hostname, name: d.cfg.nombre || 'Barbería' }, user: { id: b64uEnc(new TextEncoder().encode(ident.sujeto)), name: ident.nombre, displayName: ident.nombre }, pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }], authenticatorSelection: { authenticatorAttachment: 'platform', residentKey: 'required', requireResidentKey: true, userVerification: 'required' }, timeout: 60000, attestation: 'none', excludeCredentials: ex.results.map(x => ({ type: 'public-key', id: x.id })) } };
+}
+async function registrarHuella(env, req, ident, b, extra = []) {
+  const u = new URL(req.url); let k; try { k = await verificarAtestacion(b.credential, b.challenge, u.hostname, u.origin) } catch (e) { fail(400, 'No se pudo activar la huella: ' + e.message) }
+  const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM passkeys WHERE sujeto = ?').bind(ident.sujeto).first(); if (n.n >= 5) fail(409, 'Ya tiene 5 dispositivos. Pide al administrador que quite alguno.');
+  await env.DB.batch([env.DB.prepare('INSERT INTO passkeys(id, sujeto, jwk, alg, cnt, etiqueta, creada) VALUES(?,?,?,?,?,?,?)').bind(k.id, ident.sujeto, JSON.stringify(k.jwk), k.alg, k.cnt, str(b.etiqueta, 60) || 'Celular', Date.now()), ...extra]);
+  await anotar(env, 'huella', ident.nombre, true, 'huella activada', req);
+}
+// Activar la huella uno mismo, con la sesión recién abierta (hasta 30 min después de entrar).
+export const HUELLA_FRESCA_MS = 30 * 60e3;
 
 /* Rutas de ingreso: Google, puerta, perfiles, clave, huella, PIN (pruebas) y salida. */
 export async function rutasAuth(c) {
@@ -231,7 +253,7 @@ export async function rutasAuth(c) {
     return entrarComo(req, env, g, ident, { via: 'clave', cv: 1 }, 'clave', 'creó su clave');
   }
   if (path === '/auth/huella/reto' && m === 'GET') {
-    await limitar(env, 'hr:' + ipDe(req), 60, 15 * 60e3); await exigirPuerta(req, env, await datos(env));
+    await limitar(env, 'hr:' + ipDe(req), 60, 15 * 60e3); // la huella (passkey) no se puede adivinar: no hace falta Google antes
     return json({ challenge: await nuevoReto(env, 'get'), rpId: new URL(req.url).hostname });
   }
   if (path === '/auth/huella' && m === 'POST') {
@@ -239,11 +261,13 @@ export async function rutasAuth(c) {
     const b = await body(), cred = b.credential, u = new URL(req.url);
     if (!await gastarReto(env, b.challenge, 'get')) { await anotar(env, 'huella', '', false, 'reto vencido o repetido', req); fail(400, 'La verificación venció. Inténtalo otra vez.') }
     const g = await env.DB.prepare('SELECT * FROM passkeys WHERE id = ?').bind(str(cred?.id, 600)).first(), d = await datos(env), ident = g && porSujeto(g.sujeto, d);
-    const pg = g ? await exigirPuerta(req, env, d, g.sujeto) : null;
     if (!g || !ident) { await anotar(env, 'huella', '', false, 'huella no registrada', req); fail(403, 'Esta huella no está registrada. Pide al administrador que la active.') }
     let cnt; try { cnt = await verificarAfirmacion(cred, g, b.challenge, u.hostname, u.origin) } catch (e) { await anotar(env, 'huella', ident.nombre, false, e.message, req); fail(403, 'No se pudo verificar la huella') }
     await env.DB.prepare('UPDATE passkeys SET cnt = ? WHERE id = ?').bind(cnt, g.id).run();
-    return entrarComo(req, env, pg, ident, { via: 'huella', cid: g.id }, 'huella');
+    // Huella o Face ID verificados: si este aparato aún no estaba autorizado para esta persona, queda autorizado (90 días).
+    let pg = exigePuerta(env) ? await puerta(req, env, d) : null; const antes = [];
+    if (exigePuerta(env) && (!pg || !permitido(pg, g.sujeto))) { const n = await abrirPuertaId(env, { sujeto: g.sujeto }, 90 * 864e5, req); antes.push(n.cookie); pg = { id: n.id, dueno: false, propio: g.sujeto } }
+    return entrarComo(req, env, pg, ident, { via: 'huella', cid: g.id }, 'huella', '', antes);
   }
   // La huella se activa con una invitación que crea el administrador (código de un solo uso, vale 24 h).
   if (path === '/passkey/opciones' && m === 'POST') {
@@ -251,8 +275,7 @@ export async function rutasAuth(c) {
     const b = await body(), inv = await env.DB.prepare('SELECT * FROM invitaciones WHERE h = ? AND exp > ?').bind(await hashInv(b.codigo), Date.now()).first();
     if (!inv) fail(404, 'Este link ya no sirve. Pide uno nuevo al administrador.');
     const d = await datos(env), ident = porSujeto(inv.sujeto, d); if (!ident) fail(404, 'Esta persona ya no está activa.');
-    const ex = await env.DB.prepare('SELECT id FROM passkeys WHERE sujeto = ?').bind(inv.sujeto).all(), u = new URL(req.url);
-    return json({ nombre: ident.nombre, publicKey: { challenge: await nuevoReto(env, 'create', inv.sujeto), rp: { id: u.hostname, name: d.cfg.nombre || 'Barbería' }, user: { id: b64uEnc(new TextEncoder().encode(inv.sujeto)), name: ident.nombre, displayName: ident.nombre }, pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }], authenticatorSelection: { authenticatorAttachment: 'platform', residentKey: 'required', requireResidentKey: true, userVerification: 'required' }, timeout: 60000, attestation: 'none', excludeCredentials: ex.results.map(x => ({ type: 'public-key', id: x.id })) } });
+    return json(await opcionesHuella(env, req, d, ident));
   }
   if (path === '/passkey/registrar' && m === 'POST') {
     await limitar(env, 'pk:' + ipDe(req), 20, 15 * 60e3);
@@ -260,10 +283,7 @@ export async function rutasAuth(c) {
     if (!inv) fail(404, 'Este link ya no sirve. Pide uno nuevo al administrador.');
     const reto = await gastarReto(env, b.challenge, 'create'); if (!reto || reto.sujeto !== inv.sujeto) fail(400, 'La verificación venció. Abre el link otra vez.');
     const d = await datos(env), ident = porSujeto(inv.sujeto, d); if (!ident) fail(404, 'Esta persona ya no está activa.');
-    const u = new URL(req.url); let k; try { k = await verificarAtestacion(b.credential, b.challenge, u.hostname, u.origin) } catch (e) { fail(400, 'No se pudo activar la huella: ' + e.message) }
-    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM passkeys WHERE sujeto = ?').bind(inv.sujeto).first(); if (n.n >= 5) fail(409, 'Ya tiene 5 dispositivos. Pide al administrador que quite alguno.');
-    await env.DB.batch([env.DB.prepare('INSERT INTO passkeys(id, sujeto, jwk, alg, cnt, etiqueta, creada) VALUES(?,?,?,?,?,?,?)').bind(k.id, inv.sujeto, JSON.stringify(k.jwk), k.alg, k.cnt, str(b.etiqueta, 60) || 'Celular', Date.now()), env.DB.prepare('DELETE FROM invitaciones WHERE h = ?').bind(h)]);
-    await anotar(env, 'huella', ident.nombre, true, 'huella activada', req);
+    await registrarHuella(env, req, ident, b, [env.DB.prepare('DELETE FROM invitaciones WHERE h = ?').bind(h)]);
     return json({ ok: true, nombre: ident.nombre }, 200, exigePuerta(env) ? { 'Set-Cookie': await abrirPuerta(env, { sujeto: inv.sujeto }, 90 * 864e5, req) } : {});
   }
   if (path === '/auth/nonce' && m === 'GET') {
@@ -280,9 +300,12 @@ export async function rutasAuth(c) {
     if (!await gastarNonce(env, g.nonce)) { await anotar(env, 'google', g.email, false, 'nonce inválido o repetido', req); fail(400, 'La verificación venció. Recarga la página e inténtalo otra vez.') }
     const d = await datos(env), ident = porEmail(g.email, d, env);
     if (!ident) { await anotar(env, 'google', g.email, false, 'correo no autorizado', req); fail(403, `El correo ${norm(g.email)} no está autorizado. Pide al dueño que lo agregue en ⚙️ Config → Equipo.`) }
-    const cookie = await abrirPuerta(env, { email: norm(g.email) }, SES_MS, req);
+    const pu = await abrirPuertaId(env, { email: norm(g.email) }, SES_MS, req);
     await anotar(env, 'google', g.email, true, 'dispositivo autorizado', req);
-    return json({ puerta: true, email: norm(g.email) }, 200, { 'Set-Cookie': cookie });
+    // Dueño: su Google ya prueba que es él → entra directo (sin clave). Luego puede activar huella o Face ID.
+    const du = ident.dueno && duenoDe(g.email, d);
+    if (du) return entrarComo(req, env, { id: pu.id, ...ident }, du, { via: 'google' }, 'google', 'dueño con Google', [pu.cookie], { ofrecerHuella: true });
+    return json({ puerta: true, email: norm(g.email) }, 200, { 'Set-Cookie': pu.cookie });
   }
   if (path === '/auth/login' && m === 'POST') {
     if (!pinPermitido(env)) fail(403, 'El acceso con PIN está desactivado. Entra con Google.');
@@ -306,6 +329,15 @@ export async function rutasAuth(c) {
 export async function rutasAcceso(c) {
   const { req, env, path, m, body, d, s, exigir, propia } = c;
   let x;
+  // «Entrar con huella o Face ID la próxima vez»: la persona la activa en SU aparato, justo después de entrar.
+  if ((path === '/acceso/mi-huella/opciones' || path === '/acceso/mi-huella') && m === 'POST') {
+    await limitar(env, 'pk:' + ipDe(req), 20, 15 * 60e3);
+    if (!s.desde || Date.now() - s.desde > (+env.HUELLA_FRESCA_SEG * 1e3 || HUELLA_FRESCA_MS)) /* HUELLA_FRESCA_SEG: solo pruebas */ fail(403, 'Por seguridad, cierra sesión, vuelve a entrar y actívala al momento.');
+    if (path.endsWith('/opciones')) return json(await opcionesHuella(env, req, d, s));
+    const b = await body(), reto = await gastarReto(env, b.challenge, 'create'); if (!reto || reto.sujeto !== s.sujeto) fail(400, 'La verificación venció. Inténtalo otra vez.');
+    await registrarHuella(env, req, s, b); await auditar(env, s.nombre, 'Activó su huella', s.nombre);
+    return json({ ok: true });
+  }
   if (path === '/acceso' && m === 'GET') {
     exigir('config');
     const [c, h, b] = await Promise.all([env.DB.prepare('SELECT sujeto, temporal FROM claves').all(), env.DB.prepare('SELECT id, sujeto, etiqueta, creada FROM passkeys ORDER BY creada').all(),

@@ -31,12 +31,21 @@ check('config expone el ID de cliente (público)', r.j.google === CID, JSON.stri
 check('el PIN está apagado', r.j.pin === false, JSON.stringify(r.j));
 for (const pin of ['1234', '1111', '0000']) { const x = await call('POST', '/auth/login', { pin }); check(`entrar con PIN ${pin} → 403`, x.s === 403, JSON.stringify(x.j)) }
 
+const galleta = (raw, n) => raw.match(new RegExp(n + '=[^;,]+'))?.[0] || '';
 r = await entrar({ email: 'dueno@gmail.com' });
-check('Google abre solo la puerta del dispositivo (aún sin panel)', r.s === 200 && r.j.puerta === true && /brb_g=/.test(r.cookie) && !/brb_s=/.test(r.raw), JSON.stringify(r));
+check('el Google del dueño autoriza el aparato y entra directo como dueño (sin clave)', r.s === 200 && r.j.rol === 'dueno' && r.j.ofrecerHuella === true && /brb_g=/.test(r.raw) && /brb_s=/.test(r.raw), JSON.stringify(r));
 check('cookie HttpOnly + Secure + SameSite', /HttpOnly/i.test(r.raw) && /Secure/i.test(r.raw) && /SameSite=Lax/i.test(r.raw), r.raw);
-const puertaD = r.cookie;
+const puertaD = galleta(r.raw, 'brb_g'), duenoG = galleta(r.raw, 'brb_s');
+check('esa sesión abre el panel como dueño, sin bloqueo', (await call('GET', '/panel', null, duenoG)).j.yo?.rol === 'dueno' && (await call('GET', '/panel', null, duenoG)).j.yo?.bloqueo === 0);
 r = await call('GET', '/panel', null, puertaD);
 check('la puerta sola no abre el panel', r.s === 401);
+// Huella / Face ID: se activa en el mismo aparato justo después de entrar (no más tarde)
+r = await call('POST', '/acceso/mi-huella/opciones', {}, duenoG);
+check('recién entrado, puede activar su huella (passkey del dueño, solo en este aparato)', r.s === 200 && r.j.publicKey?.user?.name && r.j.publicKey.authenticatorSelection?.userVerification === 'required', JSON.stringify(r.j).slice(0, 200));
+check('sin sesión no se activa ninguna huella', (await call('POST', '/acceso/mi-huella/opciones', {})).s === 401);
+check('un reto que no es suyo no registra nada', (await call('POST', '/acceso/mi-huella', { challenge: 'inventado', credential: {} }, duenoG)).s === 400);
+check('la huella se puede intentar sin Google antes (no se puede adivinar)', (await call('GET', '/auth/huella/reto')).s === 200);
+check('una huella no registrada no entra', (await call('POST', '/auth/huella', { challenge: (await call('GET', '/auth/huella/reto')).j.challenge, credential: { id: 'no-existe', response: {} } })).s === 403);
 r = await call('GET', '/auth/perfiles');
 check('sin Google no se ven perfiles', r.j.puerta === false);
 r = await call('POST', '/auth/clave/crear', { sujeto: 'p_dueno', clave: 'MiClaveDueno9' });
@@ -172,6 +181,9 @@ r = await call('DELETE', '/acceso/aparatos/' + apJ.id, null, duenoR);
 check('quitar un aparato cierra su sesión al instante', r.s === 200 && (await call('GET', '/panel', null, jhon)).s === 401);
 check('y ese aparato ya no puede elegir perfil', (await call('GET', '/auth/perfiles', null, puertaJ)).j.puerta === false);
 r = await call('POST', '/acceso/p_dueno/baja', {}, duenoR); check('nadie se da de baja a sí mismo', r.s === 400);
+check('la sesión del dueño con Google sigue viva mientras su aparato esté autorizado', (await call('GET', '/panel', null, duenoG)).s === 200);
+await new Promise(res => setTimeout(res, 7000));
+check('pasado el momento, ya no se puede activar huella con esa sesión (hay que volver a entrar)', (await call('POST', '/acceso/mi-huella/opciones', {}, duenoG)).s === 403);
 r = await call('POST', '/acceso/p_b2/baja', {}, duenoR); check('dar de baja a un barbero', r.s === 200);
 check('su sesión se cierra al instante', (await call('GET', '/panel', null, tablet)).s === 401);
 const pnB = (await call('GET', '/panel', null, duenoR)).j;
@@ -182,6 +194,11 @@ await new Promise(ok => setTimeout(ok, 5500));
 check('en un aparato ajeno, tras el tiempo sin uso la sesión se cierra sola', (await call('GET', '/panel', null, piero)).s === 401);
 check('en su propio aparato no se cierra', (await call('GET', '/panel', null, duenoR)).s === 200);
 
+// Si se quita el aparato del dueño, su entrada con Google se cierra al instante
+const apD = (await call('GET', '/acceso/aparatos', null, duenoR)).j.find(a => a.quien === 'dueno@gmail.com' && a.actual === false);
+r = await entrar({ email: 'dueno@gmail.com' }); const duenoG2 = galleta(r.raw, 'brb_s'), apG2 = (await call('GET', '/acceso/aparatos', null, duenoR)).j.filter(a => a.quien === 'dueno@gmail.com').sort((a, z) => z.creado - a.creado)[0];
+await call('DELETE', '/acceso/aparatos/' + apG2.id, null, duenoR);
+check('quitar el aparato cierra la entrada del dueño por Google', (await call('GET', '/panel', null, duenoG2)).s === 401 && !!apD);
 r = await call('POST', '/auth/logout', {}, duenoR);
 r = await call('GET', '/panel', null, duenoR);
 check('cerrar sesión invalida la cookie', r.s === 401);

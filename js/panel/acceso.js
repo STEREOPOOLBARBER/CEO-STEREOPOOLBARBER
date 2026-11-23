@@ -37,8 +37,29 @@ async function loginHuella(){
  try{const r=await API.req('GET','/auth/huella/reto');
   const cr=await navigator.credentials.get({publicKey:{challenge:b64u.dec(r.challenge),rpId:r.rpId,userVerification:'required',timeout:60000}});
   const x=cr.response;
-  await entrar(await API.req('POST','/auth/huella',{challenge:r.challenge,credential:{id:cr.id,response:{clientDataJSON:b64u.enc(x.clientDataJSON),authenticatorData:b64u.enc(x.authenticatorData),signature:b64u.enc(x.signature)}}}))
+  const s=await API.req('POST','/auth/huella',{challenge:r.challenge,credential:{id:cr.id,response:{clientDataJSON:b64u.enc(x.clientDataJSON),authenticatorData:b64u.enc(x.authenticatorData),signature:b64u.enc(x.signature)}}});
+  lsSet('huellaAqui',s.pid);await entrar(s)
  }catch(e){toast(e.name==='NotAllowedError'?'Cancelaste o no se reconoció la huella':'❌ '+e.message)}}
+ACC.entrarHuella=function(){loginHuella()};
+/* Crea la passkey en este aparato con las opciones del servidor y devuelve lo que hay que mandarle. */
+async function crearPasskey(pk){const ch=pk.challenge;
+ const cr=await navigator.credentials.create({publicKey:{...pk,challenge:b64u.dec(ch),user:{...pk.user,id:b64u.dec(pk.user.id)},excludeCredentials:(pk.excludeCredentials||[]).map(e=>({...e,id:b64u.dec(e.id)}))}});
+ const ua=navigator.userAgent,et=/iPhone/.test(ua)?'iPhone':/iPad/.test(ua)?'iPad':/Android/.test(ua)?'Android':/Windows/.test(ua)?'Windows':/Mac/.test(ua)?'Mac':'Celular';
+ return {challenge:ch,etiqueta:et,credential:{id:cr.id,response:{clientDataJSON:b64u.enc(cr.response.clientDataJSON),attestationObject:b64u.enc(cr.response.attestationObject)}}}}
+/* «¿Entrar la próxima vez con tu huella o Face ID?» — justo después de entrar con Google (o desde ☰ Menú). */
+function ofrecerHuella(desdeMenu){if(!API.remote||!hayHuella()||!S.ses)return desdeMenu&&toast('Este navegador no permite huella. Usa Chrome, Safari o Edge actualizado.');
+ if(!desdeMenu&&(lsGet('huellaAqui','')===S.ses.pid||lsGet('huellaNo','')===S.ses.pid))return;
+ openModal(mHead('👆 Huella o Face ID')+`<p style="margin-top:0">¿Quieres entrar la próxima vez <b>solo con tu huella o tu cara</b>, sin Google ni clave?</p>
+ <p class="hint">Tu huella nunca sale de este aparato: el panel solo recibe una firma de que eres tú.</p>
+ ${lsGet('huellaAqui','')===S.ses.pid?'<div class="banner">✅ Este aparato ya tiene tu huella activada. Puedes activarla también en otro aparato desde allí.</div>':''}
+ <button class="btn p w" style="padding:14px;margin-top:8px" data-on-click="miHuellaActivar">👆 Sí, activar en este aparato</button>
+ <button class="btn w" style="margin-top:8px" data-on-click="miHuellaNo">Ahora no</button>`)}
+ACC.miHuella=function(){ofrecerHuella(true)};
+ACC.miHuellaNo=function(){lsSet('huellaNo',S.ses.pid);closeModal()};
+ACC.miHuellaActivar=async function(){this.disabled=true;
+ try{const o=await API.req('POST','/acceso/mi-huella/opciones',{});await API.req('POST','/acceso/mi-huella',await crearPasskey(o.publicKey));
+  lsSet('huellaAqui',S.ses.pid);closeModal();toast('✅ Listo: la próxima vez entra con tu huella o Face ID')}
+ catch(e){this.disabled=false;toast(e.name==='NotAllowedError'?'No se completó. Vuelve a intentarlo.':e.name==='InvalidStateError'?'Este aparato ya tiene tu huella activada.':'❌ '+e.message)}};
 
 /* Página que abre el barbero con el link que le manda el administrador */
 async function activarHuella(cod){
@@ -49,10 +70,7 @@ async function activarHuella(cod){
  msg(`Hola <b>${esc(o.nombre)}</b>. Toca el botón y pon tu huella o tu rostro cuando el teléfono te lo pida.`);
  const b=document.createElement('button');b.className='btn p';b.style.cssText='width:260px;padding:14px;margin-top:14px';b.textContent='👆 Activar huella';L.appendChild(b);
  b.onclick=async()=>{b.disabled=true;
-  try{const pk=o.publicKey,ch=pk.challenge;
-   const cr=await navigator.credentials.create({publicKey:{...pk,challenge:b64u.dec(ch),user:{...pk.user,id:b64u.dec(pk.user.id)},excludeCredentials:(pk.excludeCredentials||[]).map(e=>({...e,id:b64u.dec(e.id)}))}});
-   const ua=navigator.userAgent,et=/iPhone/.test(ua)?'iPhone':/iPad/.test(ua)?'iPad':/Android/.test(ua)?'Android':/Windows/.test(ua)?'Windows':/Mac/.test(ua)?'Mac':'Celular';
-   await API.req('POST','/passkey/registrar',{codigo:cod,challenge:ch,etiqueta:et,credential:{id:cr.id,response:{clientDataJSON:b64u.enc(cr.response.clientDataJSON),attestationObject:b64u.enc(cr.response.attestationObject)}}});
+  try{await API.req('POST','/passkey/registrar',{codigo:cod,...await crearPasskey(o.publicKey)});
    b.remove();msg('✅ <b>Listo, '+esc(o.nombre)+'.</b> Tu huella quedó activada. Ya puedes entrar con ella.');
    const a=document.createElement('a');a.className='btn p';a.style.cssText='width:260px;padding:14px;margin-top:14px;text-decoration:none;display:inline-flex;justify-content:center';a.href=location.pathname;a.textContent='Ir al panel';L.appendChild(a)
   }catch(e){b.disabled=false;msg(e.name==='NotAllowedError'?'No se completó. Vuelve a tocar el botón.':e.name==='InvalidStateError'?'Este teléfono ya tiene una huella activada para tu usuario.':'❌ '+esc(e.message))}}}

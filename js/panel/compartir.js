@@ -93,6 +93,7 @@ function abrirMenu(){openModal(`<div class="grab"></div>${mHead('☰ Menú')}
  ${can('config')?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="a465d46a3">👥 Equipo y permisos</button>`:''}
  ${puedeInstalar()?`<button class="btn p w" style="padding:14px;margin-bottom:8px" data-on-click="appInstalar">📲 Instalar la app en este ${esIOS()?'iPhone':'aparato'}</button>`:''}
  ${API.remote?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="abrirAvisos">🔔 Avisos en este celular</button>`:''}
+ ${API.remote?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="miHuella">👆 Huella / Face ID</button>`:''}
  ${API.remote?`<button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="miClave">🔑 Mi clave</button>`:''}
  <button class="btn w" style="padding:14px;margin-bottom:8px" data-on-click="a127fcd5a">📖 Cómo funciona</button>
  <button class="btn r w" style="padding:14px" data-on-click="a973cd47a">🚪 Cerrar sesión</button>

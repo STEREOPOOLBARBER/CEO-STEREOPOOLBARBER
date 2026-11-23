@@ -57,11 +57,12 @@ Solo el administrador (permiso `config`) configura el acceso de cada persona, en
 - Las llaves quedan atadas al dominio (hostname). Si cambias de dominio, hay que volver a invitar.
 - Google sigue siendo el acceso del dueño. Pruebas: `npm run test:acceso` (API) y `test/acceso.ui.mjs` (pantalla, con Playwright).
 
-### Entrada en dos pasos (Google → perfil)
-1. El dispositivo entra con **Google** (correo autorizado). Eso solo "abre la puerta": todavía no hay panel.
-2. Aparece **¿Quién eres?** con los perfiles. El **Dueño** entra con su clave (de arranque **1111** hasta que la cambie en ⚙️ Config → Seguridad → 🔑 Mi clave y huella). Cada barbero/usuario entra con su **clave** o **huella**; los permisos son los que asignó el admin.
-3. Un correo que no es del dueño solo ve su propio perfil (y entra directo si no tiene clave ni huella). Un barbero sin correo queda autorizado en su celular al activar su huella (90 días).
-Pruebas: `test/google.e2e.mjs` y `test/perfiles.ui.mjs` (con GOOGLE_CLIENT_ID de prueba); `acceso.e2e`/`acceso.ui` corren con `--var GOOGLE_CLIENT_ID:` vacío.
+### Entrada simple
+1. **Dueño:** «Entrar con Google» con tu correo (el de `OWNER_EMAILS`) → **entras directo**, sin clave. Enseguida te pregunta «¿Entrar la próxima vez con tu huella o Face ID?» → Sí.
+2. **Las veces siguientes:** abre la app y toca **«👆 Entrar con huella / Face ID»**. Nada que escribir. También se activa en otro aparato desde ☰ Menú → «👆 Huella / Face ID» (justo después de entrar).
+3. **Equipo:** su Google (el que pusiste en Equipo) → «¿Quién eres?» → su clave o su huella (la fase 2 lo simplifica más).
+4. Si quitas un aparato (⚙️ Config → Aparatos) o sacas un correo de `OWNER_EMAILS`, esa entrada se cierra al instante. Recomendado: activa la **Verificación en 2 pasos** de tu cuenta de Google.
+Pruebas: `test/google.e2e.mjs`, `test/perfiles.ui.mjs` y `test/huella.ui.mjs` (con GOOGLE_CLIENT_ID de prueba); `acceso.e2e`/`acceso.ui` corren con `--var GOOGLE_CLIENT_ID:` vacío.
 
 ### Vista previa de los links (WhatsApp)
 El Worker agrega título, descripción y **logo** (el de ⚙️ Config → Marca) a `reservar.html` e `index.html` (etiquetas Open Graph). Cada tipo de link tiene su texto: reserva, «Tu cita en …» (`?c=`) y «Activa tu huella» (`?huella=`). Nunca incluye datos del cliente. WhatsApp guarda la vista previa en caché: si cambias el logo, un link ya enviado puede tardar en actualizarse (links nuevos salen bien).
@@ -188,7 +189,7 @@ La estructura de la base de datos ahora es **versionada** (`MIGRACIONES` en `wor
 
 ### Equipo y entrada al panel (una sola regla)
 - ⚙️ Config → **👥 Equipo**: una sola lista de personas (antes «Barberos» y «Usuarios» por separado). Cada una con su rol, sus permisos, **«✂️ Atiende clientes»** (sale en la agenda, el formulario y la caja), su correo de Google y su acceso (clave o huella).
-- **Para entrar, todos igual:** primero **Google**; después, en «¿Quién eres?», cada persona con **su propia clave** o su huella.
+- **Para entrar:** el dueño, con su Google directo (o su huella / Face ID); el equipo, con su Google y después **su propia clave** o su huella.
 - **Dueño:** ya no existe la clave 1111. La primera vez, en «¿Quién eres?» → Dueño → **crea tu clave**. El perfil Dueño solo aparece en un aparato abierto con tu Google de dueño.
 - **Barbero con su propio celular:** pon su correo en el Equipo; la primera vez él crea su clave. **En la tablet del local:** tú le pones una clave en Equipo → su nombre → Acceso propio.
 - Si alguien aparece repetido (por ejemplo Leandro como barbero y como usuario ligados), se juntó solo al actualizar. Si quedan dos con el mismo nombre sin estar ligados, sale un aviso en el Equipo para que elijas cuál queda.
